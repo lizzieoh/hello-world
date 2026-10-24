@@ -26,6 +26,8 @@ The three things that make this reliable:
 
 ## 1. Shopping list
 
+Exact Amazon picks with links are in [SHOPPING.md](SHOPPING.md). The overview:
+
 **Per unit (buy 4: three booths plus one spare)**
 
 | Item | Notes |
@@ -62,8 +64,8 @@ You keep four parts of the phone: **the handset, its coiled cord, the hook switc
 
 **Use a touch-tone phone (with buttons), not a rotary dial.** The buttons map straight to "press 2 / press 3".
 
-1. **Open the phone body.** Unplug the coiled cord from the board's handset jack (RJ9/4P4C) and keep the cord.
-2. **Find the handset wires.** Cut the RJ9 plug off the body end of the coiled cord, or use a 4P4C breakout. There are 4 wires.
+1. **Open the phone body.** Find the board's handset jack (RJ9/4P4C), where the coiled cord plugs in. **Keep that jack, and don't cut the cord.** You'll solder to the jack's 4 pins on the back of the board, so a yanked or broken cord on show day is a 10-second swap with a spare.
+2. **Find the handset wires.** With the handset plugged in, probe the jack's 4 pins. Cut the board traces between the jack and the rest of the phone's circuit, so only your wires connect to it.
    - With a multimeter, look for the **earpiece pair**: a steady **100–300 Ω** reading. This is usually the inner two pins.
    - The other pair is the **mic** (usually the outer two pins). An electret mic reads differently with the probes reversed. That means it has a polarity, so note which wire reads as **+** (the higher resistance direction is often +; if the mic is silent later, just swap the two wires).
    - *Vintage carbon mic:* it reads a few hundred Ω, the same both ways, and will be nearly silent. Unscrew the mouthpiece and swap in an electret retrofit capsule.
