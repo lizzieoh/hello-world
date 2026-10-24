@@ -1,12 +1,14 @@
 # fal call center — landline booth (×3)
 
-Someone lifts a real phone handset and the call starts. They talk to the agent at
-fal-call-center.vercel.app and watch it on a screen. When they hang up, the page resets for the next person.
+Someone lifts a real phone handset and the site starts listening. They say what they want to see, and the
+image is generated on the screen. Then they press **2** on the phone's keypad for audio generation, which plays in the
+earpiece, or **3** to regenerate. When they hang up, the image stays on screen as a lure. The next pickup starts fresh.
 
 ```
  ┌──────────── phone shell ─────────────┐
  │ handset ── 3.5mm mic + 3.5mm ear ────┼──► USB audio adapter ─┐
- │ hook switch ── 2 wires ──► Pico ─────┼──► USB (types F8/F9) ─┤
+ │ hook switch ── 2 wires ──┐           │                       │
+ │ keypad ─────── 7 wires ──┴► Pico ────┼──► USB (F8/F9, 0-9) ──┤
  └──────────────────────────────────────┘                       ▼
                                                     Raspberry Pi 5 (Chromium kiosk)
                                                          │ micro-HDMI → HDMI
@@ -17,7 +19,7 @@ fal-call-center.vercel.app and watch it on a screen. When they hang up, the page
 
 The three things that make this reliable:
 1. **Wired Ethernet to your own travel router.** The Pis never touch the venue Wi-Fi themselves. You change one setting on site, not three.
-2. **Hook switch = keyboard.** The Pico shows up as a USB keyboard, so no drivers. Lifting the handset types F8 and hanging up types F9 plus a page reload. Every visitor starts on a fresh page.
+2. **The phone = a keyboard.** The Pico shows up as a USB keyboard, so no drivers. Lifting the handset types F8 (start listening), hanging up types F9, and the keypad types real digits (2, 3, …). Holding **\*** for 3 seconds reloads the page, as a staff reset.
 3. **Self-healing kiosk.** The Pi boots straight into the page and grants the mic automatically. Its audio always goes to the handset. It waits for the network instead of showing an error, and it relaunches Chromium if it crashes. Before the show, the SD card is made read-only so a power cut can't corrupt it.
 
 ---
@@ -56,7 +58,9 @@ The three things that make this reliable:
 
 ## 2. Rewire the phone (≈1 hour per phone)
 
-You keep only three parts of the phone: **the handset, its coiled cord, and the hook switch.** The phone's own circuit board gets disconnected.
+You keep four parts of the phone: **the handset, its coiled cord, the hook switch, and the keypad.** Everything else on the phone's own circuit board gets disconnected.
+
+**Use a touch-tone phone (with buttons), not a rotary dial.** The buttons map straight to "press 2 / press 3".
 
 1. **Open the phone body.** Unplug the coiled cord from the board's handset jack (RJ9/4P4C) and keep the cord.
 2. **Find the handset wires.** Cut the RJ9 plug off the body end of the coiled cord, or use a 4P4C breakout. There are 4 wires.
@@ -67,7 +71,13 @@ You keep only three parts of the phone: **the handset, its coiled cord, and the 
 4. **Solder the mic to pigtail #2.** Mic **+** → tip, mic **−** → sleeve. Plug it into the adapter's **mic** jack. The adapter powers the electret through this jack.
 5. **Find the hook switch.** This is the plunger under the cradle. Set the multimeter to continuity and find a pair of contacts that **changes** when you press and release the plunger. Desolder it from the board, or cut its traces, so the phone's board isn't connected to it.
 6. **Wire the hook switch to the Pico.** One contact → **GP15** (physical pin 20), the other → **GND** (pin 18). Those are the only two wires.
-7. Put the Pico and the USB adapter inside the phone body. Hot-glue them to the base, and add strain relief: a zip-tie around each cable inside the shell. Run **two USB cables** out the back where the line cord used to go. Glue the old RJ11 wall jack shut so nobody plugs it into a real line.
+7. **Wire the keypad to the Pico.** Almost every phone keypad is a grid: **4 rows × 3 columns = 7 wires**, and pressing a button connects one row to one column.
+   - Find the 7 keypad lines where they leave the keypad (a ribbon, a connector, or 7 traces going to one chip).
+   - Set the multimeter to continuity. Hold **1** and find the two lines that connect; that's Row 1 + Column 1. Hold **2**: Row 1 again + Column 2. Hold **4**: Row 2 + Column 1. Repeat until you know R1–R4 and C1–C3.
+   - **Cut those 7 lines away from the phone's chip** (cut the traces, or lift the chip's pins), so the old electronics can't interfere.
+   - Solder: **R1–R4 → GP0–GP3** (pins 1, 2, 4, 5) and **C1–C3 → GP4–GP6** (pins 6, 7, 9).
+   - If a digit comes out wrong later, don't rewire. Fix the `LAYOUT` list in `code.py`.
+8. Put the Pico and the USB adapter inside the phone body. Hot-glue them to the base, and add strain relief: a zip-tie around each cable inside the shell. Run **two USB cables** out the back where the line cord used to go. Glue the old RJ11 wall jack shut so nobody plugs it into a real line.
 
 **Test before closing it up:** plug the USB adapter into a laptop and record a voice memo through the handset. Your voice should be clear, and a test sound should play in the earpiece.
 
@@ -79,18 +89,28 @@ You keep only three parts of the phone: **the handset, its coiled cord, and the 
 2. Drag in the CircuitPython `.uf2` for Raspberry Pi Pico from circuitpython.org (latest stable). The drive reboots as `CIRCUITPY`.
 3. From the matching Adafruit CircuitPython Bundle (circuitpython.org/libraries), copy the **`adafruit_hid`** folder into `CIRCUITPY/lib/`.
 4. Copy [`pico/code.py`](pico/code.py) onto `CIRCUITPY` as `code.py`.
-5. Test: open any text editor, lift the handset, and the Pico's LED lights. Press `F8`/`F9` on a key-tester site (e.g. keyboard-test.space) and confirm lift = F8 and hang up = F9. If they're backwards, set `OFF_HOOK_READS_HIGH = False`.
+5. Test on a key-tester site (e.g. keyboard-test.space):
+   - Lift the handset: the Pico's LED lights and **F8** registers. Hang up: **F9**. If they're backwards, set `OFF_HOOK_READS_HIGH = False`.
+   - With the handset lifted, press every key, 0–9, \* and #. Each one should type its own character. Keys are ignored while the phone is hung up, so passersby poking the keypad can't trigger anything.
 
 ---
 
 ## 4. Get the website to respond to the phone (developer, 10 min)
 
-The site needs to treat **F8 = start call** and **F9 = end call**. Paste [`web/phone-keys.js`](web/phone-keys.js) into the app, point the two selectors at the real Call and End buttons, and deploy.
+The site already has a press-to-speak button, a "press 2" and a "press 3". It just needs to accept them from the keyboard. Paste [`web/phone-keys.js`](web/phone-keys.js) into the app, point the selectors at the real buttons, and deploy:
 
-- If nothing on the site changes, hanging up still works because the Ctrl+R reload kills the call. But picking up won't start anything, so do this step.
+| Phone action | Key the Pico types | Site should… |
+|---|---|---|
+| Lift handset | F8 | Reset to a fresh state **and** start listening. Picking up replaces "press to speak". |
+| Hang up | F9 | Stop the mic and any playing audio. **Keep the image on screen.** |
+| Press 2 | `2` | Audio generation; the audio plays in the earpiece. |
+| Press 3 | `3` | Regenerate. |
+| Press # | `#` | *(Optional)* "Press pound when you're done speaking", if the site doesn't detect silence by itself. |
+
 - The booth URL has `?booth=1`, so the site can hide its on-screen buttons and show "pick up the phone" instead.
+- Spoken prompts make it feel like a real phone line. For example, on pickup: "Tell me what you'd like to see." After the image: "Press 2 to hear it, press 3 to try again."
 - Make sure the site requests the mic with `echoCancellation: true` and `noiseSuppression: true`. The show floor is loud.
-- If the site shows a generated result after the call that people should see, set `RELOAD_ON_HANGUP = False` in `code.py` and have the site reset itself after a short delay.
+- Staff reset: hold **\*** for 3 seconds and the page reloads.
 
 ---
 
@@ -160,7 +180,9 @@ To change settings later: `sudo raspi-config nonint do_overlayfs 1`, reboot, edi
 
 Run all three units for **at least 24 hours**, together on one router, and check each of these:
 
-- [ ] 50 pickup/hangup cycles per phone, including fast slams and leaving it off the hook for 10 minutes
+- [ ] 50 full visits per phone (pick up, speak, image, press 2, press 3, hang up), including fast slams and leaving it off the hook for 10 minutes
+- [ ] Mash the keypad while the phone is hung up: nothing happens
+- [ ] Press 2 or 3 while an image is still generating: the site doesn't break
 - [ ] Pull the Pi's power mid-call: it comes back to the page by itself in under 60 s
 - [ ] Unplug the router's internet: the screen shows "connecting…" and recovers by itself
 - [ ] Unplug and replug the USB audio adapter, then reboot: audio is fine
@@ -178,10 +200,10 @@ Run all three units for **at least 24 hours**, together on one router, and check
 
 | Symptom | Fix |
 |---|---|
-| Stuck screen or weird state | Hang up and lift again (this reloads the page). Still stuck: unplug the Pi's power for 5 s. |
+| Stuck screen or weird state | Lift the handset and hold **\*** for 3 s, which reloads the page. Still stuck: unplug the Pi's power for 5 s. |
 | "connecting…" forever | Router problem: check the GL.iNet admin from your phone. Force it onto tethering. |
 | Earpiece silent | Reseat the USB audio adapter, then power-cycle the Pi. |
-| Lifting does nothing | Reseat the Pico USB. The LED should follow the hook. |
+| Lifting does nothing / keys don't work | Reseat the Pico USB. The LED should follow the hook. |
 | Anything else | Swap in the spare unit (it's identical) and debug later. |
 
 **Pack in the go-bag:** spare unit, spare SD cards, spare PSU, extra Ethernet/HDMI cables, USB keyboard, alcohol wipes, gaffer tape, and this printout.
@@ -191,9 +213,8 @@ Run all three units for **at least 24 hours**, together on one router, and check
 ## Optional extras
 
 - **Ringer:** a small speaker or a solenoid on a spare Pico pin can ring the phone every few minutes while it's idle to draw people in.
-- **Keypad:** wire the phone's keypad matrix to the Pico so dialed digits are typed into the site, e.g. "press 1 for images, 2 for video".
 - **Handset hygiene:** foam mic covers on the mouthpieces, changed daily.
 
-## If the site works by phone number instead (Twilio etc.)
+## Why not a Grandstream HT801?
 
-If the agent is reached by dialing a real number, skip the Pi audio. Use a **Grandstream HT801** analog adapter per phone with a SIP line (Twilio Elastic SIP or similar), and set its **"Off-hook Auto-Dial"** to the agent's number. Lifting the handset then dials automatically, and the phone works unmodified, with a real dial tone. The screen just shows the site in the same kiosk setup (keep sections 5–8). The catch is that the screen won't know which caller is which unless the site matches each call to its booth's caller ID.
+An HT801 turns a landline into an internet *phone call*, which needs a phone number on the other end. fal-call-center is a web page (press to speak, then press 2 / 3), so the audio and keypad have to go into the browser. That's what the USB adapter and the Pico do.
