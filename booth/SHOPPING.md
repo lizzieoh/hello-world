@@ -25,7 +25,7 @@ Quantities cover 4 complete units. Check that each listing is the exact model be
 
 | Item | Pick | Qty | Why |
 |---|---|---|---|
-| Travel router | [GL.iNet GL-MT3000 Beryl AX](https://www.amazon.com/GL-iNet-GL-MT3000-Pocket-Sized-Wireless-Gigabit/dp/B0BPSGJN7T) | 2 | Second one is a spare. |
+| Travel router | [GL.iNet GL-MT3000 Beryl AX](https://www.amazon.com/GL-iNet-GL-MT3000-Pocket-Sized-Wireless-Gigabit/dp/B0BPSGJN7T) | 2 | Second one is a spare. The [Beryl 7 (GL-MT3600BE)](https://www.gl-inet.com/blogs/blog/glinet-launches-beryl-7-travel-router) works equally well. Buy 2 of the same model so the spare takes a saved config backup. |
 | Switch | [TP-Link TL-SG108, 8-port gigabit](https://www.amazon.com/TP-Link-Gigabit-Ethernet-Network-Switch/dp/B00A121WN6) | 1 | |
 | Ethernet | [Cable Matters Cat6 10ft, 5-pack](https://www.amazon.com/Cable-Matters-5-Pack-Snagless-Ethernet/dp/B01CRFVGYO) | 2 packs | Cat6 is plenty, and more flexible than Cat8. |
 | Backup internet | [Netgear Nighthawk M6 5G hotspot (MR6150)](https://www.amazon.com/NETGEAR-Nighthawk-Mobile-Hotspot-MR6150/dp/B0BGV79FHT) + a data SIM | 1 | Optional: a phone USB-tethered to the router also works. Use whichever carrier is strongest at the venue. |
