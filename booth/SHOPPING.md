@@ -35,7 +35,7 @@ Quantities cover 4 complete units. Check that each listing is the exact model be
 | Item | Pick | Qty | Why |
 |---|---|---|---|
 | Pi on back of monitor | [ASG VESA mount for Pi 5](https://www.amazon.com/VESA-Mount-Raspberry-PI-Basic/dp/B079J5SFYS) | 4 | Hides the Pi; nothing on the floor for people to kick. |
-| Monitor wall mount | [Mount-It! fixed low-profile VESA mount](https://www.amazon.com/Fixed-VESA-Slim-Wall-Mount/dp/B011LODZJG) | 3 | Check the monitor's VESA pattern (100×100 for the Dell S2721NX). |
+| Monitor wall mount | [Fixed VESA slim wall mount](https://www.amazon.com/Fixed-VESA-Slim-Wall-Mount/dp/B011LODZJG) | 3 | Check the monitor's VESA pattern (100×100 for the Dell S2721NX). |
 | USB extensions (phone → Pi) | [Cable Matters USB 2.0 extension 6ft, 2-pack](https://www.amazon.com/Cable-Matters-2-Pack-Extension-Extender/dp/B00N9HRUJU) | 5 packs | 2 per phone, for the audio adapter and the Pico. |
 | Battery backup | [APC BE600M1 600VA UPS](https://www.amazon.com/APC-respaldo-protector-sobretensiones-alimentaci%C3%B3n/dp/B01FWAZEIU) | 2 | One for the router/switch/hotspot, one for the Pis. Venue power blips won't reboot anything. |
 | Power strip | [Tripp Lite SS3612, 12-outlet metal, 15ft](https://www.amazon.com/Tripp-Lite-Outlet-Protector-SS3612/dp/B00UK4BP1O) | 2 | For the monitors. Plug the UPS units straight into the wall, not into a strip. |
