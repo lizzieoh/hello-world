@@ -1,0 +1,23 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>fal booth</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; color: #888; cursor: none;
+    font: 500 18px/1.4 ui-sans-serif, system-ui, sans-serif; letter-spacing: .04em; }
+  body { display: grid; place-items: center; }
+</style>
+<body>connecting…</body>
+<script>
+  // Waits until the call-center site is reachable, then goes there.
+  // Keeps a black screen instead of Chromium's offline page while the network comes up.
+  const target = decodeURIComponent(location.hash.slice(1));
+  async function tryOpen() {
+    try {
+      await fetch(target, { mode: "no-cors", cache: "no-store" });
+      location.replace(target);
+    } catch {
+      setTimeout(tryOpen, 3000);
+    }
+  }
+  tryOpen();
+</script>
