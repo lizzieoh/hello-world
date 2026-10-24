@@ -30,6 +30,31 @@ Quantities cover 4 complete units. Check that each listing is the exact model be
 | Ethernet | [Cable Matters Cat6 10ft, 5-pack](https://www.amazon.com/Cable-Matters-5-Pack-Snagless-Ethernet/dp/B01CRFVGYO) | 2 packs | Cat6 is plenty, and more flexible than Cat8. |
 | Backup internet | [Netgear Nighthawk M6 5G hotspot (MR6150)](https://www.amazon.com/NETGEAR-Nighthawk-Mobile-Hotspot-MR6150/dp/B0BGV79FHT) + a data SIM | 1 | Optional: a phone USB-tethered to the router also works. Use whichever carrier is strongest at the venue. |
 
+## Mounting, cabling & power
+
+| Item | Pick | Qty | Why |
+|---|---|---|---|
+| Pi on back of monitor | [ASG VESA mount for Pi 5](https://www.amazon.com/VESA-Mount-Raspberry-PI-Basic/dp/B079J5SFYS) | 4 | Hides the Pi; nothing on the floor for people to kick. |
+| Monitor wall mount | [Mount-It! fixed low-profile VESA mount](https://www.amazon.com/Fixed-VESA-Slim-Wall-Mount/dp/B011LODZJG) | 3 | Check the monitor's VESA pattern (100×100 for the Dell S2721NX). |
+| USB extensions (phone → Pi) | [Cable Matters USB 2.0 extension 6ft, 2-pack](https://www.amazon.com/Cable-Matters-2-Pack-Extension-Extender/dp/B00N9HRUJU) | 5 packs | 2 per phone, for the audio adapter and the Pico. |
+| Battery backup | [APC BE600M1 600VA UPS](https://www.amazon.com/APC-respaldo-protector-sobretensiones-alimentaci%C3%B3n/dp/B01FWAZEIU) | 2 | One for the router/switch/hotspot, one for the Pis. Venue power blips won't reboot anything. |
+| Power strip | [Tripp Lite SS3612, 12-outlet metal, 15ft](https://www.amazon.com/Tripp-Lite-Outlet-Protector-SS3612/dp/B00UK4BP1O) | 2 | For the monitors. Plug the UPS units straight into the wall, not into a strip. |
+| SD card reader | [SanDisk MobileMate USB 3.0](https://www.amazon.com/SanDisk-MobileMate-microSD-Card-Reader/dp/B07G5JV2B5) | 1 | For flashing and cloning cards from a laptop. |
+
+## Not on Amazon, but don't forget
+
+- [ ] **Booth power order** through Adobe MAX exhibitor services, which usually has an early-order deadline. You need roughly 3 monitors + 3 Pis + network gear.
+- [ ] **Exhibitor manual: Wi-Fi rules.** Many venues ban exhibitor Wi-Fi access points and hotspots. Ask in writing. On site, turn off the GL.iNet's own broadcast network (repeater mode still works).
+- [ ] **Wired internet drop** quote from the venue: the single biggest reliability upgrade.
+- [ ] **Data SIM** for the hotspot, on whichever carrier is strongest at the venue.
+- [ ] **fal account ready for the crowd:** enough credits, concurrency/rate limits that cover 3 booths all day, and the API key on a server, not in the browser.
+- [ ] **Content safety:** the public will say anything. Turn on the image model's safety checker and add a prompt filter. Your brand is on the screen.
+- [ ] **Privacy:** a small sign ("Your voice is used to make your image and isn't stored"). Make sure that statement is actually true in the app.
+- [ ] **Instruction sign at each phone:** "Pick up · Say what you want to see · Press 2 to hear it · Press 3 to try again."
+- [ ] **Attract loop:** what the screen shows when nobody is on the phone.
+- [ ] **Booth wall/panel** solid enough to screw the phones and monitors into, with holes for cables.
+- [ ] **Padded cases** for monitors and kits, plus the go-bag from the guide.
+
 ## Tools & supplies
 
 | Item | Pick |
