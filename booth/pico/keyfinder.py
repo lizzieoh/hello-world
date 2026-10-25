@@ -19,7 +19,7 @@ from adafruit_hid.keyboard_layout_us import KeyboardLayoutUS
 KEYS = "123456789*0#"
 ROWS = ("123", "456", "789", "*0#")
 COLS = ("147*", "2580", "369#")
-WAIT_S = 30  # per key, then it moves on
+WAIT_S = 60  # per key, then it moves on
 
 pins = []
 for n in range(15):
@@ -33,9 +33,13 @@ time.sleep(1)  # let the laptop see the keyboard first
 layout = KeyboardLayoutUS(Keyboard(usb_hid.devices))
 
 
+TYPE_IT = False  # False: report only over USB serial (the laptop reads it); True: also type it as a keyboard
+
+
 def say(text):
     print(text, end="")
-    layout.write(text)
+    if TYPE_IT:
+        layout.write(text)
 
 
 def scan():

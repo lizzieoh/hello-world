@@ -17,7 +17,7 @@ import usb_hid
 from adafruit_hid.keyboard import Keyboard
 from adafruit_hid.keycode import Keycode
 
-FIND_KEYS = False  # True: map the keypad (type into a text editor), then paste its two lines below and set False
+FIND_KEYS = False  # True: live keypad monitor over USB serial (keymonitor.py), for mapping a new keypad
 
 HOOK_PIN = board.GP15
 OFF_HOOK_READS_HIGH = False  # HA9888 wall phone: pads 1+2 close when the handset is lifted, pulling GP15 low.
@@ -27,8 +27,10 @@ HANGUP_KEYS = (Keycode.F9,)
 RELOAD_ON_HANGUP = False    # True = wipe the screen on hangup instead of leaving the image up
 DEBOUNCE_S = 0.08
 
+# HA9888 wall phone, mapped with the key monitor: ribbon wires 1-4 are rows 1-4, wire 7 is the left column,
+# 6 the middle, 5 the right (ribbon wire n on GP n-1).
 ROW_PINS = (board.GP0, board.GP1, board.GP2, board.GP3)
-COL_PINS = (board.GP4, board.GP5, board.GP6)
+COL_PINS = (board.GP6, board.GP5, board.GP4)
 # Key at (row, col). Rows and columns above come from the key finder. If digits come out wrong, swap entries here.
 LAYOUT = ("1", "2", "3",
           "4", "5", "6",
@@ -46,7 +48,7 @@ STAFF_RESET_HOLD_S = 3.0
 KEYS_ONLY_WHEN_OFF_HOOK = True
 
 if FIND_KEYS:
-    import keyfinder  # noqa: F401  (runs until FIND_KEYS is set back to False)
+    import keymonitor  # noqa: F401  (runs until FIND_KEYS is set back to False)
 
 hook = digitalio.DigitalInOut(HOOK_PIN)
 hook.switch_to_input(pull=digitalio.Pull.UP)
