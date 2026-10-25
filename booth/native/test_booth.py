@@ -327,6 +327,21 @@ def test_slides_span_all_videos():
     stop.set()
 
 
+def test_reset_code_clears_the_feed():
+    booth, client, stop = make()
+    lift_and_say(booth, talk())
+    wait(lambda: booth.state == "ready", 10, "ready")
+    wait(lambda: booth.take.get("done") and booth.take["done"].is_set(), 20, "saved with stills")
+    booth.post(("hook", False))
+    wait(lambda: booth.state == "idle", 3)
+    for k in "*123#":  # dialed with the handset on the hook
+        booth.post(("key", k))
+    wait(lambda: not booth.cache.recent() and not booth.cache.slides(), 3, "feed empty")
+    wait(lambda: booth.view.get("center") == "Pick up the phone.", 3, "blank screen")
+    assert list((booth.cache.root / "archive").glob("*/*.mp4")), "videos archived, not deleted"
+    stop.set()
+
+
 def test_sounds():
     music = B.elevator_loop()
     assert abs(len(music) / B.SR - 10.0) < 0.01 and 0.05 < np.abs(music).max() <= 1.0

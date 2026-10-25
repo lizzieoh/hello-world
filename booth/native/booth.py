@@ -806,6 +806,25 @@ class Cache:
         finally:
             take["done"].set()
 
+    def clear(self):
+        """Empties the feed. Videos and their stills move to archive/<date>/ (kept, out of the loop)."""
+        with self.lock:
+            items, self.items = self.items, []
+            self.index.write_text("[]")
+            if not items:
+                return 0
+            dest = self.root / "archive" / time.strftime("%Y-%m-%d_%H%M%S")
+            dest.mkdir(parents=True, exist_ok=True)
+            (dest / "history.json").write_text(json.dumps(items))
+            for h in items:
+                f = self.root / h["file"]
+                if f.exists():
+                    f.rename(dest / f.name)
+                st = self._stills_dir(h["file"])
+                if st.exists():
+                    st.rename(dest / ("stills-" + st.name))
+            return len(items)
+
     def recent(self):
         with self.lock:
             return [(str(self.root / h["file"]), h["prompt"]) for h in self.items]
@@ -836,6 +855,8 @@ def video_stills(src, secs, count, out_dir):
 
 BRAND = HERE / "brand"
 # fal's list prices (USD), used if the live price lookup at start-up can't be reached.
+RESET_CODE = "*123#"  # staff: clears the screen's feed of earlier videos
+
 # 3 (regenerate): one of these rides along with the caller's words, so each take really is a different video
 TAKES = [
     "A completely different interpretation: new characters, new setting details, wide establishing shot.",
@@ -1056,6 +1077,43 @@ def test_print():
     print("sent. A receipt with a striped test pattern should come out and cut.")
 
 
+def watch_heat(every=60, hot=75):
+    """Every minute: temperature, fan speed and throttling into the log, so a hot booth shows up before it's slow.
+    The fan itself is run by the Pi's firmware, on the curve setup-native.sh writes to config.txt."""
+    def read(path):
+        try:
+            return Path(path).read_text().strip()
+        except OSError:
+            return None
+
+    fans = glob.glob("/sys/devices/platform/cooling_fan/hwmon/*/fan1_input")
+    warned, first = False, True
+    while True:
+        temp = read("/sys/class/thermal/thermal_zone0/temp")
+        if temp is None:
+            return  # not a Pi
+        c = int(temp) / 1000
+        rpm = read(fans[0]) if fans else None
+        try:
+            throttled = int(subprocess.run(["vcgencmd", "get_throttled"], capture_output=True, text=True,
+                                           timeout=5).stdout.split("=")[1], 16)
+        except Exception:
+            throttled = 0
+        # bits 0-3: under-voltage, frequency capped, throttled now, soft temperature limit
+        now = throttled & 0xF
+        if c >= hot or now:
+            log.warning("HOT: %.1f C, fan %s rpm, throttled=0x%x%s", c, rpm or "none", throttled,
+                        " (under-voltage: use the 27 W supply)" if throttled & 1 else "")
+            warned = True
+        elif warned or first:
+            log.info("heat: %.1f C, fan %s rpm", c, rpm or "none (fit the Active Cooler)")
+            warned = False
+        else:
+            log.debug("heat: %.1f C, fan %s rpm", c, rpm)
+        first = False
+        time.sleep(every)
+
+
 def next_call_number(path=HERE / "cache" / "calls.txt"):
     """A running count of calls on this line, kept across restarts, for the receipt."""
     try:
@@ -1078,6 +1136,7 @@ class Booth:
         self.timers, self.seq = [], itertools.count()
         self.off_hook = False
         self.cid = 0          # call number: bumped on every lift and hang-up
+        self.dialed = ""      # the last few keys, for staff codes
         self.take_offset = 0  # where in TAKES the next call's first regenerate starts, so callers don't all get the same one
         self.state = "idle"   # idle | greeting | listening | hold | ready | busy
         self.attempt = 0
@@ -1179,6 +1238,10 @@ class Booth:
         self.go_idle()
 
     def on_key(self, k):
+        self.dialed = (self.dialed + k)[-len(RESET_CODE):]
+        if self.dialed == RESET_CODE:
+            self.dialed = ""
+            return self.reset_feed()
         if k == "#" and self.state == "listening":
             return self.line.stop_recording()
         if not self.off_hook:
@@ -1413,6 +1476,16 @@ class Booth:
         if cid == self.cid and self.off_hook and self.state == "ready" and armed >= self.last_key:
             self.busy("Please hang up the phone.")
 
+    def reset_feed(self):
+        """Staff (*123#): nothing from earlier calls on the screen. The videos go to cache/archive, not the bin."""
+        n = self.cache.clear()
+        log.info("feed reset: %d videos moved to cache/archive", n)
+        self.take, self.attract, self.slideshow = None, [], []
+        if self.off_hook:
+            self.busy(f"Feed cleared ({n} videos put away). Hang up the phone.")
+        else:
+            self.go_idle()
+
     def go_idle(self):
         self.state = "idle"
         self.pending = None
@@ -1535,6 +1608,7 @@ def main():
     booth.screen = Screen(booth.post)
     booth.fal = Fal(cfg)
     threading.Thread(target=booth.fal.load_prices, daemon=True).start()
+    threading.Thread(target=watch_heat, daemon=True).start()
     booth.printer = Printer(cfg)
     booth.cache = Cache(cfg["history"], secs=cfg["secs"])
     Phone(booth.post, grab=cfg["grab"])

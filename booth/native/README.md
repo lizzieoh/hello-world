@@ -62,6 +62,7 @@ Changes take effect when the app restarts. Hold **\*** for 3 seconds on the phon
 | **0** | Prints the receipt (once per video; if the printer is offline, 0 tries again) |
 | Hold **\*** 3 s | Staff: restart the app |
 | Hold **#** 5 s | Staff: shut the Pi down safely; unplug once the green light stops blinking |
+| Dial **\*123#** | Staff: clear the screen's feed of earlier videos (they move to `cache/archive/`, not deleted) |
 | Space | Lift/hang up, for testing with a USB keyboard instead of the phone |
 
 A USB keyboard works as the phone, which is handy for testing before the phone is wired.

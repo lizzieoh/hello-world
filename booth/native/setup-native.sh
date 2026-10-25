@@ -21,6 +21,23 @@ sudo raspi-config nonint do_hostname "fal-booth-$N"
 # Read the Pico straight from /dev/input, and write to the receipt printer, without root.
 sudo usermod -aG input,lp "$USER"
 
+echo "==> Fan: start earlier and harder than the factory curve (a booth sits in a warm hall, behind a wall)"
+CONF=/boot/firmware/config.txt
+if ! grep -q "fal booth fan curve" "$CONF"; then
+  sudo tee -a "$CONF" >/dev/null <<'FAN'
+
+# fal booth fan curve (Active Cooler). Factory: 50/60/67.5/75 C. Speeds are 0-255.
+dtparam=fan_temp0=45000,fan_temp0_hyst=5000,fan_temp0_speed=100
+dtparam=fan_temp1=55000,fan_temp1_hyst=5000,fan_temp1_speed=160
+dtparam=fan_temp2=62000,fan_temp2_hyst=5000,fan_temp2_speed=210
+dtparam=fan_temp3=68000,fan_temp3_hyst=5000,fan_temp3_speed=255
+FAN
+fi
+
+echo "==> Printer: keep the system print service off it (it grabs USB printers at boot, and the booth loses lp0)"
+sudo systemctl disable --now cups.socket cups.path cups.service cups-browsed.service ipp-usb.service 2>/dev/null || true
+sudo systemctl mask cups.socket cups.path cups.service cups-browsed.service ipp-usb.service 2>/dev/null || true
+
 echo "==> Settings"
 chmod +x "$APP/run.sh" "$APP/booth.py"
 sed -i "s/^LINE=[0-9]* /LINE=$N /" "$APP/native.conf"
