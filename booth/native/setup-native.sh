@@ -11,7 +11,7 @@ APP="$(cd "$(dirname "$0")" && pwd)"   # runs in place, wherever the repo is
 echo "==> Packages"
 sudo apt-get update
 sudo apt-get install -y mpv ffmpeg unclutter x11-xserver-utils pulseaudio-utils fonts-dejavu-core \
-  python3-venv python3-numpy python3-pil python3-evdev libportaudio2
+  python3-venv python3-numpy python3-pil python3-evdev libportaudio2 pipewire-alsa
 
 echo "==> System: X11, auto-login to desktop, no screen blanking, hostname"
 sudo raspi-config nonint do_wayland W1          # X11 (reliable cursor hiding + xset)
