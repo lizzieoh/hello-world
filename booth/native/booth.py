@@ -16,6 +16,7 @@ and a video arriving: each call has a number, and anything from an older call is
 Run by run.sh, which restarts it if it ever exits. Settings: native.conf next to this file. fal key: fal.key.
 """
 import base64
+import glob
 import heapq
 import io
 import itertools
@@ -26,6 +27,7 @@ import queue
 import re
 import socket
 import subprocess
+import sys
 import threading
 import time
 import urllib.request
@@ -789,8 +791,32 @@ class Printer:
             take["done"].wait(20)
         src = take.get("file") or take["url"]
         data = escpos(receipt_image(take, self.cfg, src))
-        with open(self.cfg["printer"], "wb") as f:
+        with open(printer_path(self.cfg), "wb") as f:
             f.write(data)
+
+
+def printer_path(cfg):
+    """The configured printer, or else the first USB printer the kernel found (lp0 can come back as lp1 after a
+    replug)."""
+    if os.path.exists(cfg["printer"]):
+        return cfg["printer"]
+    found = sorted(glob.glob("/dev/usb/lp*"))
+    return found[0] if found else cfg["printer"]
+
+
+def test_print():
+    """python3 booth.py --test-print : one receipt from a test pattern, to check the printer on its own."""
+    import tempfile
+    cfg = load_config()
+    clip = Path(tempfile.mkdtemp()) / "test.mp4"
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", f"testsrc2=s=1280x720:d={cfg['secs']}:r=24",
+                    "-pix_fmt", "yuv420p", str(clip)], check=True)
+    take = {"prompt": "This is a test print from the fal call center", "model": "Test pattern", "secs": 0.0,
+            "url": str(clip)}
+    path = printer_path(cfg)
+    print(f"printing to {path} ...")
+    Printer(cfg).print(take)
+    print("sent. A receipt with a striped test pattern should come out and cut.")
 
 
 # ---------- the call ----------
@@ -1177,4 +1203,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    test_print() if "--test-print" in sys.argv else main()
