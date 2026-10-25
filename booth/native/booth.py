@@ -43,7 +43,7 @@ log = logging.getLogger("booth")
 # ---------- settings ----------
 def load_config(path=HERE / "native.conf"):
     cfg = {"LINE": "1", "SECS": "10", "MODEL": "h3", "LANGUAGE": "en", "PRINTER": "/dev/usb/lp0", "GRAB": "1",
-           "PLAYS_BEFORE_SLIDES": "4", "SLIDES": "6", "SLIDE_SECS": "2.5",
+           "PLAYS_BEFORE_SLIDES": "4", "SLIDES": "6", "SLIDE_SECS": "2.5", "PRINT_LIGHTEN": "35",
            "OUT_DEVICE": "", "IN_DEVICE": ""}
     if path.exists():
         for raw in path.read_text().splitlines():
@@ -58,6 +58,8 @@ def load_config(path=HERE / "native.conf"):
         "flux_first": cfg["MODEL"].lower() == "flux",
         "language": cfg["LANGUAGE"],
         "printer": cfg["PRINTER"],
+        # How much lighter the receipt's pictures print, 0-100 (0 = as filmed). Thermal paper prints dark.
+        "print_lighten": min(100, max(0, int(cfg["PRINT_LIGHTEN"]))),
         "grab": cfg["GRAB"] != "0",
         # Sound devices by (part of) their name; empty = the system default (on the Pi, run.sh points that at the
         # USB adapter). E.g. on a laptop: OUT_DEVICE="External Headphones", IN_DEVICE="USB Audio".
@@ -825,7 +827,9 @@ def receipt_image(take, cfg, src):
     for line in said:
         d.text((DOTS // 2, y), line, font=mid, fill=0, anchor="mt"); y += 34
     y += 12
+    gamma = 1 + cfg.get("print_lighten", 0) / 50  # 35 -> 1.7: lifts the darks and mids, keeps the whites
     for f in frames:
+        f = f.point(lambda v: round(255 * (v / 255) ** (1 / gamma)))
         img.paste(f.convert("1", dither=Image.Dither.FLOYDSTEINBERG).convert("L"), (0, y))
         y += f.height + 12
     d.line([(16, y), (DOTS - 16, y)], fill=0, width=2); y += 16
