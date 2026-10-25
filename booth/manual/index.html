@@ -583,6 +583,14 @@
       <li><b>Hook:</b> solder two wires onto the two hook pads you found, and connect them to <b>GP15 (pin 20)</b> and <b>GND (pin 18)</b>. Either wire can go to either pin.</li>
       <li>Use a different colour for each wire and write the colour list on tape inside the phone.</li>
     </ol>
+    <div class="note check"><b>Faster: wiring with no soldering</b>
+      <ul>
+        <li><b>Plug jumpers straight into the keypad's own plug (try this first, 2 minutes).</b> Push the metal pin of a <i>male</i>-to-female jumper wire into one slot of the keypad ribbon's white plug. If it goes in snugly and stays put, do all of them: the male end goes in the plug, the female end on the Pico pin. That's the whole keypad wired in about 5 minutes, with no cutting or soldering. A dab of hot glue over the plug keeps the pins in for the show.</li>
+        <li><b>If the pins are loose:</b> use a <b>Pico screw-terminal breakout board</b> (search Amazon for "Raspberry Pi Pico screw terminal breakout"). The Pico plugs into it; you cut the ribbon's plug off, strip each wire about 5 mm (³⁄₁₆ in), push it into a terminal and tighten the screw. No soldering, and wires can be moved in seconds.</li>
+        <li><b>Hook switch:</b> the same two options work on its PX2 plug. Otherwise it's only 2 solder joints.</li>
+        <li><b>Assembly line for the 4 phones:</b> do the same step on all four before moving on. Use the same wire colours in the same order on every phone, and run the key finder (10c) on phone 1 only. If the other phones are the same model, its two lines work for all of them: copy the same code.py and just press every key to check.</li>
+      </ul>
+    </div>
     <h3>10c · Let the Pico map the keypad (the key finder)</h3>
     <ol class="steps">
       <li>Also copy <code>booth/pico/keyfinder.py</code> onto CIRCUITPY, next to code.py.</li>
