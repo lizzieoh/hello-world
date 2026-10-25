@@ -59,6 +59,9 @@ class BrowserScreen:
         self._set(src=urls[0] if urls else None, muted=True, loop=False, playlist=urls, pos=0)
         self.post(("playlist_pos", 0))
 
+    def slides(self, images, secs):
+        pass  # the browser test screen keeps the video looping instead
+
     def mute(self, on):
         with self.lock:
             self.state["muted"] = on

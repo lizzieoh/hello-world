@@ -179,8 +179,8 @@ def test_full_call():
     assert client.calls.count("minimax/h3-max/text-to-video") == 2
     booth.post(("hook", False))
     wait(lambda: booth.state == "idle", 3, "idle")
-    wait(lambda: booth.screen.calls("playlist"), 5, "recent videos loop")
-    assert len(booth.screen.calls("playlist")[-1][1]) >= 1
+    wait(lambda: booth.screen.calls("slides"), 5, "slideshow of recent videos")
+    assert len(booth.screen.calls("slides")[-1][1]) >= 2
     stop.set()
 
 
@@ -279,6 +279,36 @@ def test_hang_up_during_greeting_is_silent():
     wait(lambda: booth.state == "idle", 3)
     time.sleep(2.0)
     assert booth.state == "idle" and not client.calls and booth.line.rec is None
+    stop.set()
+
+
+def test_slideshow_after_four_plays():
+    booth, client, stop = make()
+    lift_and_say(booth, talk())
+    wait(lambda: booth.state == "ready", 10, "ready")
+    booth.cfg["secs"] = 0.3  # 4 plays of a 0.3 s clip; the render itself was asked for 10 s
+    booth.post(("file_loaded",))
+    wait(lambda: booth.screen.calls("slides"), 25, "slideshow")
+    images, secs = booth.screen.calls("slides")[-1][1:3]
+    assert len(images) == 3 and secs == 2.5, (len(images), secs)  # 3 stills from the one video so far
+    assert all(Path(i).exists() for i in images)
+    booth.post(("key", "2"))  # sound on: back to the video, from the start
+    wait(lambda: booth.screen.calls("video")[-1][2] is False, 3, "video with sound")
+    assert booth.take["sound"] and not booth.take["slides"]
+    stop.set()
+
+
+def test_slides_span_all_videos():
+    booth, client, stop = make()
+    for n in range(2):
+        lift_and_say(booth, talk())
+        wait(lambda: booth.state == "ready", 10, "ready")
+        wait(lambda: booth.take.get("done") and booth.take["done"].is_set(), 20, "saved with stills")
+        booth.post(("hook", False))
+        wait(lambda: booth.state == "idle", 3)
+    wait(lambda: booth.screen.calls("slides"), 5, "attract slideshow")
+    images = booth.screen.calls("slides")[-1][1]
+    assert len(images) == 6 and len({Path(i).parent for i in images}) == 2, images
     stop.set()
 
 

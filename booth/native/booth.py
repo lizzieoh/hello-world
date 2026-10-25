@@ -41,6 +41,7 @@ log = logging.getLogger("booth")
 # ---------- settings ----------
 def load_config(path=HERE / "native.conf"):
     cfg = {"LINE": "1", "SECS": "10", "MODEL": "h3", "LANGUAGE": "en", "PRINTER": "/dev/usb/lp0", "GRAB": "1",
+           "PLAYS_BEFORE_SLIDES": "4", "SLIDES": "6", "SLIDE_SECS": "2.5",
            "OUT_DEVICE": "", "IN_DEVICE": ""}
     if path.exists():
         for raw in path.read_text().splitlines():
@@ -65,6 +66,9 @@ def load_config(path=HERE / "native.conf"):
         "off_hook_idle": 60.0,                                   # handset left off after the menu -> busy signal
         "history": 12,                                           # recent videos kept for the screen between calls
         "attract_after": 20.0,                                   # after a hang-up, their clip stays up this long
+        # After the video has played this many times, it turns into a slideshow of stills from it (0 = never).
+        "plays_before_slides": max(0, int(cfg["PLAYS_BEFORE_SLIDES"])),
+        "slides": max(2, int(cfg["SLIDES"])), "slide_secs": max(0.5, float(cfg["SLIDE_SECS"])),
     }
 
 
@@ -396,7 +400,8 @@ class Line:
     def record(self, cid):
         with self.lock:
             # times are counted in samples, so a late callback can't cut someone off
-            self.rec = {"cid": cid, "chunks": [], "n": 0, "floor": 0.01, "heard": False, "last_loud": None}
+            self.rec = {"cid": cid, "chunks": [], "n": 0, "floor": 0.01, "heard": False, "last_loud": None,
+                        "wall0": time.monotonic()}
 
     def stop_recording(self):
         """# pressed: whatever was said so far is the prompt."""
@@ -438,6 +443,9 @@ class Line:
         if peak > 0:
             audio = audio * min(30.0, 0.9 / peak)
         since = r["n"] / MIC_SR - (r["last_loud"] or r["n"] / MIC_SR)  # seconds since they stopped talking
+        log.info("recorded %.1f s (speech heard: %s, ended %.1f s before the end, gain %.1fx, wall %.1f s)",
+                 r["n"] / MIC_SR, r["heard"], since, min(30.0, 0.9 / peak) if peak > 0 else 0,
+                 time.monotonic() - r["wall0"])
         self.post(("heard", r["cid"], {"wav": to_wav(audio, MIC_SR), "heard": r["heard"],
                                        "speech_end": time.monotonic() - since}))
 
@@ -548,10 +556,21 @@ class Screen:
 
     # ----- scenes -----
     def background(self):
+        self.cmd("set_property", "image-display-duration", "inf")
         self.cmd("set_property", "loop-playlist", "no")
         self.cmd("loadfile", str(self.bg), "replace")
 
+    def slides(self, images, secs):
+        """Stills from the video, one after another, round and round."""
+        path = HERE / "cache" / "slides.m3u"
+        path.write_text("\n".join(images) + "\n")
+        self.cmd("set_property", "image-display-duration", secs)
+        self.cmd("set_property", "loop-file", "no")
+        self.cmd("set_property", "loop-playlist", "inf")
+        self.cmd("loadlist", str(path), "replace")
+
     def video(self, src, mute=True):
+        self.cmd("set_property", "image-display-duration", "inf")
         self.cmd("set_property", "mute", mute)
         self.cmd("set_property", "loop-playlist", "no")
         self.cmd("set_property", "loop-file", "inf")
@@ -672,11 +691,12 @@ class Phone:
 
 # ---------- recent videos, kept on disk ----------
 class Cache:
-    """The last few videos, downloaded in the background: they loop on the screen between calls (with or without
-    Wi-Fi) and the receipt's stills come from the local copy."""
+    """The last few videos, downloaded in the background, each with a few stills pulled from it. Between calls the
+    screen shows the stills from all of them (with or without Wi-Fi), and the receipt's stills come from the local
+    copy."""
 
-    def __init__(self, keep, root=HERE / "cache"):
-        self.root, self.keep = root, keep
+    def __init__(self, keep, root=HERE / "cache", secs=10, stills=3):
+        self.root, self.keep, self.secs, self.stills = root, keep, secs, stills
         root.mkdir(parents=True, exist_ok=True)
         self.index = root / "history.json"
         try:
@@ -684,10 +704,30 @@ class Cache:
         except Exception:
             self.items = []
         self.lock = threading.Lock()
+        threading.Thread(target=self._backfill, daemon=True).start()
 
     def add(self, take):
         take["done"] = threading.Event()
         threading.Thread(target=self._download, args=(take,), daemon=True).start()
+
+    def _stills_dir(self, name):
+        return self.root / "stills" / Path(name).stem
+
+    def _pull_stills(self, name):
+        try:
+            return [str(Path(p).relative_to(self.root)) for p in
+                    video_stills(str(self.root / name), self.secs, self.stills, self._stills_dir(name))]
+        except Exception as e:
+            log.warning("couldn't pull stills from %s: %s", name, e)
+            return []
+
+    def _backfill(self):
+        """Videos saved before stills existed get theirs now."""
+        for h in list(self.items):
+            if not h.get("stills"):
+                h["stills"] = self._pull_stills(h["file"])
+        with self.lock:
+            self.index.write_text(json.dumps(self.items))
 
     def _download(self, take):
         name = f"{int(time.time() * 1000)}.mp4"
@@ -698,10 +738,13 @@ class Cache:
                     f.write(chunk)
             part.rename(self.root / name)
             take["file"] = str(self.root / name)
+            stills = self._pull_stills(name)
             with self.lock:
-                self.items = [{"file": name, "prompt": take["prompt"]}] + self.items
+                self.items = [{"file": name, "prompt": take["prompt"], "stills": stills}] + self.items
                 for old in self.items[self.keep:]:
                     (self.root / old["file"]).unlink(missing_ok=True)
+                    for f in self._stills_dir(old["file"]).glob("*"):
+                        f.unlink(missing_ok=True)
                 self.items = self.items[:self.keep]
                 self.index.write_text(json.dumps(self.items))
         except Exception as e:
@@ -714,9 +757,28 @@ class Cache:
         with self.lock:
             return [(str(self.root / h["file"]), h["prompt"]) for h in self.items]
 
+    def slides(self):
+        """Every saved still, newest video first, as (image, prompt)."""
+        with self.lock:
+            return [(str(self.root / st), h["prompt"]) for h in self.items for st in h.get("stills") or []
+                    if (self.root / st).exists()]
+
 
 # ---------- the receipt ----------
 DOTS = 576  # across an 80 mm receipt at 203 dpi
+
+
+def video_stills(src, secs, count, out_dir):
+    """`count` evenly spaced frames from the video, as JPEGs in out_dir. Returns their paths."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    paths = []
+    for i in range(count):
+        out = out_dir / f"{i}.jpg"
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{secs * (i + 0.5) / count:.2f}", "-i", src,
+                        "-frames:v", "1", "-q:v", "2", str(out)], capture_output=True, timeout=30)
+        if out.exists() and out.stat().st_size:
+            paths.append(str(out))
+    return paths
 
 
 def receipt_image(take, cfg, src):
@@ -809,6 +871,7 @@ class Booth:
         self.last_key = 0.0
         self.view = {"said": "", "status": "", "keys": None, "center": ""}
         self.attract = []
+        self.slideshow = []
         self.online = True
 
     def post(self, ev):
@@ -861,6 +924,7 @@ class Booth:
     def pick_up(self):
         if self.off_hook:
             return
+        log.info("lifted")
         self.off_hook = True
         self.cid += 1
         self.attempt = 0
@@ -900,6 +964,7 @@ class Booth:
         if cid != self.cid:
             return
         if what == "greeted" and self.state == "greeting":
+            log.info("greeting done, listening (call %d, try %d)", self.cid, self.attempt + 1)
             self.state = "listening"
             self.set_view(center="Listening…  press # when you're done.")
             self.line.record(self.cid)
@@ -920,8 +985,10 @@ class Booth:
                          daemon=True).start()
 
     def _transcribe_and_render(self, cid, rid, wav, t0):
+        t = time.monotonic()
         try:
             prompt = self.fal.transcribe(wav)
+            log.info("transcribed in %.1f s (%d KB of audio)", time.monotonic() - t, len(wav) // 1024)
         except Exception:
             return self.post(("failed", cid, rid, "Our lines are busy. Hang up and try again."))
         self.post(("prompt", cid, rid, prompt))
@@ -946,8 +1013,10 @@ class Booth:
         threading.Thread(target=self._render, args=(self.cid, rid, prompt, time.monotonic()), daemon=True).start()
 
     def _render(self, cid, rid, prompt, t0):
+        t = time.monotonic()
         try:
             url, model = self.fal.render(prompt)
+            log.info("rendered in %.1f s", time.monotonic() - t)
         except Refused:
             return self.post(("failed", cid, rid, "That one didn't go through. Hang up and try another."))
         except Exception:
@@ -976,6 +1045,36 @@ class Booth:
         if self.state == "ready" and t and not t.get("loaded"):
             t["loaded"] = True
             self.after(self.cfg["menu_after"], "menu", self.cid, t["rid"])
+            self.slides_later(t)
+
+    # ----- after a few plays, the video becomes a slideshow of its own stills -----
+    def slides_later(self, t):
+        plays = self.cfg["plays_before_slides"]
+        if plays:
+            t["playing_since"] = token = time.monotonic()
+            self.after(plays * self.cfg["secs"], "to_slides", t["rid"], token)
+
+    def on_to_slides(self, rid, token):
+        t = self.take
+        if t and t["rid"] == rid and t.get("playing_since") == token and self.state in ("ready", "idle"):
+            threading.Thread(target=self._wait_for_stills, args=(t, token), daemon=True).start()
+
+    def _wait_for_stills(self, t, token):
+        if t.get("done"):
+            t["done"].wait(30)  # so this call's own stills are in the slideshow too
+        self.post(("slides_ready", t["rid"], token))
+
+    def on_slides_ready(self, rid, token):
+        t = self.take
+        if not (t and t["rid"] == rid and t.get("playing_since") == token and self.state in ("ready", "idle")):
+            return
+        slides = self.cache.slides()
+        if len(slides) < 2:
+            return
+        t["slides"] = True
+        self.slideshow = slides
+        log.info("slideshow: %d stills from %d videos", len(slides), len({p for _, p in slides}))
+        self.screen.slides([img for img, _ in slides], self.cfg["slide_secs"])
 
     def on_video_error(self):
         if self.state == "ready" and self.take:
@@ -1003,9 +1102,14 @@ class Booth:
         keys = self.view["keys"]
         if k == "2":
             t["sound"] = not t["sound"]
-            self.screen.mute(not t["sound"])
-            if t["sound"]:
-                self.screen.restart_clip()
+            if t.get("slides"):  # the slideshow has no sound: back to the video, from the start
+                t["slides"] = False
+                self.screen.video(t.get("file") or t["url"], mute=not t["sound"])
+                self.slides_later(t)
+            else:
+                self.screen.mute(not t["sound"])
+                if t["sound"]:
+                    self.screen.restart_clip()
             keys["2"] = "Sound on" if t["sound"] else None
         elif k == "3":
             self.screen.mute(True)
@@ -1060,7 +1164,6 @@ class Booth:
             # the clip they just made keeps playing, muted, for a little while before the loop of recent ones
             self.screen.mute(True)
             self.set_view(said=f"“{self.take['prompt']}”", status="Pick up the phone to make your own.")
-            self.take = None
             self.after(self.cfg["attract_after"], "attract", self.cid)
         else:
             self.on_attract(self.cid)
@@ -1068,8 +1171,13 @@ class Booth:
     def on_attract(self, cid):
         if cid != self.cid or self.state != "idle":
             return
-        self.attract = self.cache.recent()
-        if self.attract:
+        self.take = None  # their clip (or its slideshow) makes way for the loop of recent ones
+        slides = self.cache.slides()
+        self.attract = slides if len(slides) >= 2 else self.cache.recent()
+        if len(slides) >= 2:
+            self.screen.slides([img for img, _ in slides], self.cfg["slide_secs"])
+            self.set_view(said=f"“{self.attract[0][1]}”", status="Pick up the phone to make your own.")
+        elif self.attract:
             self.screen.playlist([f for f, _ in self.attract])
             self.set_view(said=f"“{self.attract[0][1]}”", status="Pick up the phone to make your own.")
         else:
@@ -1077,8 +1185,10 @@ class Booth:
             self.set_view(center="Pick up the phone.")
 
     def on_playlist_pos(self, pos):
-        if self.state == "idle" and isinstance(pos, int) and 0 <= pos < len(self.attract):
-            self.set_view(said=f"“{self.attract[pos][1]}”", status="Pick up the phone to make your own.")
+        # their own slideshow still lingering after a hang-up, or the loop of recent ones
+        shown = self.slideshow if self.take and self.take.get("slides") else self.attract
+        if self.state == "idle" and isinstance(pos, int) and 0 <= pos < len(shown):
+            self.set_view(said=f"“{shown[pos][1]}”", status="Pick up the phone to make your own.")
 
     def on_next_clip(self):
         if self.state == "idle" and self.attract:
@@ -1168,7 +1278,7 @@ def main():
     booth.screen = Screen(booth.post)
     booth.fal = Fal(cfg)
     booth.printer = Printer(cfg)
-    booth.cache = Cache(cfg["history"])
+    booth.cache = Cache(cfg["history"], secs=cfg["secs"])
     Phone(booth.post, grab=cfg["grab"])
     try:
         booth.run()
