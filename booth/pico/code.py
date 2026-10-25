@@ -100,6 +100,7 @@ def tap(*codes):
 
 state = off_hook()
 led.value = state
+print("booth ready, handset", "lifted" if state else "hung up")
 star_down_at = None
 down = set()      # keys reported as pressed
 candidate = set()  # what the last scan saw; a change has to show up twice in a row (debounce)
@@ -110,6 +111,7 @@ while True:
         if off_hook() == reading:
             state = reading
             led.value = state
+            print("hook:", "lifted" if state else "hung up")  # USB serial log, for testing
             if state:
                 tap(*PICKUP_KEYS)
             else:
@@ -124,6 +126,7 @@ while True:
             key = LAYOUT[n]
             if key == "*":
                 star_down_at = time.monotonic()
+            print("key:", key, "" if state or not KEYS_ONLY_WHEN_OFF_HOOK else "(ignored: hung up)")
             if state or not KEYS_ONLY_WHEN_OFF_HOOK:
                 tap(*KEYCODES[key])
         if LAYOUT.index("*") in down - now:
