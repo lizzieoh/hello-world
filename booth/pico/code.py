@@ -12,7 +12,6 @@ import time
 
 import board
 import digitalio
-import keypad
 import usb_hid
 from adafruit_hid.keyboard import Keyboard
 from adafruit_hid.keycode import Keycode
@@ -54,7 +53,32 @@ hook = digitalio.DigitalInOut(HOOK_PIN)
 hook.switch_to_input(pull=digitalio.Pull.UP)
 led = digitalio.DigitalInOut(board.LED)
 led.switch_to_output()
-keys = keypad.KeyMatrix(ROW_PINS, COL_PINS, columns_to_anodes=True)
+# The phone's carbon-pad keys are slow to pull a line low, too slow for keypad.KeyMatrix, which reads straight
+# after switching rows. This scan waits SETTLE_S per row (the same as keymonitor.py, which sees every key).
+SETTLE_S = 0.0005
+rows = []
+for pin in ROW_PINS:
+    r = digitalio.DigitalInOut(pin)
+    r.switch_to_input(pull=digitalio.Pull.UP)
+    rows.append(r)
+cols = []
+for pin in COL_PINS:
+    c = digitalio.DigitalInOut(pin)
+    c.switch_to_input(pull=digitalio.Pull.UP)
+    cols.append(c)
+
+
+def held_keys():
+    """Indexes into LAYOUT of every key held right now."""
+    held = set()
+    for r, row in enumerate(rows):
+        row.switch_to_output(value=False)
+        time.sleep(SETTLE_S)
+        for c, col in enumerate(cols):
+            if not col.value:
+                held.add(r * len(cols) + c)
+        row.switch_to_input(pull=digitalio.Pull.UP)
+    return held
 
 kbd = None
 while kbd is None:
@@ -77,7 +101,8 @@ def tap(*codes):
 state = off_hook()
 led.value = state
 star_down_at = None
-event = keypad.Event()
+down = set()      # keys reported as pressed
+candidate = set()  # what the last scan saw; a change has to show up twice in a row (debounce)
 while True:
     reading = off_hook()
     if reading != state:
@@ -93,12 +118,18 @@ while True:
                     time.sleep(0.5)
                     tap(Keycode.CONTROL, Keycode.R)
 
-    while keys.events.get_into(event):
-        key = LAYOUT[event.key_number]
-        if key == "*":
-            star_down_at = time.monotonic() if event.pressed else None
-        if event.pressed and (state or not KEYS_ONLY_WHEN_OFF_HOOK):
-            tap(*KEYCODES[key])
+    now = held_keys()
+    if now == candidate and now != down:
+        for n in now - down:
+            key = LAYOUT[n]
+            if key == "*":
+                star_down_at = time.monotonic()
+            if state or not KEYS_ONLY_WHEN_OFF_HOOK:
+                tap(*KEYCODES[key])
+        if LAYOUT.index("*") in down - now:
+            star_down_at = None
+        down = now
+    candidate = now
 
     if star_down_at is not None and time.monotonic() - star_down_at > STAFF_RESET_HOLD_S:
         star_down_at = None
