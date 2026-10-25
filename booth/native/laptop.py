@@ -237,7 +237,8 @@ def main():
     booth.screen = screen
     booth.line = B.Line(booth.post, cfg)
     booth.fal = B.Fal(cfg)
-    booth.printer = LaptopPrinter(cfg)
+    # BOOTH_PRINTER=<printer queue name> prints for real; otherwise 0 opens the receipt as a picture
+    booth.printer = B.Printer(cfg) if "/" not in cfg["printer"] else LaptopPrinter(cfg)
     booth.cache = B.Cache(cfg["history"])
     threading.Thread(target=serve, args=(booth, screen), daemon=True).start()
     log.info("open http://localhost:%d and click into the page", PORT)

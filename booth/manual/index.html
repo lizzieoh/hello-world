@@ -686,6 +686,21 @@ sudo reboot</code></pre>
     <p class="time">About 30 minutes. Test this early: it's the step most likely to need help.</p>
     <p>Pressing <kbd>0</kbd> prints a receipt: the prompt, three black-and-white stills from the video and the time. The receipt is laid out for <b>80 mm</b> paper.</p>
     <div class="note check"><b>Using the native app (Part 11e)? Skip the driver.</b><p>Load the paper, plug the printer into the Pi, make a call and press <kbd>0</kbd>. The receipt prints straight away. If the screen says "Printer offline", replug the printer's USB cable and press <kbd>0</kbd> again. Steps 2 to 4 below are only for the browser version.</p></div>
+    <h3>12a · Rongta 80 mm (the one we bought): test it on its own</h3>
+    <ol class="steps">
+      <li><b>Paper:</b> open the lid and drop the roll in so the paper comes off the <b>bottom</b> of the roll toward you. Pull out about 5 cm (2 in) and close the lid firmly until it clicks. The auto-cutter trims the end.</li>
+      <li><b>The printer's own self-test:</b> with the printer off, hold the <b>FEED</b> button, switch it on, and let go once it starts printing. It prints its settings page. That proves the printer, paper and cutter work before the Pi is involved.</li>
+      <li><b>Plug it into the Pi by USB</b> (the square USB-B port on the back). <b>Don't use the port that looks like a phone jack:</b> that's for a cash drawer. With phone cords all over the bench, it's an easy mix-up.</li>
+      <li><b>Test print from the Pi.</b> In Terminal:</li>
+    </ol>
+<pre><code>cd ~/hello-world &amp;&amp; git pull
+ls /dev/usb/
+cd booth/native
+sudo apt install -y python3-numpy python3-pil ffmpeg
+sudo python3 booth.py --test-print</code></pre>
+    <p><code>ls /dev/usb/</code> should show <b>lp0</b>, which is the printer. The last line prints a receipt with a striped test pattern and cuts it. <code>sudo</code> is only for this test: the native app's setup gives the booth permission to print without it.</p>
+    <div class="note check"><b>No Pi yet? Test it from the Mac</b><p>Plug the printer into the Mac. In Terminal, <code>lpinfo -v | grep usb</code> lists it as a line starting <code>usb://</code>. Copy that address, then run <code>sudo lpadmin -p rongta -E -v 'usb://…paste…' -m raw</code>. Then, from <code>hello-world/booth/native</code>: <code>BOOTH_PRINTER=rongta python3 booth.py --test-print</code>. The same <code>BOOTH_PRINTER=rongta</code> in front of the laptop test (<code>laptop.py</code>) makes <kbd>0</kbd> print for real.</p></div>
+    <div class="note warn"><b>If <code>ls /dev/usb/</code> shows nothing</b><p>Check the printer is switched on, then replug its USB cable and run it again. If it's still empty, run <code>lsusb</code> and send Claude what it lists. Some Rongta units show up as a different kind of USB device, and that's a one-line setting change.</p></div>
     <ol class="steps">
       <li>Load an 80 mm paper roll (thermal side facing out, the side that scratches dark with a fingernail) and connect the printer to the Pi by USB.</li>
       <li>On the Pi, open Terminal and install the print system and a free driver for 80 mm receipt printers:</li>
