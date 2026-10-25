@@ -23,7 +23,7 @@ echo "==> Booth files"
 mkdir -p "$BOOTH"
 cp "$HERE/kiosk.sh" "$HERE/start.html" "$BOOTH/"
 chmod +x "$BOOTH/kiosk.sh"
-[ -f "$BOOTH/booth.conf" ] || cp "$HERE/booth.conf" "$BOOTH/booth.conf"
+[ -f "$BOOTH/booth.conf" ] || sed "s/line=1/line=$N/" "$HERE/booth.conf" > "$BOOTH/booth.conf"
 
 echo "==> Autostart"
 mkdir -p "$HOME/.config/autostart"

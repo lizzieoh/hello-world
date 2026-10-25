@@ -97,22 +97,22 @@ You keep four parts of the phone: **the handset, its coiled cord, the hook switc
 
 ---
 
-## 4. Get the website to respond to the phone (developer, 10 min)
+## 4. The booth page (done)
 
-The site already has a press-to-speak button, a "press 2" and a "press 3". It just needs to accept them from the keyboard. Paste [`web/phone-keys.js`](web/phone-keys.js) into the app, point the selectors at the real buttons, and deploy:
+The call center has a dedicated kiosk page, **`/booth`**, built for the phone (branch `booth` of `lizzieoh/fal-call-center`; merge it to make it live at `fal-call-center.vercel.app/booth`). Each Pi opens `/booth?line=N`.
 
-| Phone action | Key the Pico types | Site should… |
+| Phone action | Key the Pico types | What happens |
 |---|---|---|
-| Lift handset | F8 | Reset to a fresh state **and** start listening. Picking up replaces "press to speak". |
-| Hang up | F9 | Stop the mic and any playing audio. **Keep the image on screen.** |
-| Press 2 | `2` | Audio generation; the audio plays in the earpiece. |
-| Press 3 | `3` | Regenerate. |
-| Press # | `#` | *(Optional)* "Press pound when you're done speaking", if the site doesn't detect silence by itself. |
+| Lift handset | F8 | "Please leave your prompt after the beep." → beep → listening |
+| Speak, then pause or press **#** | `#` | Hold line + elevator music start at once while the video renders |
+| (video arrives) | | Plays muted; a few seconds in: "Press 2…, 3…, 0…" |
+| Press 2 | `2` | Sound on (it was rendered with the video, so it's instant) |
+| Press 3 | `3` | Regenerate the same prompt (back on hold) |
+| Press 0 | `0` | Prints the receipt (silently, via the kiosk's print setting) |
+| Hang up | F9 | Line goes quiet; a video still rendering lands on screen anyway |
+| Hold **\*** 3 s | Ctrl+R | Staff reset: reloads the page |
 
-- The booth URL has `?booth=1`, so the site can hide its on-screen buttons and show "pick up the phone" instead.
-- Spoken prompts make it feel like a real phone line. For example, on pickup: "Tell me what you'd like to see." After the image: "Press 2 to hear it, press 3 to try again."
-- Make sure the site requests the mic with `echoCancellation: true` and `noiseSuppression: true`. The show floor is loud.
-- Staff reset: hold **\*** for 3 seconds and the page reloads.
+Anything that fails (network, fal, no speech heard) plays the fast busy signal and shows "hang up and try again". Between calls, the screen cycles through recent videos.
 
 ---
 
