@@ -1,0 +1,28 @@
+fal booth: Pico setup kit (about 5 minutes)
+
+1. Put CircuitPython on the Pico (one time only)
+   - Unplug the Pico. Hold its white BOOTSEL button, plug it into the Mac, then let go.
+     A drive called RPI-RP2 appears.
+   - Download CircuitPython for "Pico" from circuitpython.org/board/raspberry_pi_pico
+     (the newest stable .uf2 file) and drag it onto RPI-RP2.
+   - The drive disappears and comes back as CIRCUITPY. (If the Mac complains that the
+     drive was not ejected properly, that's normal here; ignore it.)
+   - If a "Keyboard Setup Assistant" window pops up, close it. That's the Pico saying
+     hello as a keyboard.
+
+2. Copy the booth files
+   - Open the CIRCUITPY folder in this kit. Select everything inside it (code.py,
+     keyfinder.py and the lib folder) and drag it onto the CIRCUITPY drive.
+     Replace the existing code.py when asked.
+   - The Pico restarts by itself a second later.
+
+3. Quick test, before anything is wired
+   - Open TextEdit and click into an empty document.
+   - With a jumper wire (or a paperclip), briefly join pin 20 (GP15) and pin 18 (GND).
+     Count pins with the USB plug pointing up: pin 1 is top left, going down the left side.
+   - While they touch, the Pico's little green LED lights. That's "handset lifted".
+     F8 doesn't show in TextEdit, so nothing appears there. That's expected.
+   Pass: LED on while joined, off when you let go.
+
+Next: wire the hook switch (pads 1+2 -> pin 20 and pin 18) and the keypad ribbon in order
+(wire 1 -> GP0 ...), then follow manual Part 10c to let the Pico map the keypad.
