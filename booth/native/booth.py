@@ -695,6 +695,8 @@ class Phone:
                         self.post(("toggle",))
                     elif c == e.KEY_R and ctrl:
                         self.post(("restart",))
+                    elif c == e.KEY_F10:
+                        self.post(("shutdown",))
                     elif (c == e.KEY_8 and shift) or c == e.KEY_KPASTERISK:
                         self.post(("key", "*"))
                     elif (c == e.KEY_3 and shift) or c == e.KEY_KPENTER:
@@ -1093,6 +1095,16 @@ class Booth:
 
     def on_toggle(self):
         self.on_hook(not self.off_hook)
+
+    def on_shutdown(self):
+        """Staff (# held 5 s): say so on screen, then power the Pi off safely so it can be unplugged."""
+        log.info("shutdown requested")
+        self.line.cancel_recording()
+        self.line.stop(fade=False)
+        self.state = "busy"
+        self.screen.background()
+        self.set_view(center="Shutting down. Unplug when the green light stops blinking.")
+        threading.Timer(3, lambda: subprocess.run(["sudo", "-n", "shutdown", "-h", "now"], check=False)).start()
 
     def on_restart(self):
         log.info("restart requested")

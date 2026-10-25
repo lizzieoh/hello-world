@@ -2,7 +2,8 @@
 # Lift handset  -> F8   (site: fresh session, start listening)
 # Hang up       -> F9   (site: stop listening/audio, leave the image on screen)
 # Keypad 0-9 * # -> types that character (site: "press 2 for audio", "press 3 to regenerate")
-# Hold * for 3 s -> Ctrl+R (staff reset: reloads the page)
+# Hold * for 3 s -> Ctrl+R (staff reset: restarts the booth app)
+# Hold # for 5 s -> F10 (staff: shut the booth down safely, then it can be unplugged)
 #
 # Wiring:
 #   hook switch: GP15 (pin 20) and GND (pin 18)
@@ -44,6 +45,8 @@ KEYCODES = {
     "#": (Keycode.SHIFT, Keycode.THREE),
 }
 STAFF_RESET_HOLD_S = 3.0
+STAFF_SHUTDOWN_HOLD_S = 5.0
+SHUTDOWN_KEYS = (Keycode.F10,)
 KEYS_ONLY_WHEN_OFF_HOOK = True
 
 if FIND_KEYS:
@@ -102,6 +105,7 @@ state = off_hook()
 led.value = state
 print("booth ready, handset", "lifted" if state else "hung up")
 star_down_at = None
+hash_down_at = None
 down = set()      # keys reported as pressed
 candidate = set()  # what the last scan saw; a change has to show up twice in a row (debounce)
 while True:
@@ -126,16 +130,25 @@ while True:
             key = LAYOUT[n]
             if key == "*":
                 star_down_at = time.monotonic()
+            if key == "#":
+                hash_down_at = time.monotonic()
             print("key:", key, "" if state or not KEYS_ONLY_WHEN_OFF_HOOK else "(ignored: hung up)")
             if state or not KEYS_ONLY_WHEN_OFF_HOOK:
                 tap(*KEYCODES[key])
         if LAYOUT.index("*") in down - now:
             star_down_at = None
+        if LAYOUT.index("#") in down - now:
+            hash_down_at = None
         down = now
     candidate = now
 
     if star_down_at is not None and time.monotonic() - star_down_at > STAFF_RESET_HOLD_S:
         star_down_at = None
         tap(Keycode.CONTROL, Keycode.R)
+
+    if hash_down_at is not None and time.monotonic() - hash_down_at > STAFF_SHUTDOWN_HOLD_S:
+        hash_down_at = None
+        print("staff: shutdown")
+        tap(*SHUTDOWN_KEYS)
 
     time.sleep(0.01)
