@@ -48,6 +48,7 @@ while true; do
     --password-store=basic --check-for-update-interval=31536000 \
     --autoplay-policy=no-user-gesture-required \
     --use-fake-ui-for-media-stream \
+    --kiosk-printing \
     --overscroll-history-navigation=0 --disable-pinch \
     "file://$BOOTH/start.html#$URL"
   sleep 2
