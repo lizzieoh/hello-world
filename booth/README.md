@@ -69,7 +69,7 @@ You keep four parts of the phone: **the handset, its coiled cord, the hook switc
    - With a multimeter, look for the **earpiece pair**: a steady **100–300 Ω** reading. This is usually the inner two pins.
    - The other pair is the **mic** (usually the outer two pins). An electret mic reads differently with the probes reversed. That means it has a polarity, so note which wire reads as **+** (the higher resistance direction is often +; if the mic is silent later, just swap the two wires).
    - *Vintage carbon mic:* it reads a few hundred Ω, the same both ways, and will be nearly silent. Unscrew the mouthpiece and swap in an electret retrofit capsule.
-3. **Solder the earpiece to pigtail #1.** Earpiece wire A → tip (and ring), earpiece wire B → sleeve (ground). Plug it into the adapter's **headphone** jack.
+3. **Solder the earpiece to pigtail #1.** Earpiece wire A → **tip**, earpiece wire B → **sleeve** (ground). Leave the ring unconnected (joining tip and ring ties the adapter's left and right outputs together). Plug it into the adapter's **headphone** jack.
 4. **Solder the mic to pigtail #2.** Mic **+** → tip, mic **−** → sleeve. Plug it into the adapter's **mic** jack. The adapter powers the electret through this jack.
 5. **Find the hook switch.** This is the plunger under the cradle. Set the multimeter to continuity and find a pair of contacts that **changes** when you press and release the plunger. Desolder it from the board, or cut its traces, so the phone's board isn't connected to it.
 6. **Wire the hook switch to the Pico.** One contact → **GP15** (physical pin 20), the other → **GND** (pin 18). Those are the only two wires.
