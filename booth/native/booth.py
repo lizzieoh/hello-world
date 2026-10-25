@@ -78,6 +78,14 @@ def fal_key():
 
 # Prompts that never reach the model. The models' own safety checkers are the real filter; this just keeps the
 # obvious ones from costing a render.
+# What Whisper-style models "hear" in near-silence. Treated as nothing said.
+NOT_SPEECH = {"", "you", "thank you", "thanks", "thanks for watching", "thank you for watching", "bye", "okay", "so"}
+
+
+def heard_nothing(prompt):
+    return re.sub(r"[^a-z ]", "", prompt.lower()).strip() in NOT_SPEECH
+
+
 BLOCKED = re.compile(r"\b(nude|naked|nudity|porn\w*|sex\w*|nsfw|genital\w*|gore|gory|behead\w*|suicide|nazi\w*|hitler"
                      r"|rape\w*|terroris\w*)\b", re.I)
 
@@ -117,7 +125,7 @@ class Fal:
 
     def transcribe(self, wav_bytes):
         # The recording rides along inline (a data URI): no upload step, one request, one retry.
-        args = {"audio_url": "data:audio/wav;base64," + base64.b64encode(wav_bytes).decode(), "task": "transcribe"}
+        args = {"audio_url": "data:audio/x-wav;base64," + base64.b64encode(wav_bytes).decode(), "task": "transcribe"}
         if self.cfg["language"] != "auto":
             args["language"] = self.cfg["language"]
         for attempt in range(2):
@@ -425,6 +433,10 @@ class Line:
     def _finish(self):  # with self.lock held
         r, self.rec = self.rec, None
         audio = np.concatenate(r["chunks"]) if r["chunks"] else np.zeros(1, np.float32)
+        # Handset mics are quiet; bring the loudest moment up to 90% (at most 30x) so the speech model hears words.
+        peak = float(np.abs(audio).max())
+        if peak > 0:
+            audio = audio * min(30.0, 0.9 / peak)
         since = r["n"] / MIC_SR - (r["last_loud"] or r["n"] / MIC_SR)  # seconds since they stopped talking
         self.post(("heard", r["cid"], {"wav": to_wav(audio, MIC_SR), "heard": r["heard"],
                                        "speech_end": time.monotonic() - since}))
@@ -913,13 +925,14 @@ class Booth:
         except Exception:
             return self.post(("failed", cid, rid, "Our lines are busy. Hang up and try again."))
         self.post(("prompt", cid, rid, prompt))
-        if prompt and not BLOCKED.search(prompt):
+        if not heard_nothing(prompt) and not BLOCKED.search(prompt):
             self._render(cid, rid, prompt, t0)
 
     def on_prompt(self, cid, rid, prompt):
+        log.info("heard: %r", prompt)
         if cid != self.cid or rid != self.pending:
             return
-        if not prompt:
+        if heard_nothing(prompt):
             return self.busy("Sorry, we didn't catch that. Hang up and try again.")
         if BLOCKED.search(prompt):
             return self.busy("Let's keep it friendly. Hang up and try another one.")
@@ -943,6 +956,7 @@ class Booth:
                                           "printed": False, "answered": False, "sound": False}))
 
     def on_rendered(self, cid, rid, take):
+        log.info("video: %s, %.1f s after they stopped talking", take["model"], take["secs"])
         self.cache.add(take)  # kept for the screen between calls, even if they hung up while it rendered
         if cid != self.cid or rid != self.pending or not self.off_hook:
             return
@@ -1145,6 +1159,7 @@ class Booth:
 
 def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    logging.getLogger("httpx").setLevel(logging.WARNING)  # not every status poll
     cfg = load_config()
     if not fal_key():
         log.error("no fal key: put it in %s", HERE / "fal.key")

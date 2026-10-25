@@ -220,6 +220,7 @@ def serve(booth, screen):
 
 def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     load_key()
     try:  # this Mac's Python may not know where the certificates are; certifi (a fal_client dependency) does
         import certifi

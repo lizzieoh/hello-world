@@ -58,7 +58,7 @@ class Client:
 
     def run(self, endpoint, args, timeout=None):
         self.calls.append(endpoint)
-        assert args["audio_url"].startswith("data:audio/wav;base64,") and args["language"] == "en"
+        assert args["audio_url"].startswith("data:audio/x-wav;base64,") and args["language"] == "en"
         time.sleep(0.05)
         return {"text": self.text}
 
