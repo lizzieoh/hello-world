@@ -591,14 +591,20 @@
         <li><b>Assembly line for the 4 phones:</b> do the same step on all four before moving on. Use the same wire colours in the same order on every phone, and run the key finder (10c) on phone 1 only. If the other phones are the same model, its two lines work for all of them: copy the same code.py and just press every key to check.</li>
       </ul>
     </div>
-    <h3>10c · Let the Pico map the keypad (the key finder)</h3>
+    <h3>10c · Let the Pico map the keypad (the key monitor)</h3>
     <ol class="steps">
-      <li>Also copy <code>booth/pico/keyfinder.py</code> onto CIRCUITPY, next to code.py. Only the keypad needs to be wired for this. The hook switch can wait.</li>
-      <li>Open <code>code.py</code> on CIRCUITPY in a text editor. Change <code>FIND_KEYS = False</code> to <code>FIND_KEYS = True</code> and save. The Pico restarts by itself.</li>
-      <li>Open a new empty text document (TextEdit or Notes) and click into it. The Pico starts <b>typing into it</b>: "Hold 1 …". Hold each key it asks for until it types the wires and moves to the next key.</li>
-      <li>At the end it types two lines starting with <code>ROW_PINS =</code> and <code>COL_PINS =</code>. In code.py, replace the two lines with the same names with them, and set <code>FIND_KEYS = False</code> again. Save.</li>
+      <li>Only the keypad needs to be wired for this; the hook switch can wait. Make sure <code>keymonitor.py</code> is on CIRCUITPY next to code.py.</li>
+      <li>Open <code>code.py</code> on CIRCUITPY. Change <code>FIND_KEYS = False</code> to <code>FIND_KEYS = True</code> and save. The Pico restarts as a <b>key monitor</b>. It reports over USB every time two ribbon wires touch.</li>
+      <li>With Claude running on the Mac (Part 10a's teleported session), say <b>"map the keypad"</b>. Claude reads the Pico's reports and asks you to press each key in turn. It then writes the right <code>ROW_PINS</code> and <code>COL_PINS</code> into code.py and sets <code>FIND_KEYS</code> back to <code>False</code>.</li>
     </ol>
-    <div class="note why"><b>Why this works when the meter didn't</b><p>The Pico tests every pair of wires itself, hundreds of times a second, and notices a connection even through a carbon pad's few thousand ohms. It also does the row-and-column puzzle for you. If it types "Not a simple grid", send the typed list to Claude.</p></div>
+    <div class="note why"><b>Why this works when the meter didn't</b><p>The Pico tests every pair of wires itself, hundreds of times a second, and notices a connection even through a carbon pad's few thousand ohms. It reports any number of wires, up to 15, so it works for keypads that aren't a neat 7-wire grid.</p></div>
+    <div class="note check"><b>A different phone model (8 keypad wires, hook switch on the main board)</b>
+      <ul>
+        <li><b>8 or more keypad wires is normal.</b> The extra ones serve extra keys such as <b>F</b> (flash), <b>RD</b> (redial) or mute, usually as a fourth column. Wire all of them in ribbon order (8 wires → GP0–GP7, pins 1, 2, 4, 5, 6, 7, 9, 10) and run the key monitor. The booth uses only 0–9, * and #, so the extra keys are simply ignored.</li>
+        <li><b>Hook switch soldered onto the main board</b> (a blue block printed HOOK, S1): keep that board in the phone. On its underside, use the meter's beep to find two of the switch's pins that beep in one position only, and solder the GP15 and GND wires there. If no pair is clean, because the rest of the circuit is in the way, cut the two traces leading away from those pins with a hobby knife and test again.</li>
+        <li><b>Handset wired onto the board</b> (pads printed <b>M+ M− R+ R−</b>): M is the mic, R the receiver (earpiece). Cut the four handset wires off the pads. Then R+ → earpiece pigtail tip, R− → its sleeve, M+ → mic pigtail tip, M− → its sleeve.</li>
+      </ul>
+    </div>
     <div class="note check"><b>Checkpoint · Pico</b><p>Plug the Pico into your laptop and open any text editor. Lift the handset: the Pico's small LED lights. Hang up: it goes out. With the handset lifted, press every key; each one types its own character. Keys are ignored while the phone is hung up, so if the hook isn't wired yet, join <b>pin 20 and pin 18</b> with a jumper wire: the Pico then thinks the handset is lifted (the hook itself types F8 and F9, which you won't see in a text editor). If the LED is lit with the handset <i>down</i>, open <code>code.py</code> and flip <code>OFF_HOOK_READS_HIGH</code> (it's set to <code>False</code> for this phone). If a digit comes out wrong, fix the <code>LAYOUT</code> list in <code>code.py</code> rather than re-soldering.</p></div>
     <div class="note why"><b>Why the Pico types keys</b><p>Every computer understands a keyboard. The Pi doesn't need any driver or setup; the web page just listens for <kbd>F8</kbd>, <kbd>F9</kbd> and digits. If anything goes wrong you can test the whole booth with a normal keyboard.</p></div>
     <div class="note whynot"><b>Why not wire the switches straight to the Pi's pins</b><p>It's possible, but then you need custom software on the Pi to read the pins and pass them to the browser, and the Pi's pins are easy to damage. The Pico costs a few dollars, plugs in by USB, and keeps the phone and the computer independent: you can swap either one in seconds.</p></div>
