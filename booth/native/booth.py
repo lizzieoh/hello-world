@@ -106,6 +106,9 @@ class Refused(Exception):
 
 class Fal:
     STT = "fal-ai/wizper"
+    STT_BACKUP = "fal-ai/elevenlabs/speech-to-text/scribe-v2"
+    STT_BACKUP_AFTER = 1.5  # s
+    STT_DEADLINE = 12       # s, then the caller hears "lines are busy"
 
     def __init__(self, cfg, client=None):
         self.cfg = cfg
@@ -129,7 +132,7 @@ class Fal:
         """fal's current prices for the models in use; the PRICES list if fal can't be reached."""
         self.prices = dict(PRICES)
         try:
-            ids = [e for _, e, _ in self.models] + [self.STT]
+            ids = [e for _, e, _ in self.models] + [self.STT, self.STT_BACKUP]
             r = self.client._client.get("https://api.fal.ai/v1/models/pricing",
                                         params=[("endpoint_id", e) for e in ids], timeout=8)
             for p in r.json().get("prices", []):
@@ -149,17 +152,42 @@ class Fal:
             pass
 
     def transcribe(self, wav_bytes):
-        # The recording rides along inline (a data URI): no upload step, one request, one retry.
-        args = {"audio_url": "data:audio/x-wav;base64," + base64.b64encode(wav_bytes).decode(), "task": "transcribe"}
-        if self.cfg["language"] != "auto":
-            args["language"] = self.cfg["language"]
-        for attempt in range(2):
+        """Wizper first; if it hasn't answered in STT_BACKUP_AFTER s (it once stalled for 77 s), Scribe joins the race.
+        First good answer wins; the other is left to finish on its own. Returns (text, endpoint)."""
+        uri = "data:audio/x-wav;base64," + base64.b64encode(wav_bytes).decode()
+        lang = self.cfg["language"]
+        tries = [(self.STT, {"audio_url": uri, "task": "transcribe", **({} if lang == "auto" else {"language": lang})}),
+                 (self.STT_BACKUP, {"audio_url": uri, "diarize": False, "tag_audio_events": False})]
+        answers = queue.Queue()
+
+        def one(endpoint, args):
             try:
-                return (self.client.run(self.STT, args, timeout=15).get("text") or "").strip()
+                answers.put((endpoint, (self.client.run(endpoint, args, timeout=15).get("text") or "").strip(), None))
             except Exception as e:
-                log.warning("transcribe failed: %s", e)
-                if attempt:
-                    raise
+                answers.put((endpoint, None, e))
+
+        t0 = time.monotonic()
+        deadline = t0 + self.STT_DEADLINE
+        started, failed = 0, 0
+        while True:
+            # start the next one at once, or when the last one failed, or when Wizper is slow
+            if started < len(tries) and (started == 0 or failed == started or
+                                         time.monotonic() - t0 > self.STT_BACKUP_AFTER):
+                threading.Thread(target=one, args=tries[started], daemon=True).start()
+                started += 1
+            wait = deadline - time.monotonic()
+            if wait <= 0:
+                raise TimeoutError(f"no transcript in {self.STT_DEADLINE:.0f} s")
+            try:
+                endpoint, text, err = answers.get(timeout=min(wait, 0.1))
+            except queue.Empty:
+                continue
+            if err is None:
+                return text, endpoint
+            log.warning("transcribe failed (%s): %s", endpoint.split("/")[-1], err)
+            failed += 1
+            if failed == len(tries):
+                raise err
 
     def render(self, prompt):
         """Each model gets one go, in order. Returns (url, model name)."""
@@ -819,7 +847,7 @@ TAKES = [
 ]
 
 PRICES = {"minimax/h3-max/text-to-video": 0.0325, "blackforestlabs/flux-3-max/text-to-video": 0.02125,
-          "fal-ai/wizper": 0.00111}
+          "fal-ai/wizper": 0.00111, "fal-ai/elevenlabs/speech-to-text/scribe-v2": 0.008}
 
 
 def brand_font(kind, size, weight=None):
@@ -1189,9 +1217,10 @@ class Booth:
     def _transcribe_and_render(self, cid, rid, wav, t0):
         t = time.monotonic()
         try:
-            prompt = self.fal.transcribe(wav)
-            self.stt_secs[rid] = time.monotonic() - t
-            log.info("transcribed in %.1f s (%d KB of audio)", self.stt_secs[rid], len(wav) // 1024)
+            prompt, endpoint = self.fal.transcribe(wav)
+            secs = time.monotonic() - t
+            self.stt_secs[rid] = (secs, endpoint, max(0, len(wav) - 44) / (2 * MIC_SR))
+            log.info("transcribed in %.1f s by %s (%d KB of audio)", secs, endpoint.split("/")[-1], len(wav) // 1024)
         except Exception:
             return self.post(("failed", cid, rid, "Our lines are busy. Hang up and try again."))
         self.post(("prompt", cid, rid, prompt))
@@ -1255,8 +1284,11 @@ class Booth:
         prices = getattr(self.fal, "prices", PRICES)
         items = []
         if rid in self.stt_secs:
-            stt = self.stt_secs.pop(rid)
-            items.append(("SPEECH TO TEXT", "wizper", stt * prices.get(Fal.STT, PRICES[Fal.STT])))
+            secs, endpoint, audio_secs = self.stt_secs.pop(rid)
+            if endpoint == Fal.STT:  # billed per compute second
+                items.append(("SPEECH TO TEXT", "wizper", secs * prices.get(endpoint, PRICES[endpoint])))
+            else:  # billed per minute of audio
+                items.append(("SPEECH TO TEXT", "scribe", audio_secs / 60 * prices.get(endpoint, PRICES[endpoint])))
         try:
             endpoint = self.fal.endpoint(take["model"])
         except (StopIteration, AttributeError):

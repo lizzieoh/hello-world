@@ -58,7 +58,10 @@ class Client:
 
     def run(self, endpoint, args, timeout=None):
         self.calls.append(endpoint)
-        assert args["audio_url"].startswith("data:audio/x-wav;base64,") and args["language"] == "en"
+        assert args["audio_url"].startswith("data:audio/x-wav;base64,")
+        assert args.get("language", "en") == "en"
+        if self.plan.get(endpoint) == "hang":
+            time.sleep(30)
         time.sleep(0.05)
         return {"text": self.text}
 
@@ -202,6 +205,17 @@ def test_hash_ends_listening():
     booth.post(("key", "#"))
     wait(lambda: booth.state == "hold", 3, "hold after #")
     stop.set()
+
+
+def test_stalled_speech_to_text_falls_back():
+    client = Client()
+    client.plan["fal-ai/wizper"] = "hang"
+    cfg = B.load_config()
+    t = time.monotonic()
+    text, endpoint = B.Fal(cfg, client).transcribe(b"RIFF" + bytes(4000))
+    took = time.monotonic() - t
+    assert endpoint == B.Fal.STT_BACKUP and text == client.text, (text, endpoint)
+    assert B.Fal.STT_BACKUP_AFTER <= took < B.Fal.STT_BACKUP_AFTER + 1, took
 
 
 def test_fallback_to_flux_on_server_error():
