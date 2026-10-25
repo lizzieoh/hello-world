@@ -1,0 +1,833 @@
+<title>Call Center Booth Manual</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+  /* Layout: a field manual. One reading column, numbered parts that really are a sequence, and two kinds of margin
+     note the reader learns to scan for: WHY (the reason) and WHY NOT (the options ruled out). The safety-yellow of the
+     photo callouts is the one accent. */
+  :root {
+    --paper: #f6f4ee;      /* warm off-white, like a printed manual */
+    --ink: #17191c;
+    --muted: #5d6066;
+    --rule: #d9d5ca;
+    --panel: #ece8dd;
+    --yellow: #ffd600;     /* the callout yellow used on every photo */
+    --why: #1d5c4d;        /* deep phone-cord green for WHY notes */
+    --whynot: #8a3b12;     /* rust for WHY NOT notes */
+    --warn: #b42318;
+    --code-bg: #1f2227;
+    --code-fg: #f2efe6;
+    --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+    --body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #16181b; --ink: #ece9e1; --muted: #a3a6ad; --rule: #34373d; --panel: #202328;
+      --yellow: #ffd600; --why: #6fc3ad; --whynot: #f0a37a; --warn: #ff8a7a; --code-bg: #0e1013; --code-fg: #ece9e1;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #16181b; --ink: #ece9e1; --muted: #a3a6ad; --rule: #34373d; --panel: #202328;
+    --yellow: #ffd600; --why: #6fc3ad; --whynot: #f0a37a; --warn: #ff8a7a; --code-bg: #0e1013; --code-fg: #ece9e1;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--paper); color: var(--ink); font: 400 17px/1.6 var(--body); }
+  .wrap { max-width: 780px; margin: 0 auto; padding-block: 28px 80px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  h1, h2, h3 { font-family: var(--display); text-wrap: balance; letter-spacing: -.01em; }
+  h1 { font-size: clamp(36px, 7vw, 58px); font-weight: 800; line-height: 1; margin: 18px 0 12px; }
+  h2 { font-size: clamp(26px, 4.4vw, 34px); font-weight: 800; line-height: 1.1; margin: 0 0 6px; }
+  h3 { font-size: 20px; font-weight: 700; margin: 30px 0 6px; }
+  p, li { max-width: 68ch; }
+  a { color: inherit; text-decoration-color: var(--yellow); text-decoration-thickness: 3px; text-underline-offset: 3px; }
+  .eyebrow { font: 700 12px/1 var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+  .lede { font-size: 20px; line-height: 1.5; }
+  hr { border: 0; border-top: 1px solid var(--rule); margin: 40px 0; }
+
+  section.part { border-top: 3px solid var(--ink); padding-top: 18px; margin-top: 64px; scroll-margin-top: 16px; }
+  .partno { display: inline-block; font: 800 13px/1 var(--display); letter-spacing: .12em; text-transform: uppercase; background: var(--yellow); color: #17191c; padding: 5px 8px; margin-bottom: 10px; }
+  .time { font-size: 14px; color: var(--muted); margin: 0 0 14px; }
+
+  figure { margin: 22px 0; }
+  figure img { display: block; width: 100%; max-width: 100%; height: auto; border: 1px solid var(--rule); background: #fff; }
+  figure.tall img { max-width: 440px; margin: 0 auto; }
+  figcaption { font-size: 14px; color: var(--muted); margin-top: 8px; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .pair figure { margin: 0; }
+  @media (max-width: 560px) { .pair { grid-template-columns: 1fr; } }
+
+  .note { border-left: 4px solid; padding: 10px 14px; margin: 16px 0; background: var(--panel); }
+  .note > b:first-child { display: block; font: 800 12px/1 var(--display); letter-spacing: .14em; text-transform: uppercase; margin-bottom: 6px; }
+  .note p, .note ul { margin: 0; }
+  .note ul { padding-left: 20px; }
+  .note.why { border-color: var(--why); } .note.why > b:first-child { color: var(--why); }
+  .note.whynot { border-color: var(--whynot); } .note.whynot > b:first-child { color: var(--whynot); }
+  .note.warn { border-color: var(--warn); } .note.warn > b:first-child { color: var(--warn); }
+  .note.check { border-color: var(--yellow); background: transparent; border: 2px solid var(--yellow); border-left-width: 8px; }
+  .note.check > b:first-child { color: var(--ink); }
+
+  ol.steps { padding-left: 0; list-style: none; counter-reset: step; }
+  ol.steps > li { counter-increment: step; position: relative; padding-left: 44px; margin: 14px 0; }
+  ol.steps > li::before { content: counter(step); position: absolute; left: 0; top: 1px; width: 30px; height: 30px; border-radius: 50%; background: var(--ink); color: var(--paper); font: 700 15px/30px var(--display); text-align: center; }
+
+  code { font: 400 .88em var(--mono); background: var(--panel); padding: 1px 5px; border-radius: 3px; }
+  pre { background: var(--code-bg); color: var(--code-fg); padding: 14px 16px; overflow-x: auto; font: 400 14px/1.55 var(--mono); border-radius: 4px; }
+  pre code { background: none; padding: 0; color: inherit; }
+  kbd { font: 600 .85em var(--mono); border: 1.5px solid var(--ink); border-bottom-width: 3px; border-radius: 4px; padding: 0 6px; background: var(--paper); }
+
+  .tablewrap { overflow-x: auto; margin: 16px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 15px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { font: 700 13px/1.2 var(--display); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  td.blank { min-width: 120px; color: var(--muted); }
+
+  nav.toc { background: var(--panel); padding: 16px 20px; margin: 28px 0; }
+  nav.toc ol { margin: 8px 0 0; padding-left: 22px; columns: 2; column-gap: 28px; }
+  @media (max-width: 560px) { nav.toc ol { columns: 1; } }
+  nav.toc li { break-inside: avoid; margin: 2px 0; }
+
+  .diagram { overflow-x: auto; margin: 22px 0; border: 1px solid var(--rule); background: var(--paper); }
+  .diagram svg { display: block; min-width: 640px; width: 100%; height: auto; }
+  .diagram svg text { font-family: var(--body); fill: var(--ink); }
+  .diagram .box { fill: var(--panel); stroke: var(--ink); stroke-width: 1.5; }
+  .diagram .hot { fill: var(--yellow); stroke: #17191c; stroke-width: 1.5; }
+  .diagram .hot + text, .diagram text.onhot { fill: #17191c; }
+  .diagram .wire { stroke: var(--ink); stroke-width: 2; fill: none; }
+  .diagram .wire.audio { stroke: var(--why); }
+  .diagram .wire.keys { stroke: var(--whynot); }
+  .diagram .small { font-size: 12px; fill: var(--muted); }
+  .diagram .pin { fill: var(--paper); stroke: var(--ink); stroke-width: 1.2; }
+  .diagram .pin.used { fill: var(--yellow); }
+  .diagram .gnd { fill: var(--ink); }
+  .checklist { list-style: none; padding-left: 0; }
+  .checklist li { padding-left: 30px; position: relative; margin: 6px 0; }
+  .checklist li::before { content: ""; position: absolute; left: 0; top: 4px; width: 16px; height: 16px; border: 2px solid var(--ink); border-radius: 3px; }
+  @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div class="wrap">
+  <div class="eyebrow">fal call center · Adobe MAX · build manual for 3 booths + 1 spare</div>
+  <h1>Call Center Booth Manual</h1>
+  <p class="lede">How to turn a beige wall phone, a Raspberry Pi, a small screen and a receipt printer into a booth where a visitor lifts the handset, says what they want to see, waits on hold to elevator music, and watches the video arrive. Written for someone who has never soldered.</p>
+
+  <figure>
+    <img src="img/hero.webp" alt="Illustration: a visitor holds the handset of a beige wall phone mounted on a white booth wall; a monitor above shows a generated video and a receipt curls out of a slot below.">
+    <figcaption>The finished booth: the phone at chest height, the screen above it, the receipt slot below. Everything else hides behind the wall.</figcaption>
+  </figure>
+
+  <div class="note why"><b>How to read this manual</b>
+    <p>Every step has a <b>Why</b> note (the reason we do it this way) and, where it matters, a <b>Why not</b> note (the other options we considered and rejected). Yellow-bordered <b>Checkpoint</b> boxes are tests you must pass before moving on. If a checkpoint fails, stop there. Fixing a problem is easy now and hard once everything is screwed into a wall.</p>
+  </div>
+
+  <nav class="toc" aria-label="Contents">
+    <span class="eyebrow">Contents</span>
+    <ol>
+      <li><a href="#how">How the booth works</a></li>
+      <li><a href="#safety">Ground rules and safety</a></li>
+      <li><a href="#parts">Parts and tools</a></li>
+      <li><a href="#skills">Three skills: meter, solder, shrink</a></li>
+      <li><a href="#open">Open the phone and label everything</a></li>
+      <li><a href="#handset">Wire the handset to the audio adapter</a></li>
+      <li><a href="#hook">Find the hook switch</a></li>
+      <li><a href="#keypad">Map the keypad</a></li>
+      <li><a href="#light">The red light (optional)</a></li>
+      <li><a href="#pico">Set up and wire the Pico</a></li>
+      <li><a href="#pi">Set up the Raspberry Pi</a></li>
+      <li><a href="#printer">Connect the receipt printer</a></li>
+      <li><a href="#network">The booth network</a></li>
+      <li><a href="#mount">Mount it in the booth wall</a></li>
+      <li><a href="#copies">Make units 2, 3 and the spare</a></li>
+      <li><a href="#burnin">Lock it down and burn it in</a></li>
+      <li><a href="#showday">Show day</a></li>
+      <li><a href="#reference">Reference</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <section class="part" id="how">
+    <span class="partno">Part 1</span>
+    <h2>How the booth works</h2>
+    <p class="time">Read time: 5 minutes. No tools.</p>
+    <p>Before touching anything, it helps to know what each piece does. There are only five boxes and they talk in one direction.</p>
+
+    <div class="diagram" role="img" aria-label="Signal flow: the phone's handset connects to a USB audio adapter, the hook switch and keypad connect to a Pico board; both plug into the Raspberry Pi by USB; the Pi drives the monitor over HDMI and the receipt printer over USB, and reaches the internet through the booth router.">
+      <svg viewBox="0 0 760 330" xmlns="http://www.w3.org/2000/svg">
+        <rect class="box" x="16" y="30" width="170" height="270" rx="6"/>
+        <text x="30" y="56" font-weight="700" font-size="15">THE PHONE</text>
+        <rect class="hot" x="30" y="76" width="142" height="44" rx="4"/><text class="onhot" x="42" y="103" font-size="14">Handset (ear + mic)</text>
+        <rect class="hot" x="30" y="140" width="142" height="44" rx="4"/><text class="onhot" x="42" y="167" font-size="14">Hook switch</text>
+        <rect class="hot" x="30" y="204" width="142" height="44" rx="4"/><text class="onhot" x="42" y="231" font-size="14">Keypad 0–9 * #</text>
+        <text class="small" x="30" y="282">stays inside the phone body</text>
+
+        <rect class="box" x="250" y="66" width="150" height="62" rx="6"/><text x="264" y="92" font-weight="700" font-size="14">USB audio adapter</text><text class="small" x="264" y="112">sound in and out</text>
+        <rect class="box" x="250" y="160" width="150" height="62" rx="6"/><text x="264" y="186" font-weight="700" font-size="14">Pico</text><text class="small" x="264" y="206">pretends to be a keyboard</text>
+
+        <path class="wire audio" d="M172 98 H250"/>
+        <path class="wire keys" d="M172 162 H215 V185 H250"/>
+        <path class="wire keys" d="M172 226 H215 V197 H250"/>
+
+        <rect class="box" x="460" y="100" width="130" height="100" rx="6"/><text x="474" y="130" font-weight="700" font-size="15">Raspberry Pi</text><text class="small" x="474" y="152">runs the booth web</text><text class="small" x="474" y="168">page full-screen</text>
+        <path class="wire" d="M400 97 H430 V135 H460"/>
+        <path class="wire" d="M400 191 H430 V165 H460"/>
+        <text class="small" x="404" y="88">USB</text><text class="small" x="404" y="212">USB</text>
+
+        <rect class="box" x="640" y="20" width="110" height="56" rx="6"/><text x="654" y="54" font-weight="700" font-size="14">Monitor</text>
+        <rect class="box" x="640" y="122" width="110" height="56" rx="6"/><text x="654" y="148" font-weight="700" font-size="14">Receipt</text><text x="654" y="166" font-weight="700" font-size="14">printer</text>
+        <rect class="box" x="640" y="224" width="110" height="76" rx="6"/><text x="654" y="250" font-weight="700" font-size="14">Booth router</text><text class="small" x="654" y="270">→ internet → fal</text>
+        <path class="wire" d="M590 120 H615 V48 H640"/><text class="small" x="596" y="40">HDMI</text>
+        <path class="wire" d="M590 150 H640"/><text class="small" x="598" y="142">USB</text>
+        <path class="wire" d="M590 180 H615 V262 H640"/><text class="small" x="596" y="292">Ethernet</text>
+      </svg>
+    </div>
+
+    <ol class="steps">
+      <li><b>Lift the handset.</b> The hook switch opens. The <b>Pico</b> (a coin-sized computer inside the phone) notices and "types" the key <kbd>F8</kbd> into the Raspberry Pi, exactly as if someone pressed it on a keyboard.</li>
+      <li><b>The web page hears F8</b> and plays "Please leave your prompt after the beep" through the <b>USB audio adapter</b>, which is wired to the handset's earpiece.</li>
+      <li><b>The visitor speaks.</b> The handset microphone goes back through the same adapter. The page records it, sends it to fal to turn speech into text, then asks fal's video model (H3 Max) for a 10-second clip.</li>
+      <li><b>While it renders,</b> the page plays "Please hold while I connect you to our fastest agent" and elevator music. The clip appears on the monitor in about 10 seconds.</li>
+      <li><b>Keypad presses</b> (2 for sound, 3 to regenerate, 0 to print) are also typed by the Pico. Hanging up types <kbd>F9</kbd>.</li>
+    </ol>
+
+    <div class="note why"><b>Why it's built this way</b>
+      <ul>
+        <li><b>Nothing time-sensitive crosses the Wi-Fi.</b> Sound, keypad and screen all live inside the booth. Only small requests go out to fal. Bad conference Wi-Fi makes a video arrive a little later; it never makes the call break up.</li>
+        <li><b>The phone becomes a keyboard and a headset.</b> Computers already understand both, with no special drivers, so there's very little that can go wrong.</li>
+        <li><b>The software is a web page</b> hosted on Vercel. Fix a typo once and all three booths get it on their next reload.</li>
+      </ul>
+    </div>
+    <div class="note whynot"><b>Why not</b>
+      <ul>
+        <li><b>A real phone line (a Grandstream HT801 + a phone number).</b> The voice call itself would travel over the venue internet. Conference Wi-Fi drops data in bursts, which means choppy, one-way or dropped calls. It also can't drive a web page.</li>
+        <li><b>A tablet instead of a Pi and monitor.</b> iPads keep asking for microphone permission and drop USB accessories. A Pi boots straight into the page with no prompts.</li>
+        <li><b>An off-the-shelf USB phone.</b> Office USB phones talk to Teams and Zoom, not to a web page, and look like office gear. We keep your landline's look.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 2 -->
+  <section class="part" id="safety">
+    <span class="partno">Part 2</span>
+    <h2>Ground rules and safety</h2>
+    <p class="time">Read time: 2 minutes.</p>
+    <ul>
+      <li><b>Never plug the phone into a real phone jack</b>, and never plug its straight cord into anything. A phone line carries up to about 90 volts when it rings. We don't use it at all.</li>
+      <li><b>The soldering iron tip is about 350 °C.</b> Always put it back in its stand. Work near an open window or a fan; the smoke from the flux irritates your eyes and lungs.</li>
+      <li><b>Wash your hands after soldering</b>, especially with leaded solder, and before eating.</li>
+      <li><b>Keep the bare Raspberry Pi off metal.</b> The phone's chassis is steel. A Pi touching it, or a loose screw under it, can short-circuit and die. Put the Pi in its case first.</li>
+      <li><b>Unplug power before changing wires.</b> Nothing here is dangerous to you (it's all 5 volts or less), but connecting wires while powered can damage the boards.</li>
+    </ul>
+    <div class="note why"><b>Why these rules</b><p>Every item in this build runs on 5 volts from USB, which can't hurt you. The only hazards are heat (the iron), fumes (the flux) and the phone line, which we never connect. The Pi rule protects the hardware: it's the most expensive part and the one people kill most often by setting it down on something metal.</p></div>
+  </section>
+
+  <!-- 3 -->
+  <section class="part" id="parts">
+    <span class="partno">Part 3</span>
+    <h2>Parts and tools</h2>
+    <p class="time">Unboxing and checking: 15 minutes.</p>
+
+    <figure>
+      <img src="img/parts-phone.jpg" alt="Photo of the parts on a desk, labelled: Raspberry Pi 5, coiled handset cord, straight line cord (not used), phone body with metal back plate, and handset." loading="lazy">
+      <figcaption>The phone as it comes out of the box, plus the Raspberry Pi. The straight cord is the phone-line cord; we never use it.</figcaption>
+    </figure>
+
+    <h3>Per booth (buy 4 of each: 3 booths + 1 spare)</h3>
+    <div class="tablewrap"><table>
+      <tr><th>Part</th><th>What it does</th><th>Why this one</th></tr>
+      <tr><td>Beige wall phone (HA9888-style, Sangyn listing)</td><td>The thing people touch</td><td>Screws to the wall so it can't be knocked over or carried off; keypad and hook switch plug in with small connectors, so no cutting inside.</td></tr>
+      <tr><td>Raspberry Pi 5 (4 GB) + official 27 W power supply + official case</td><td>The booth's computer</td><td>Cheap, silent, boots in seconds, runs Chromium well. The <b>official</b> power supply matters: cheap ones cause random reboots.</td></tr>
+      <tr><td>2 × SanDisk Extreme 64 GB microSD</td><td>The Pi's "hard drive"</td><td>Fast and reliable. The second card is a ready-to-swap spare.</td></tr>
+      <tr><td>Raspberry Pi Pico (pre-soldered pins) + USB cable</td><td>Turns the hook and keypad into key presses</td><td>Shows up as a normal keyboard on any computer. Pre-soldered pins mean you can test with clip-on wires.</td></tr>
+      <tr><td>Sabrent AU-MMSA USB audio adapter</td><td>Connects the handset to the Pi</td><td>Separate headphone and mic jacks (no guessing about 4-pin plugs), and needs no driver on Linux.</td></tr>
+      <tr><td>2 × 3.5 mm pigtail cables</td><td>A plug on one end, bare wires on the other</td><td>Lets you solder the handset wires to a plug without touching the adapter.</td></tr>
+      <tr><td>Micro-HDMI to HDMI cable</td><td>Pi to monitor</td><td>The Pi 5 only has micro-HDMI ports.</td></tr>
+      <tr><td>Monitor (27", VESA mount)</td><td>Shows the video</td><td>VESA holes let you hang it on the wall and hang the Pi on its back.</td></tr>
+      <tr><td>Spare coiled handset cord</td><td>Replacement</td><td>The most-yanked part. A swap takes 10 seconds because we keep the cord's plug.</td></tr>
+      <tr><td>2 × USB extension cables (6 ft)</td><td>Phone to Pi, through the wall</td><td>The phone and Pi are on opposite sides of the wall.</td></tr>
+    </table></div>
+
+    <h3>Shared by all booths</h3>
+    <ul>
+      <li>GL.iNet travel router (Beryl AX or Beryl 7) ×2, 8-port switch, Ethernet cables, a 5G hotspot or a phone with a data plan, two battery backups (APC 600 VA), power strips.</li>
+      <li>80 mm receipt printer per booth (Epson TM-T20III renewed, or Rongta RP326), plus a case of 80 mm thermal paper.</li>
+    </ul>
+
+    <h3>Tools</h3>
+    <ul>
+      <li><b>Multimeter</b> with a continuity beep (Klein MM325 or similar).</li>
+      <li><b>Soldering station</b> (X-Tronic 3020-XTS) with its helping hands, 0.8 mm rosin-core solder, a flux pen, desoldering braid.</li>
+      <li>Fine wire strippers, flush cutters, heat-shrink tubing and a heat gun or hair dryer, 26 AWG hookup wire in several colours, female-to-female jumper wires, masking tape and a marker, small screwdrivers.</li>
+    </ul>
+    <div class="note whynot"><b>Why not</b>
+      <ul>
+        <li><b>A Raspberry Pi 4 or older.</b> Slower at playing video and running the browser; the price difference is small.</li>
+        <li><b>A USB audio adapter with one 4-pin jack</b> (like Apple's). Which ring is the mic depends on the brand. Separate jacks remove that guesswork.</li>
+        <li><b>An Arduino instead of the Pico.</b> Most Arduinos can't act as a USB keyboard; the ones that can cost more and are harder to set up.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 4 -->
+  <section class="part" id="skills">
+    <span class="partno">Part 4</span>
+    <h2>Three skills: meter, solder, shrink</h2>
+    <p class="time">Practice: one evening. Do this on scrap wire or an old gadget first.</p>
+
+    <h3>4a · The multimeter</h3>
+    <figure>
+      <img src="img/multimeter.webp" alt="Illustration: a red digital multimeter on the resistance setting, its red and black probes touching the legs of a small part; the screen reads 150." loading="lazy">
+      <figcaption>A multimeter measures electricity. We only use three settings of the dial.</figcaption>
+    </figure>
+    <div class="tablewrap"><table>
+      <tr><th>Dial setting</th><th>Symbol</th><th>What it tells you</th><th>Where we use it</th></tr>
+      <tr><td>Resistance, 2k range</td><td>Ω</td><td>How hard it is for electricity to pass, in ohms</td><td>Finding the earpiece wires (they read about 100–300 Ω)</td></tr>
+      <tr><td>Continuity</td><td>a speaker or sound-wave symbol, often shared with ▶|</td><td>Beeps when two points are connected</td><td>Hook switch and keypad</td></tr>
+      <tr><td>Diode</td><td>▶|</td><td>Whether current flows one way only</td><td>Checking whether the red light is an LED</td></tr>
+    </table></div>
+    <ol class="steps">
+      <li>Plug the <b>black</b> probe into the socket marked <b>COM</b> and the <b>red</b> probe into the socket marked <b>VΩ</b> (or similar). Leave them there for this whole project.</li>
+      <li>Turn the dial to continuity and touch the two probe tips together. It should beep. Now you know the meter works.</li>
+      <li>To test something, touch one probe to each point. On continuity, a beep means "connected". On Ω, read the number.</li>
+    </ol>
+    <div class="note why"><b>Why a meter at all</b><p>Phone makers use different wire colours and pin orders. Guessing means soldering the wrong wires together. The meter tells you the truth in seconds, and it's how you check every joint afterwards.</p></div>
+
+    <h3>4b · Soldering</h3>
+    <figure>
+      <img src="img/soldering.webp" alt="Illustration: a soldering iron heats a twisted wire joint from one side while solder is fed into the joint from the other side; heat-shrink tubing waits slid back on one wire." loading="lazy">
+      <figcaption>Heat the joint with the iron, feed solder into the other side, and let it flow in. Slide the heat-shrink on first, well away from the heat.</figcaption>
+    </figure>
+    <ol class="steps">
+      <li>Set the station to <b>330–350 °C</b> for leaded solder (about <b>370 °C</b> for lead-free). Wet the sponge.</li>
+      <li><b>Tin the tip:</b> wipe it on the sponge, then melt a little solder onto it so it shines.</li>
+      <li><b>Tin both wires:</b> strip 5 mm of insulation, twist the strands, heat them for a second and touch solder to them so it soaks in.</li>
+      <li><b>Join:</b> hold the two tinned wires together in the helping hands, touch the iron to both for 1–2 seconds, add a little solder, then lift the solder away, then the iron.</li>
+      <li><b>Don't move anything for 3 seconds</b> while it cools.</li>
+    </ol>
+    <figure>
+      <img src="img/solder-good-bad.webp" alt="Illustration comparing a good joint (smooth, shiny cone of solder hugging the wire) with a bad joint (dull, lumpy ball sitting on top)." loading="lazy">
+      <figcaption>Good: shiny and shaped like a small volcano. Bad: a dull ball sitting on top. A bad joint means it wasn't hot enough or moved while cooling; reheat it.</figcaption>
+    </figure>
+    <div class="note why"><b>Why solder (and not tape or twist)</b><p>A twisted or taped connection loosens with every handset lift. Thousands of visitors will pull on these wires. A soldered joint is a single piece of metal and doesn't loosen.</p></div>
+    <div class="note whynot"><b>Why not crimp connectors or screw terminals</b><p>The phone's handset wires are very thin. Crimps sized for them need a special tool, and screw terminals chew thin wire. Soldering is the reliable option at this size.</p></div>
+
+    <h3>4c · Heat-shrink tubing</h3>
+    <figure>
+      <img src="img/heatshrink.webp" alt="Illustration: a soldered joint with heat-shrink tubing beside it, then the tubing slid over the joint and shrunk tight with a heat gun." loading="lazy">
+      <figcaption>Slide the tube over the finished joint and heat it until it shrinks tight.</figcaption>
+    </figure>
+    <div class="note why"><b>Why</b><p>It insulates the bare metal so two joints can't touch each other (a "short"), and it stiffens the joint so it doesn't snap when bent. <b>Always slide the tube onto the wire before you solder</b>; you can't add it afterwards.</p></div>
+
+    <div class="note check"><b>Checkpoint · skills</b><p>Make 5 wire-to-wire joints in a row that look shiny and survive a firm tug. Then you're ready for the phone.</p></div>
+  </section>
+
+  <!-- 5 -->
+  <section class="part" id="open">
+    <span class="partno">Part 5</span>
+    <h2>Open the phone and label everything</h2>
+    <p class="time">About 20 minutes.</p>
+    <ol class="steps">
+      <li>Lay the phone face-down on a towel. Remove the screws from the metal back plate and lift the beige front shell away. <b>Go slowly:</b> the red light in the shell is still wired to the inside.</li>
+      <li>Find each cable in the photo below. Put a strip of masking tape on each one and write its name: <b>HANDSET</b>, <b>KEYPAD</b>, <b>HOOK</b>, <b>LIGHT</b>, <b>BELL</b>, <b>LINE</b>.</li>
+      <li>Take a clear photo of the board with all its plugs still in place. This is your undo button.</li>
+      <li>Unplug every connector from the main green board. Pull on the white plastic plug, never on the wires.</li>
+      <li>Remove the board's 2 screws, put the board in a zip bag and write the phone's number on it.</li>
+    </ol>
+    <figure class="tall">
+      <img src="img/step1-what-is-what.webp" alt="Annotated photo of the opened phone: handset plug HSM to the audio adapter, keypad ribbon (flat grey cable) to the Pico, bell connectors to unplug and ignore, red light connector MWLI to test, and the handset jack to keep." loading="lazy">
+      <figcaption>What each connector is. Labels made with fal from your phone's photo and checked against the board.</figcaption>
+    </figure>
+    <div class="pair">
+      <figure>
+        <img src="img/back-plate.jpg" alt="Photo of the metal back plate: the LINE jack in the middle is never used, and its opening becomes the exit hole for the USB cables." loading="lazy">
+        <figcaption>The jack on the back is the phone LINE. We never connect it. Its hole is where our cables will leave the phone.</figcaption>
+      </figure>
+      <figure>
+        <img src="img/red-light.jpg" alt="Photo of the front shell's red light with its 2-wire cord, and the handset jack." loading="lazy">
+        <figcaption>The red light lives in the front shell. Two red-striped cords look alike: the one to the red lens is LIGHT; the one to the back jack is LINE.</figcaption>
+      </figure>
+    </div>
+    <div class="tablewrap"><table>
+      <tr><th>Cable</th><th>Board label</th><th>Keep or ignore</th></tr>
+      <tr><td>Handset jack (4 wires: green, red, yellow, black)</td><td>HSM</td><td><b>Keep</b> → audio adapter</td></tr>
+      <tr><td>Keypad (flat grey ribbon with a red edge)</td><td>its own small board</td><td><b>Keep</b> → Pico</td></tr>
+      <tr><td>Hook switch (ribbon from the tan board in the cradle)</td><td>PX2</td><td><b>Keep</b> → Pico</td></tr>
+      <tr><td>Red light (2-wire cord)</td><td>MWLI</td><td>Optional → Pico</td></tr>
+      <tr><td>Bell (red and black wires)</td><td>BELL</td><td>Ignore</td></tr>
+      <tr><td>Line jack (back plate)</td><td>(line)</td><td>Ignore</td></tr>
+    </table></div>
+    <div class="note why"><b>Why remove the whole board</b><p>Everything we need already unplugs from it. Taking it out means no cutting of circuit-board tracks and no risk that the old electronics interfere with our signals. Bagging it means the phone can be restored later.</p></div>
+    <div class="note whynot"><b>Why not keep the phone's own electronics</b><p>The board is designed to talk to a phone line: it needs line voltage to power it and turns keypad presses into tones. We want simple on/off signals, which is exactly what the bare switches give us.</p></div>
+  </section>
+
+  <!-- 6 -->
+  <section class="part" id="handset">
+    <span class="partno">Part 6</span>
+    <h2>Wire the handset to the audio adapter</h2>
+    <p class="time">About 45 minutes the first time.</p>
+
+    <h3>6a · Identify the four handset wires</h3>
+    <figure class="tall">
+      <img src="img/step2-handset-plug.webp" alt="Annotated close-up of the HSM plug: green to earpiece tip, red to earpiece sleeve, yellow to mic sleeve, black (+) to mic tip. Also shows the PX2 hook switch plug." loading="lazy">
+      <figcaption>The board prints the four pins as <b>G+ R− Y− B+</b>: green and red are the earpiece, black (+) and yellow (−) are the microphone.</figcaption>
+    </figure>
+    <ol class="steps">
+      <li>Plug the handset into its jack so the cord is connected.</li>
+      <li>Meter on <b>Ω, 2k</b>. Touch the probes into the white HSM plug on the <b>green</b> and <b>red</b> contacts. Expect <b>100–300 Ω</b>. That's the earpiece.</li>
+      <li>Now <b>black</b> and <b>yellow</b>. Read the number, swap the probes, read again. The two numbers should be <b>different</b>. That means it's an electret microphone, the kind the adapter can power.</li>
+    </ol>
+    <div class="note check"><b>Checkpoint · handset</b><p>Green–red reads 100–300 Ω, and black–yellow reads differently each way round. If green–red doesn't read 100–300 Ω, stop and recheck before cutting anything.</p></div>
+    <div class="note why"><b>Why test before cutting</b><p>Cutting is the one step you can't undo. Thirty seconds with the meter means you never solder the earpiece to the mic jack.</p></div>
+
+    <h3>6b · Know your 3.5 mm plug</h3>
+    <figure>
+      <img src="img/trs.webp" alt="Illustration of a 3.5 mm plug with three metal sections labelled tip, ring and sleeve, and three bare wires coming out of the cable." loading="lazy">
+      <figcaption>A headphone plug has three metal contacts: <b>tip</b> (the point), <b>ring</b> (the middle band) and <b>sleeve</b> (the last metal section before the plastic handle). The sleeve is always ground.</figcaption>
+    </figure>
+    <ol class="steps">
+      <li>Each pigtail has three bare wires. Their colours vary by brand, so <b>find out which is which with the meter</b>: continuity mode, one probe on a bare wire, the other touching the tip of the plug. The beep tells you which wire is the tip. Repeat for ring and sleeve.</li>
+      <li>Write it on tape on each pigtail, for example "red = tip, white = ring, copper = sleeve".</li>
+    </ol>
+
+    <h3>6c · Solder</h3>
+    <figure>
+      <img src="img/step3-solder-handset.webp" alt="Diagram: earpiece green wire to tip and red wire to sleeve of pigtail 1 going to the headphone jack; mic black (+) to tip and yellow (−) to sleeve of pigtail 2 going to the mic jack; ring wires taped off." loading="lazy">
+      <figcaption>The whole handset in one picture. Ring wires are taped off, not connected.</figcaption>
+    </figure>
+    <ol class="steps">
+      <li>Cut the white HSM plug off, about 1 cm from the plug. Strip 5 mm from each of the four wires.</li>
+      <li>Slide heat-shrink onto each wire.</li>
+      <li><b>Earpiece pigtail (#1):</b> solder <b>green → tip</b>, <b>red → sleeve</b>. Tape off its ring wire.</li>
+      <li><b>Microphone pigtail (#2):</b> solder <b>black → tip</b>, <b>yellow → sleeve</b>. Tape off its ring wire.</li>
+      <li>Shrink the tubing. Label the plugs <b>EAR</b> and <b>MIC</b>.</li>
+      <li>Plug EAR into the adapter's headphone jack (pink or headphone icon) and MIC into the mic jack (green or mic icon).</li>
+    </ol>
+    <div class="note check"><b>Checkpoint · audio</b><p>Plug the adapter into a laptop. Open a voice recorder, talk into the handset, then play it back with the handset at your ear. You should hear yourself clearly. Mic silent? Swap black and yellow. Earpiece silent? Recheck green and red.</p></div>
+    <div class="note why"><b>Why tip for the earpiece and not tip + ring</b><p>Tip is the left channel, ring the right. Joining them ties the adapter's two outputs together, which can distort the sound or stress the adapter. One channel is plenty for a single earpiece.</p></div>
+    <div class="note whynot"><b>Why not cut the coiled cord instead</b><p>We solder at the phone's own jack and keep the cord's plug. When a visitor yanks the cord out of shape, you swap in a spare cord in 10 seconds instead of re-soldering on the show floor.</p></div>
+  </section>
+
+  <!-- 7 -->
+  <section class="part" id="hook">
+    <span class="partno">Part 7</span>
+    <h2>Find the hook switch</h2>
+    <p class="time">About 15 minutes.</p>
+    <figure class="tall">
+      <img src="img/hook-switch.jpg" alt="Annotated photo: the hook switch is a blue block with a white plunger on a small tan board printed PX2; a grey ribbon runs from it to the PX2 plug on the main board." loading="lazy">
+      <figcaption>The hook switch: a blue block whose white plunger is pressed when the handset hangs on the cradle.</figcaption>
+    </figure>
+    <ol class="steps">
+      <li>Meter on <b>continuity</b>.</li>
+      <li>Touch the probes to two of the solder pads where the ribbon joins the tan board.</li>
+      <li>Press the white plunger in with a finger (that's "hung up"), then let go (that's "lifted").</li>
+      <li>Try pairs of pads until you find a pair that <b>beeps in one position only</b>. There may be two such pairs. Either works; pick one.</li>
+      <li>Write down which two pads (count from one edge) and whether it beeps <b>pressed</b> or <b>released</b>.</li>
+    </ol>
+    <div class="tablewrap"><table>
+      <tr><th>Record for each phone</th><th>Your answer</th></tr>
+      <tr><td>Hook pads (counted from the edge)</td><td class="blank">pad __ and pad __</td></tr>
+      <tr><td>Beeps when the plunger is…</td><td class="blank">pressed / released</td></tr>
+    </table></div>
+    <div class="note why"><b>Why only two wires</b><p>A switch is just two metal contacts that touch or don't. The Pico only needs to know which, so it needs only the two contacts that change. Extra contacts are for the old phone circuit.</p></div>
+  </section>
+
+  <!-- 8 -->
+  <section class="part" id="keypad">
+    <span class="partno">Part 8</span>
+    <h2>Map the keypad</h2>
+    <p class="time">About 30 minutes.</p>
+    <p>Twelve buttons, but only about seven wires. That's because the keypad is a <b>grid</b>: four row wires and three column wires. Pressing a button connects one row to one column.</p>
+    <div class="diagram" role="img" aria-label="Keypad matrix: rows R1 to R4 run horizontally, columns C1 to C3 vertically; each key sits where a row and a column cross, for example key 1 at R1 and C1, key 5 at R2 and C2, key hash at R4 and C3.">
+      <svg viewBox="0 0 640 330" xmlns="http://www.w3.org/2000/svg">
+        <g>
+          <line class="wire keys" x1="150" y1="40" x2="150" y2="300"/><line class="wire keys" x1="250" y1="40" x2="250" y2="300"/><line class="wire keys" x1="350" y1="40" x2="350" y2="300"/>
+          <line class="wire audio" x1="80" y1="80" x2="420" y2="80"/><line class="wire audio" x1="80" y1="145" x2="420" y2="145"/><line class="wire audio" x1="80" y1="210" x2="420" y2="210"/><line class="wire audio" x1="80" y1="275" x2="420" y2="275"/>
+          <text x="40" y="85" font-weight="700">R1</text><text x="40" y="150" font-weight="700">R2</text><text x="40" y="215" font-weight="700">R3</text><text x="40" y="280" font-weight="700">R4</text>
+          <text x="140" y="26" font-weight="700">C1</text><text x="240" y="26" font-weight="700">C2</text><text x="340" y="26" font-weight="700">C3</text>
+          <g font-weight="700" font-size="18">
+            <rect class="hot" x="128" y="60" width="44" height="40" rx="5"/><text class="onhot" x="145" y="87">1</text>
+            <rect class="box" x="228" y="60" width="44" height="40" rx="5"/><text x="245" y="87">2</text>
+            <rect class="box" x="328" y="60" width="44" height="40" rx="5"/><text x="345" y="87">3</text>
+            <rect class="box" x="128" y="125" width="44" height="40" rx="5"/><text x="145" y="152">4</text>
+            <rect class="box" x="228" y="125" width="44" height="40" rx="5"/><text x="245" y="152">5</text>
+            <rect class="box" x="328" y="125" width="44" height="40" rx="5"/><text x="345" y="152">6</text>
+            <rect class="box" x="128" y="190" width="44" height="40" rx="5"/><text x="145" y="217">7</text>
+            <rect class="box" x="228" y="190" width="44" height="40" rx="5"/><text x="245" y="217">8</text>
+            <rect class="box" x="328" y="190" width="44" height="40" rx="5"/><text x="345" y="217">9</text>
+            <rect class="box" x="128" y="255" width="44" height="40" rx="5"/><text x="145" y="282">*</text>
+            <rect class="box" x="228" y="255" width="44" height="40" rx="5"/><text x="245" y="282">0</text>
+            <rect class="box" x="328" y="255" width="44" height="40" rx="5"/><text x="343" y="282">#</text>
+          </g>
+          <text x="450" y="90" font-size="14">Press <tspan font-weight="700">1</tspan>:</text>
+          <text x="450" y="112" font-size="14">R1 and C1 connect,</text>
+          <text x="450" y="134" font-size="14">so those two wires beep.</text>
+          <text x="450" y="180" font-size="14">7 wires = 4 rows + 3 columns.</text>
+          <text x="450" y="202" font-size="14">An 8th wire, if there is one,</text>
+          <text x="450" y="224" font-size="14">is a "common" we leave alone.</text>
+        </g>
+      </svg>
+    </div>
+    <ol class="steps">
+      <li>Unplug the grey keypad ribbon from the main board (if you haven't). Count its wires. Number them <b>1, 2, 3…</b> starting from the wire with the <b>red stripe</b>.</li>
+      <li>Meter on <b>continuity</b>. Hold down key <b>1</b> and touch the probes to pairs of contacts in the ribbon's plug until it beeps. Write down the two wire numbers.</li>
+      <li>Repeat for keys <b>2, 3, 4, 7, *, #</b>. These seven keys are enough to work out every row and column.</li>
+    </ol>
+    <div class="tablewrap"><table>
+      <tr><th>Key held</th><th>Wires that beep</th><th>So it's…</th></tr>
+      <tr><td>1</td><td class="blank">__ and __</td><td>R1 + C1</td></tr>
+      <tr><td>2</td><td class="blank">__ and __</td><td>R1 + C2</td></tr>
+      <tr><td>3</td><td class="blank">__ and __</td><td>R1 + C3</td></tr>
+      <tr><td>4</td><td class="blank">__ and __</td><td>R2 + C1</td></tr>
+      <tr><td>7</td><td class="blank">__ and __</td><td>R3 + C1</td></tr>
+      <tr><td>*</td><td class="blank">__ and __</td><td>R4 + C1</td></tr>
+      <tr><td>#</td><td class="blank">__ and __</td><td>R4 + C3</td></tr>
+    </table></div>
+    <p><b>How to read it:</b> the wire that appears for 1, 2 and 3 is <b>R1</b>. The wire shared by 1, 4, 7 and * is <b>C1</b>. Keep going and every wire gets a name.</p>
+    <p><b>Tip for probing tiny plugs:</b> tape a sewing pin to each probe and touch the pin to the metal contact inside each slot.</p>
+    <div class="note why"><b>Why a grid</b><p>Twelve separate switches would need 13 wires. A grid needs 7. The Pico scans the grid many times a second ("is row 1 touching column 1? column 2?…") and works out which key is down.</p></div>
+  </section>
+
+  <!-- 9 -->
+  <section class="part" id="light">
+    <span class="partno">Part 9</span>
+    <h2>The red light (optional)</h2>
+    <p class="time">5 minutes to test.</p>
+    <ol class="steps">
+      <li>Meter on <b>diode</b> (▶|). Touch the probes to the two contacts of the LIGHT cord's plug, then swap them.</li>
+      <li><b>It glows faintly, or reads about 1.6–2.0 V one way round:</b> it's an LED. Later the Pico can blink it while a video renders.</li>
+      <li><b>Nothing either way:</b> it's probably a neon bulb that needs high voltage. Skip it.</li>
+    </ol>
+    <div class="note why"><b>Why bother</b><p>A blinking red light is a strong "something is happening" signal for people walking past. It's a bonus, not a requirement; the booth works without it.</p></div>
+  </section>
+
+  <!-- 10 -->
+  <section class="part" id="pico">
+    <span class="partno">Part 10</span>
+    <h2>Set up and wire the Pico</h2>
+    <p class="time">10 minutes of setup, 30 minutes of wiring.</p>
+
+    <h3>10a · Give it its program</h3>
+    <ol class="steps">
+      <li>Hold the white <b>BOOTSEL</b> button on the Pico while plugging its USB cable into your laptop. A drive called <b>RPI-RP2</b> appears.</li>
+      <li>From <b>circuitpython.org</b>, download the latest stable <b>.uf2</b> file for the board "Pico" by Raspberry Pi and drag it onto RPI-RP2. The drive restarts as <b>CIRCUITPY</b>.</li>
+      <li>From <b>circuitpython.org/libraries</b>, download the bundle that matches that version. Copy its <code>lib/adafruit_hid</code> folder into <code>CIRCUITPY/lib/</code>.</li>
+      <li>Copy <code>booth/pico/code.py</code> from the project (GitHub: lizzieoh/hello-world, branch <code>claude/landline-demo-booth-setup-05lxch</code>) onto CIRCUITPY.</li>
+    </ol>
+    <div class="note why"><b>Why CircuitPython</b><p>The program is a plain text file you can open and edit on the drive itself. Change a setting, save, and the Pico restarts with it. No special software to install.</p></div>
+
+    <h3>10b · Wire it</h3>
+    <div class="diagram" role="img" aria-label="Pico left-side pins with USB at the top: pin 1 GP0 row 1, pin 2 GP1 row 2, pin 4 GP2 row 3, pin 5 GP3 row 4, pin 6 GP4 column 1, pin 7 GP5 column 2, pin 9 GP6 column 3, pin 18 ground to hook switch, pin 20 GP15 to hook switch. Pins 3, 8, 13 and 18 are ground.">
+      <svg viewBox="0 0 700 560" xmlns="http://www.w3.org/2000/svg">
+        <rect class="box" x="250" y="40" width="140" height="500" rx="8"/>
+        <rect x="290" y="16" width="60" height="34" rx="4" fill="var(--rule)" stroke="var(--ink)" stroke-width="1.5"/><text x="302" y="38" font-size="13" font-weight="700">USB</text>
+        <text x="282" y="300" font-size="22" font-weight="800">PICO</text>
+        <text x="266" y="324" class="small">viewed from the top</text>
+        <g font-size="13">
+          <!-- pins 1..20 down the left edge -->
+          <circle class="pin used" cx="262" cy="70" r="7"/><text x="228" y="74" text-anchor="end">GP0</text><text text-anchor="end" x="250" y="74" class="small">1</text>
+          <circle class="pin used" cx="262" cy="94" r="7"/><text x="228" y="98" text-anchor="end">GP1</text><text text-anchor="end" x="250" y="98" class="small">2</text>
+          <circle class="pin gnd" cx="262" cy="118" r="7"/><text x="228" y="122" text-anchor="end">GND</text><text text-anchor="end" x="250" y="122" class="small">3</text>
+          <circle class="pin used" cx="262" cy="142" r="7"/><text x="228" y="146" text-anchor="end">GP2</text><text text-anchor="end" x="250" y="146" class="small">4</text>
+          <circle class="pin used" cx="262" cy="166" r="7"/><text x="228" y="170" text-anchor="end">GP3</text><text text-anchor="end" x="250" y="170" class="small">5</text>
+          <circle class="pin used" cx="262" cy="190" r="7"/><text x="228" y="194" text-anchor="end">GP4</text><text text-anchor="end" x="250" y="194" class="small">6</text>
+          <circle class="pin used" cx="262" cy="214" r="7"/><text x="228" y="218" text-anchor="end">GP5</text><text text-anchor="end" x="250" y="218" class="small">7</text>
+          <circle class="pin gnd" cx="262" cy="238" r="7"/><text x="228" y="242" text-anchor="end">GND</text><text text-anchor="end" x="250" y="242" class="small">8</text>
+          <circle class="pin used" cx="262" cy="262" r="7"/><text x="228" y="266" text-anchor="end">GP6</text><text text-anchor="end" x="250" y="266" class="small">9</text>
+          <circle class="pin" cx="262" cy="286" r="7"/><text text-anchor="end" x="250" y="290" class="small">10</text>
+          <circle class="pin" cx="262" cy="310" r="7"/><text text-anchor="end" x="250" y="314" class="small">11</text>
+          <circle class="pin" cx="262" cy="334" r="7"/><text text-anchor="end" x="250" y="338" class="small">12</text>
+          <circle class="pin gnd" cx="262" cy="358" r="7"/><text text-anchor="end" x="250" y="362" class="small">13</text>
+          <circle class="pin" cx="262" cy="382" r="7"/><text text-anchor="end" x="250" y="386" class="small">14</text>
+          <circle class="pin" cx="262" cy="406" r="7"/><text text-anchor="end" x="250" y="410" class="small">15</text>
+          <circle class="pin" cx="262" cy="430" r="7"/><text text-anchor="end" x="250" y="434" class="small">16</text>
+          <circle class="pin" cx="262" cy="454" r="7"/><text text-anchor="end" x="250" y="458" class="small">17</text>
+          <circle class="pin gnd used" cx="262" cy="478" r="7"/><text x="228" y="482" text-anchor="end">GND</text><text text-anchor="end" x="250" y="482" class="small">18</text>
+          <circle class="pin" cx="262" cy="502" r="7"/><text text-anchor="end" x="250" y="506" class="small">19</text>
+          <circle class="pin used" cx="262" cy="526" r="7"/><text x="228" y="530" text-anchor="end">GP15</text><text text-anchor="end" x="250" y="530" class="small">20</text>
+        </g>
+        <g font-size="14">
+          <path class="wire audio" d="M178 70 H110"/><text x="20" y="74">Row 1 (R1)</text>
+          <path class="wire audio" d="M178 94 H110"/><text x="20" y="98">Row 2 (R2)</text>
+          <path class="wire audio" d="M178 142 H110"/><text x="20" y="146">Row 3 (R3)</text>
+          <path class="wire audio" d="M178 166 H110"/><text x="20" y="170">Row 4 (R4)</text>
+          <path class="wire keys" d="M178 190 H110"/><text x="20" y="194">Col 1 (C1)</text>
+          <path class="wire keys" d="M178 214 H110"/><text x="20" y="218">Col 2 (C2)</text>
+          <path class="wire keys" d="M178 262 H110"/><text x="20" y="266">Col 3 (C3)</text>
+          <path class="wire" d="M178 478 H120 V500"/><path class="wire" d="M178 526 H120 V510"/>
+          <text x="20" y="500">Hook switch</text><text x="20" y="518" class="small">(the 2 pads you found)</text>
+        </g>
+        <g font-size="13">
+          <text x="420" y="74">Keypad: 7 wires</text>
+          <text x="420" y="94" class="small">rows to GP0–GP3, columns to GP4–GP6</text>
+          <text x="420" y="490">Hook: 2 wires</text>
+          <text x="420" y="510" class="small">one to GP15 (pin 20), one to GND (pin 18)</text>
+          <circle class="pin used" cx="428" cy="400" r="7"/><text x="444" y="404">used</text>
+          <circle class="pin gnd" cx="428" cy="424" r="7"/><text x="444" y="428">ground (GND)</text>
+        </g>
+      </svg>
+    </div>
+    <p>Hold the Pico with the <b>USB plug pointing up</b> and the components facing you. The pins are numbered from 1 at the top-left, down the left side to 20.</p>
+    <ol class="steps">
+      <li><b>Keypad:</b> solder a 26 AWG wire to each of the 7 ribbon wires (heat-shrink each joint), then push a female jumper onto the Pico pin: <b>R1 → GP0 (pin 1), R2 → GP1 (pin 2), R3 → GP2 (pin 4), R4 → GP3 (pin 5), C1 → GP4 (pin 6), C2 → GP5 (pin 7), C3 → GP6 (pin 9)</b>.</li>
+      <li><b>Hook:</b> solder two wires onto the two hook pads you found, and connect them to <b>GP15 (pin 20)</b> and <b>GND (pin 18)</b>. Either wire can go to either pin.</li>
+      <li>Use a different colour for each wire and write the colour list on tape inside the phone.</li>
+    </ol>
+    <div class="note check"><b>Checkpoint · Pico</b><p>Plug the Pico into your laptop and open any text editor. Lift the handset: the Pico's small LED lights. Hang up: it goes out. With the handset lifted, press every key; each one types its own character (the hook itself types F8 and F9, which you won't see in a text editor). If the LED is lit with the handset <i>down</i>, open <code>code.py</code> and change <code>OFF_HOOK_READS_HIGH = True</code> to <code>False</code>. If a digit comes out wrong, fix the <code>LAYOUT</code> list in <code>code.py</code> rather than re-soldering.</p></div>
+    <div class="note why"><b>Why the Pico types keys</b><p>Every computer understands a keyboard. The Pi doesn't need any driver or setup; the web page just listens for <kbd>F8</kbd>, <kbd>F9</kbd> and digits. If anything goes wrong you can test the whole booth with a normal keyboard.</p></div>
+    <div class="note whynot"><b>Why not wire the switches straight to the Pi's pins</b><p>It's possible, but then you need custom software on the Pi to read the pins and pass them to the browser, and the Pi's pins are easy to damage. The Pico costs a few dollars, plugs in by USB, and keeps the phone and the computer independent: you can swap either one in seconds.</p></div>
+  </section>
+
+  <!-- 11 -->
+  <section class="part" id="pi">
+    <span class="partno">Part 11</span>
+    <h2>Set up the Raspberry Pi</h2>
+    <p class="time">About 45 minutes, mostly waiting.</p>
+    <figure>
+      <img src="img/pi.webp" alt="Illustration: a Raspberry Pi in a red and white case with power, micro-HDMI, Ethernet and USB cables plugged in." loading="lazy">
+      <figcaption>The Pi in its official case, with power, monitor, network and USB connected.</figcaption>
+    </figure>
+    <h3>11a · Case first</h3>
+    <ol class="steps">
+      <li>Push the case fan's small connector onto the 4-pin <b>FAN</b> header on the Pi (labelled on the board), seat the Pi in the case and snap the lid on.</li>
+    </ol>
+    <div class="note why"><b>Why</b><p>The fan keeps the Pi from slowing down when it's playing video all day, and the case protects it from shorts against metal.</p></div>
+
+    <h3>11b · Write the SD card (on your laptop)</h3>
+    <ol class="steps">
+      <li>Install <b>Raspberry Pi Imager</b> from raspberrypi.com/software and put a microSD card in the card reader.</li>
+      <li>Choose <b>Device:</b> Raspberry Pi 5 · <b>OS:</b> Raspberry Pi OS (64-bit), the one <i>with desktop</i> · <b>Storage:</b> your card.</li>
+      <li>Click <b>Edit settings</b>: hostname <code>fal-booth-1</code>, username <code>booth</code> with a password you'll remember, your Wi-Fi for now, and on the Services tab <b>enable SSH</b>.</li>
+      <li>Click <b>Write</b> and wait about 10 minutes.</li>
+    </ol>
+    <div class="note whynot"><b>Why not "Lite" (no desktop)</b><p>The booth needs a screen with a browser. The desktop version includes everything for that; Lite would mean installing it all by hand.</p></div>
+
+    <h3>11c · First boot and booth setup</h3>
+    <ol class="steps">
+      <li>Put the card in the Pi. Connect the monitor to <b>HDMI 0</b>, the micro-HDMI port right next to the USB-C power port. Connect a keyboard, Ethernet, the USB audio adapter and the Pico. Plug in power last.</li>
+      <li>When the desktop appears, open <b>Terminal</b> (the black icon at the top) and type these lines one at a time, pressing Enter after each:</li>
+    </ol>
+<pre><code>git clone -b claude/landline-demo-booth-setup-05lxch https://github.com/lizzieoh/hello-world.git
+cd hello-world/booth/pi
+chmod +x setup.sh
+./setup.sh 1
+sudo reboot</code></pre>
+    <p>The <code>1</code> is the booth number. Use 2, 3 or 4 on the other Pis.</p>
+    <div class="note why"><b>What setup.sh does, and why</b>
+      <ul>
+        <li><b>Starts the booth page full-screen at power-on</b>, so nobody has to touch a mouse at the venue.</li>
+        <li><b>Allows the microphone without asking</b> and lets sound play without a click. A permission pop-up would block the whole booth.</li>
+        <li><b>Prints silently</b> to the receipt printer, with no print dialog.</li>
+        <li><b>Turns off screen blanking</b> so the monitor never goes to sleep.</li>
+        <li><b>Sends all sound to the handset</b> every time it starts, so a replugged adapter still works.</li>
+        <li><b>Restarts the browser if it ever closes</b>, and shows a quiet "connecting…" screen until the internet is up.</li>
+      </ul>
+    </div>
+    <div class="note check"><b>Checkpoint · Pi</b><p>After the reboot, the Pi goes straight to a black "connecting…" screen, then the booth page: "Pick up the phone." Lift the handset: you hear "Please leave your prompt after the beep." Speak, wait, and the video appears.</p></div>
+    <h3>11d · If something's off</h3>
+    <div class="tablewrap"><table>
+      <tr><th>Symptom</th><th>Fix</th></tr>
+      <tr><td>Earpiece too quiet</td><td>Edit <code>~/booth/booth.conf</code>, raise <code>SPEAKER_VOLUME</code>, reboot.</td></tr>
+      <tr><td>Agent hears an echo or the mic is too loud</td><td>Lower <code>MIC_VOLUME</code> in the same file.</td></tr>
+      <tr><td>No sound at all</td><td>Run <code>cat ~/booth/audio.log</code>. It should name a USB device. If not, reseat the adapter.</td></tr>
+      <tr><td>Portrait monitor</td><td>Set <code>ROTATE="left"</code> or <code>"right"</code> in booth.conf.</td></tr>
+      <tr><td>Need the desktop for maintenance</td><td>From a laptop: <code>ssh booth@fal-booth-1.local</code>, then <code>pkill -f kiosk.sh; pkill chromium</code>.</td></tr>
+    </table></div>
+    <div class="note whynot"><b>Why not a Mac mini</b><p>A Mac mini would also work, but costs about ten times as much per booth, is harder to lock into a single full-screen app, and loses its settings when updates run. The Pi does this one job reliably.</p></div>
+  </section>
+
+  <!-- 12 -->
+  <section class="part" id="printer">
+    <span class="partno">Part 12</span>
+    <h2>Connect the receipt printer</h2>
+    <p class="time">About 30 minutes. Test this early: it's the step most likely to need help.</p>
+    <p>Pressing <kbd>0</kbd> prints a receipt: the prompt, three black-and-white stills from the video and the time. The receipt is laid out for <b>80 mm</b> paper.</p>
+    <ol class="steps">
+      <li>Load an 80 mm paper roll (thermal side facing out, the side that scratches dark with a fingernail) and connect the printer to the Pi by USB.</li>
+      <li>On the Pi, open Terminal and install the print system and a free driver for 80 mm receipt printers:</li>
+    </ol>
+<pre><code>sudo apt install -y cups libcups2-dev libcupsimage2-dev cmake git
+sudo usermod -aG lpadmin booth
+git clone https://github.com/klirichek/zj-58.git
+cd zj-58 &amp;&amp; mkdir build &amp;&amp; cd build &amp;&amp; cmake .. &amp;&amp; make &amp;&amp; sudo make install</code></pre>
+    <ol class="steps" start="3">
+      <li>Open the browser at <code>http://localhost:631</code>, go to <b>Administration → Add Printer</b>, pick your USB printer, and for the model choose the <b>80 mm</b> option the driver offers.</li>
+      <li>On the printer's page, choose <b>Set As Server Default</b>.</li>
+      <li>Make a call, press <kbd>0</kbd>. A receipt should print without any dialog.</li>
+    </ol>
+    <div class="note warn"><b>If this doesn't work</b><p>Stop here and ask. There's a tested fallback: a small helper program on the Pi that prints straight to the printer without any driver. It doesn't change anything else in the booth.</p></div>
+    <div class="note why"><b>Why an 80 mm receipt printer</b><p>The receipt design is exactly 576 dots wide, the printing width of standard 80 mm receipt paper. Receipt printers are built to run all day in shops, cut automatically, and the paper is sold everywhere.</p></div>
+    <div class="note whynot"><b>Why not</b>
+      <ul>
+        <li><b>Epson's official driver:</b> it only exists for regular PCs, not the Pi's ARM processor.</li>
+        <li><b>A Star TSP143:</b> it speaks Star's own language, which the free driver and the fallback can't use.</li>
+        <li><b>A 4×6 label printer or a colour photo printer:</b> a different paper size from the receipt design. A colour printer like the Canon Selphy also takes about 41 seconds per print.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 13 -->
+  <section class="part" id="network">
+    <span class="partno">Part 13</span>
+    <h2>The booth network</h2>
+    <p class="time">About 30 minutes at home, 10 at the venue.</p>
+    <div class="diagram" role="img" aria-label="Network: the three Pis connect by Ethernet to an 8-port switch, which connects to the travel router; the router reaches the internet through the venue Wi-Fi, with a 5G hotspot as backup.">
+      <svg viewBox="0 0 700 250" xmlns="http://www.w3.org/2000/svg">
+        <rect class="box" x="20" y="20" width="110" height="46" rx="6"/><text x="36" y="49" font-weight="700" font-size="14">Pi · Line 1</text>
+        <rect class="box" x="20" y="100" width="110" height="46" rx="6"/><text x="36" y="129" font-weight="700" font-size="14">Pi · Line 2</text>
+        <rect class="box" x="20" y="180" width="110" height="46" rx="6"/><text x="36" y="209" font-weight="700" font-size="14">Pi · Line 3</text>
+        <rect class="box" x="210" y="95" width="120" height="56" rx="6"/><text x="226" y="121" font-weight="700" font-size="14">8-port switch</text>
+        <rect class="hot" x="400" y="95" width="130" height="56" rx="6"/><text class="onhot" x="414" y="121" font-weight="700" font-size="14">Travel router</text><text class="onhot" x="414" y="139" font-size="12">GL.iNet</text>
+        <rect class="box" x="580" y="40" width="110" height="56" rx="6"/><text x="592" y="64" font-weight="700" font-size="13">Venue Wi-Fi</text><text class="small" x="592" y="82">main</text>
+        <rect class="box" x="580" y="150" width="110" height="56" rx="6"/><text x="592" y="174" font-weight="700" font-size="13">5G hotspot</text><text class="small" x="592" y="192">backup (USB)</text>
+        <path class="wire" d="M130 43 H170 V115 H210"/><path class="wire" d="M130 123 H210"/><path class="wire" d="M130 203 H170 V131 H210"/>
+        <path class="wire" d="M330 123 H400"/>
+        <path class="wire" d="M530 113 H555 V68 H580" stroke-dasharray="6 4"/>
+        <path class="wire" d="M530 133 H555 V178 H580"/>
+        <text class="small" x="140" y="236">Ethernet cables</text>
+        <text class="small" x="536" y="232">fails over by itself</text>
+      </svg>
+    </div>
+    <ol class="steps">
+      <li>Plug in the router. On a laptop, join its Wi-Fi and open <code>192.168.8.1</code>. Set an admin password.</li>
+      <li><b>Internet → Repeater:</b> join your home Wi-Fi for now. At the venue you'll change only this one setting to the show's network.</li>
+      <li><b>Internet → Tethering:</b> plug in the hotspot or phone by USB. Turn on <b>Multi-WAN</b> with Repeater first and Tethering second.</li>
+      <li>Router → switch → each Pi, all by Ethernet.</li>
+      <li>On each Pi, switch its own Wi-Fi off so it can't wander onto the busy hall network: <code>sudo nmcli radio wifi off</code>.</li>
+      <li>Save a backup of the router's settings and load it onto the spare router.</li>
+    </ol>
+    <div class="note why"><b>Why your own router</b><p>Conference Wi-Fi is crowded and changes. With your own router, you set up everything at home and change one setting at the venue, instead of three Pis. If the venue Wi-Fi drops, the router switches to the hotspot by itself.</p></div>
+    <div class="note whynot"><b>Why not Wi-Fi on each Pi</b><p>A crowded hall has hundreds of phones fighting for the same airwaves. A cable doesn't. Ethernet is the single biggest reliability win in the whole build.</p></div>
+    <div class="note warn"><b>Ask the venue first</b><p>Many convention centres ban exhibitors from running their own Wi-Fi network or hotspot. Ask Adobe in writing. If it's banned, turn off the router's own Wi-Fi (repeater mode still works) and ask whether the backup hotspot is allowed.</p></div>
+  </section>
+
+  <!-- 14 -->
+  <section class="part" id="mount">
+    <span class="partno">Part 14</span>
+    <h2>Mount it in the booth wall</h2>
+    <p class="time">About an hour per booth, once the wall is built.</p>
+    <figure>
+      <img src="img/cutaway.webp" alt="Cutaway illustration of a plywood booth wall: phone and monitor on the front, the computer on the back of the monitor, cables through a hole in the wall, a cable tray and power strip behind." loading="lazy">
+      <figcaption>Visitors see only the phone, the screen and the receipt slot. The Pi, Pico, cables and power live behind the wall.</figcaption>
+    </figure>
+    <ol class="steps">
+      <li><b>Wall:</b> use plywood or MDF at least 12 mm (½") thick. Mark the phone at chest height (about 120 cm / 47" to the top of the phone) and the monitor's bottom edge about 15 cm above it.</li>
+      <li><b>Cable hole:</b> drill a 25 mm (1") hole behind where the phone's LINE jack opening will sit. Both USB cables pass through it.</li>
+      <li><b>Phone:</b> screw the phone's metal back plate to the wall through its keyhole slots with wood screws. Tuck the Pico and audio adapter inside the phone body, held with hot glue, and zip-tie the cables inside so a pull on the outside doesn't reach the solder joints.</li>
+      <li><b>Monitor:</b> hang it on the VESA wall mount. Screw the Pi's VESA plate to the back of the monitor.</li>
+      <li><b>Printer:</b> mount it behind the wall with only its paper slot showing through a cut-out below the phone.</li>
+      <li><b>Power:</b> monitors and printers to the power strip; the Pis and the network gear to the battery backups. Plug the battery backups straight into the wall.</li>
+    </ol>
+    <div class="note why"><b>Why hide everything</b><p>Anything a visitor can reach, a visitor will touch, unplug or lean on. Hidden cables can't be tripped over, and a wall-mounted phone can't be knocked off a table or walked away with.</p></div>
+    <div class="note whynot"><b>Why not adhesive strips or a fabric wall</b><p>A handset gets lifted and slammed thousands of times a day. Adhesive creeps and fabric walls flex. Screws into wood hold.</p></div>
+  </section>
+
+  <!-- 15 -->
+  <section class="part" id="copies">
+    <span class="partno">Part 15</span>
+    <h2>Make units 2, 3 and the spare</h2>
+    <p class="time">Phones: about an hour each. Pis: 20 minutes each.</p>
+    <ol class="steps">
+      <li><b>Phones:</b> repeat Parts 5–10 for each phone. Because they're the same model, the wire colours and pins should match. Still run every checkpoint.</li>
+      <li><b>Pis:</b> shut down Pi #1, then copy its SD card onto three more cards (Raspberry Pi Imager, or "SD Card Copier" on another Pi). On each copy, change the name and line number: run <code>sudo raspi-config nonint do_hostname fal-booth-2</code>, edit <code>~/booth/booth.conf</code> so the address ends in <code>line=2</code>, and reboot.</li>
+      <li><b>Spare cards:</b> make a second copy for each Pi and tape it inside that Pi's case.</li>
+      <li><b>Label everything</b> 1, 2, 3 or S: phone, Pi, SD cards, power supplies and both ends of every cable.</li>
+    </ol>
+    <div class="note why"><b>Why copy instead of setting up each Pi</b><p>Copies are identical, so if Line 1 works, Lines 2 and 3 work the same way. It's also how you recover on show day: swap in the spare card and you're back in two minutes.</p></div>
+  </section>
+
+  <!-- 16 -->
+  <section class="part" id="burnin">
+    <span class="partno">Part 16</span>
+    <h2>Lock it down and burn it in</h2>
+    <p class="time">Lock: 5 minutes. Burn-in: at least 24 hours.</p>
+    <h3>16a · Make the SD card read-only</h3>
+<pre><code>sudo raspi-config nonint do_overlayfs 0
+sudo reboot</code></pre>
+    <p>To change settings later: <code>sudo raspi-config nonint do_overlayfs 1</code>, reboot, make the change, lock it again.</p>
+    <div class="note why"><b>Why</b><p>At a trade show, someone will pull a power cord. A read-only card can't be corrupted by that, and every boot is identical to the last.</p></div>
+    <h3>16b · The burn-in checklist (all three booths on one router)</h3>
+    <ul class="checklist">
+      <li>50 full calls per phone: lift, speak, video, press 2, press 3, press 0, hang up.</li>
+      <li>Slam the handset down. Leave it off the hook for 10 minutes (you should hear the busy signal).</li>
+      <li>Mash the keypad while the phone is hung up: nothing should happen.</li>
+      <li>Press 2 or 3 while a video is still rendering: nothing should break.</li>
+      <li>Pull a Pi's power mid-call: it comes back to the booth page by itself within a minute.</li>
+      <li>Unplug the router's internet: the screen shows "connecting…" and recovers by itself.</li>
+      <li>Turn off the home Wi-Fi: calls keep working over the hotspot.</li>
+      <li>Play loud crowd noise nearby: the system still understands you.</li>
+      <li>Wipe the handsets with alcohol wipes: nothing breaks.</li>
+    </ul>
+    <div class="note why"><b>Why 24 hours</b><p>Most failures (a loose joint, a memory leak, an overheating board) only show up after hours of use. You want to find them at home, not in front of visitors.</p></div>
+  </section>
+
+  <!-- 17 -->
+  <section class="part" id="showday">
+    <span class="partno">Part 17</span>
+    <h2>Show day</h2>
+    <h3>Setup (30 minutes)</h3>
+    <ol class="steps">
+      <li>Power order: battery backups → router → switch → monitors and printers → Pis.</li>
+      <li>On the router, switch Repeater to the show's Wi-Fi and accept any sign-in page.</li>
+      <li>Make a test call on every line, including printing a receipt.</li>
+    </ol>
+    <h3>When something goes wrong</h3>
+    <div class="tablewrap"><table>
+      <tr><th>What you see</th><th>Do this</th></tr>
+      <tr><td>Screen stuck or strange</td><td>Lift the handset and hold <kbd>*</kbd> for 3 seconds (reloads the page). Still stuck: unplug the Pi for 5 seconds.</td></tr>
+      <tr><td>"Our lines are busy" on every call</td><td>The internet or fal is down. Check the router from your phone; force it onto the hotspot.</td></tr>
+      <tr><td>"connecting…" forever</td><td>The router has no internet. Same as above.</td></tr>
+      <tr><td>Earpiece silent</td><td>Reseat the audio adapter's USB, then restart the Pi.</td></tr>
+      <tr><td>Lifting the handset does nothing</td><td>Reseat the Pico's USB. Its LED should follow the hook.</td></tr>
+      <tr><td>Receipt doesn't print</td><td>Check the paper (thermal side out) and the printer's USB.</td></tr>
+      <tr><td>Anything else</td><td>Swap in the spare unit. Debug after the show.</td></tr>
+    </table></div>
+    <div class="note why"><b>Why "swap first, debug later"</b><p>A visitor-facing booth has to be back up in minutes. Every spare part is identical, so swapping always works; debugging on the floor rarely does.</p></div>
+    <h3>Go-bag</h3>
+    <ul class="checklist">
+      <li>Spare complete unit and spare router</li>
+      <li>Spare SD cards (labelled), power supplies and handset cords</li>
+      <li>Extra Ethernet, HDMI and USB cables</li>
+      <li>USB keyboard, multimeter, small screwdrivers, gaffer tape, zip ties</li>
+      <li>Receipt paper, alcohol wipes, foam mic covers</li>
+      <li>This manual, printed</li>
+    </ul>
+  </section>
+
+  <!-- 18 -->
+  <section class="part" id="reference">
+    <span class="partno">Part 18</span>
+    <h2>Reference</h2>
+    <h3>The booth page address</h3>
+    <p><code>https://fal-call-center.vercel.app/booth?line=1</code>. The project's <code>booth</code> branch has to be merged before this address is live; until then, use the Vercel preview link for that branch. Options you can add to the end of the address:</p>
+    <div class="tablewrap"><table>
+      <tr><th>Add</th><th>Effect</th></tr>
+      <tr><td><code>&amp;model=flux</code></td><td>FLUX 3 Max makes the videos; H3 Max becomes the backup.</td></tr>
+      <tr><td><code>&amp;secs=8</code></td><td>8-second clips: about 3 seconds faster than the default 10.</td></tr>
+      <tr><td><code>&amp;lang=auto</code></td><td>Detects the visitor's language (a little slower than English-only).</td></tr>
+    </table></div>
+    <h3>What the phone types</h3>
+    <div class="tablewrap"><table>
+      <tr><th>Phone action</th><th>Key</th><th>What the booth does</th></tr>
+      <tr><td>Lift handset</td><td><kbd>F8</kbd></td><td>Greeting, beep, listens</td></tr>
+      <tr><td>Press # while speaking</td><td><kbd>#</kbd></td><td>Stops listening early</td></tr>
+      <tr><td>Press 2</td><td><kbd>2</kbd></td><td>Turns the video's sound on</td></tr>
+      <tr><td>Press 3</td><td><kbd>3</kbd></td><td>Makes a new video from the same prompt</td></tr>
+      <tr><td>Press 0</td><td><kbd>0</kbd></td><td>Prints the receipt (once per video)</td></tr>
+      <tr><td>Hang up</td><td><kbd>F9</kbd></td><td>Goes quiet; screen returns to recent videos</td></tr>
+      <tr><td>Hold * for 3 s</td><td><kbd>Ctrl</kbd>+<kbd>R</kbd></td><td>Reloads the page (staff reset)</td></tr>
+    </table></div>
+    <h3>Glossary</h3>
+    <ul>
+      <li><b>Continuity:</b> whether two points are connected; the meter beeps if they are.</li>
+      <li><b>Electret microphone:</b> a tiny microphone that needs a little power from the adapter to work.</li>
+      <li><b>GND (ground):</b> the shared "zero" wire every circuit returns to.</li>
+      <li><b>Heat-shrink:</b> plastic tube that shrinks with heat to insulate a joint.</li>
+      <li><b>Matrix (keypad):</b> a grid of row and column wires; each key connects one row to one column.</li>
+      <li><b>Pico:</b> a small programmable board that acts as a USB keyboard in this build.</li>
+      <li><b>Short (short circuit):</b> two things touching that shouldn't; the cause of most dead boards.</li>
+      <li><b>Tip / ring / sleeve:</b> the three metal contacts of a headphone plug.</li>
+    </ul>
+  </section>
+</div>
