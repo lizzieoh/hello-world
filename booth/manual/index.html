@@ -699,6 +699,7 @@ cd booth/native
 sudo apt install -y python3-numpy python3-pil ffmpeg
 sudo python3 booth.py --test-print</code></pre>
     <p><code>ls /dev/usb/</code> should show <b>lp0</b>, which is the printer. The last line prints a receipt with a striped test pattern and cuts it. <code>sudo</code> is only for this test: the native app's setup gives the booth permission to print without it.</p>
+    <div class="note check"><b>No Pi yet? Test it from the Mac</b><p>Plug the printer into the Mac. In Terminal, <code>lpinfo -v | grep usb</code> lists it as a line starting <code>usb://</code>. Copy that address, then run <code>sudo lpadmin -p rongta -E -v 'usb://…paste…' -m raw</code>. Then, from <code>hello-world/booth/native</code>: <code>BOOTH_PRINTER=rongta python3 booth.py --test-print</code>. The same <code>BOOTH_PRINTER=rongta</code> in front of the laptop test (<code>laptop.py</code>) makes <kbd>0</kbd> print for real.</p></div>
     <div class="note warn"><b>If <code>ls /dev/usb/</code> shows nothing</b><p>Check the printer is switched on, then replug its USB cable and run it again. If it's still empty, run <code>lsusb</code> and send Claude what it lists. Some Rongta units show up as a different kind of USB device, and that's a one-line setting change.</p></div>
     <ol class="steps">
       <li>Load an 80 mm paper roll (thermal side facing out, the side that scratches dark with a fingernail) and connect the printer to the Pi by USB.</li>
