@@ -24,6 +24,7 @@ import json
 import logging
 import os
 import queue
+import random
 import re
 import socket
 import subprocess
@@ -807,6 +808,16 @@ def video_stills(src, secs, count, out_dir):
 
 BRAND = HERE / "brand"
 # fal's list prices (USD), used if the live price lookup at start-up can't be reached.
+# 3 (regenerate): one of these rides along with the caller's words, so each take really is a different video
+TAKES = [
+    "A completely different interpretation: new characters, new setting details, wide establishing shot.",
+    "Reimagined at a different time of day with different lighting and colors, filmed from a low angle.",
+    "Reimagined as a stylized animated film, with a moving handheld camera.",
+    "A surprising new take: different subject details and composition, dramatic close-up shots.",
+    "Reimagined in a different visual style, aerial drone camera, bold color palette.",
+    "A playful, unexpected version with different characters and a fast tracking shot.",
+]
+
 PRICES = {"minimax/h3-max/text-to-video": 0.0325, "blackforestlabs/flux-3-max/text-to-video": 0.02125,
           "fal-ai/wizper": 0.00111}
 
@@ -830,7 +841,6 @@ def brand_font(kind, size, weight=None):
 
 def glitch_row(width, seed, height=28):
     """A strip of the brand's pixel 'glitch dust', in black, for dividers."""
-    import random
     from PIL import Image, ImageDraw
     rnd = random.Random(seed)
     img = Image.new("L", (width, height), 255)
@@ -1040,6 +1050,7 @@ class Booth:
         self.timers, self.seq = [], itertools.count()
         self.off_hook = False
         self.cid = 0          # call number: bumped on every lift and hang-up
+        self.take_offset = 0  # where in TAKES the next call's first regenerate starts, so callers don't all get the same one
         self.state = "idle"   # idle | greeting | listening | hold | ready | busy
         self.attempt = 0
         self.take = None      # the take on screen
@@ -1114,6 +1125,7 @@ class Booth:
         if self.off_hook:
             return
         self.call_no = next_call_number(Path(getattr(self.cache, "root", HERE / "cache")) / "calls.txt")
+        self.take_offset = random.randrange(len(TAKES))
         log.info("lifted (call #%d)", self.call_no)
         self.off_hook = True
         self.cid += 1
@@ -1196,23 +1208,28 @@ class Booth:
             return self.busy("Let's keep it friendly. Hang up and try another one.")
         self.view["said"] = f"“{prompt}”"
 
-    def regenerate(self, prompt):
-        """3: the same prompt again. The last video keeps playing (muted) under the hold clock."""
+    def regenerate(self, prompt, take=1):
+        """3: the same prompt again, but a different take of it. The model reads the same words the same way every
+        time (same person, same street), so each take adds its own direction. The screen and receipt keep their words."""
         self.line.hold()
         self.start_hold(time.monotonic(), said=f"“{prompt}”", keep_video=True)
         self.pending = rid = next(self.seq)
-        threading.Thread(target=self._render, args=(self.cid, rid, prompt, time.monotonic()), daemon=True).start()
+        threading.Thread(target=self._render, args=(self.cid, rid, prompt, time.monotonic(), take), daemon=True).start()
 
-    def _render(self, cid, rid, prompt, t0):
+    def _render(self, cid, rid, prompt, t0, take=0):
         t = time.monotonic()
+        asked = prompt
+        if take:
+            asked = f"{prompt.rstrip(' .')}. {TAKES[(take - 1 + self.take_offset) % len(TAKES)]}"
+            log.info("take %d: %s", take + 1, asked)
         try:
-            url, model = self.fal.render(prompt)
+            url, model = self.fal.render(asked)
             log.info("rendered in %.1f s", time.monotonic() - t)
         except Refused:
             return self.post(("failed", cid, rid, "That one didn't go through. Hang up and try another."))
         except Exception:
             return self.post(("failed", cid, rid, "Our lines are busy. Hang up and try again."))
-        self.post(("rendered", cid, rid, {"prompt": prompt, "url": url, "model": model, "secs": time.monotonic() - t0,
+        self.post(("rendered", cid, rid, {"prompt": prompt, "take": take, "url": url, "model": model, "secs": time.monotonic() - t0,
                                           "printed": False, "answered": False, "sound": False}))
 
     def on_rendered(self, cid, rid, take):
@@ -1322,7 +1339,7 @@ class Booth:
         elif k == "3":
             self.screen.mute(True)
             self.take = None
-            return self.regenerate(t["prompt"])
+            return self.regenerate(t["prompt"], t.get("take", 0) + 1)
         elif k == "0" and not t["printed"]:
             t["printed"] = True
             keys["0"] = "Printing…"
