@@ -28,7 +28,7 @@ rm -f "$APP/cache/bg.png"   # redrawn on next start
 
 echo "==> Python packages (in a venv that can also see the system numpy, Pillow and evdev)"
 [ -d "$APP/venv" ] || python3 -m venv --system-site-packages "$APP/venv"
-"$APP/venv/bin/pip" install --quiet --upgrade fal-client sounddevice
+"$APP/venv/bin/pip" install --quiet --upgrade fal-client sounddevice qrcode
 
 echo "==> fal key"
 if [ ! -s "$APP/fal.key" ]; then

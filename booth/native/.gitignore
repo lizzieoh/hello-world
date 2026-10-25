@@ -3,3 +3,4 @@ cache/
 venv/
 booth.log*
 __pycache__/
+brand/fonts/

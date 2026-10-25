@@ -124,6 +124,22 @@ class Fal:
         if cfg["flux_first"]:
             self.models.reverse()
 
+    def load_prices(self):
+        """fal's current prices for the models in use; the PRICES list if fal can't be reached."""
+        self.prices = dict(PRICES)
+        try:
+            ids = [e for _, e, _ in self.models] + [self.STT]
+            r = self.client._client.get("https://api.fal.ai/v1/models/pricing",
+                                        params=[("endpoint_id", e) for e in ids], timeout=8)
+            for p in r.json().get("prices", []):
+                self.prices[p["endpoint_id"]] = float(p["unit_price"])
+            log.info("prices: %s", {k.split("/")[1]: v for k, v in self.prices.items()})
+        except Exception as e:
+            log.warning("price lookup failed, using the built-in list: %s", e)
+
+    def endpoint(self, name):
+        return next(e for n, e, _ in self.models if n == name)
+
     def warm_up(self):
         """Open the connection to fal while the greeting plays, so the real requests skip DNS and TLS."""
         try:
@@ -787,24 +803,68 @@ def video_stills(src, secs, count, out_dir):
     return paths
 
 
+BRAND = HERE / "brand"
+# fal's list prices (USD), used if the live price lookup at start-up can't be reached.
+PRICES = {"minimax/h3-max/text-to-video": 0.0325, "blackforestlabs/flux-3-max/text-to-video": 0.02125,
+          "fal-ai/wizper": 0.00111}
+
+
+def brand_font(kind, size, weight=None):
+    """fal's own fonts when they're installed in brand/fonts (not in git: they're licensed), else DejaVu."""
+    from PIL import ImageFont
+    files = {"display": "Focal-Upright-VF_wght.ttf", "mono": "HALTimezone-MonoRegular.otf",
+             "serif": "HALTimezone-Regular.otf"}
+    path = BRAND / "fonts" / files[kind]
+    if path.exists():
+        font = ImageFont.truetype(str(path), size)
+        if weight:
+            try:
+                font.set_variation_by_axes([weight])
+            except Exception:
+                pass
+        return font
+    return ImageFont.truetype(find_font(bold=(weight or 400) >= 600 or kind == "display"), size)
+
+
+def glitch_row(width, seed, height=28):
+    """A strip of the brand's pixel 'glitch dust', in black, for dividers."""
+    import random
+    from PIL import Image, ImageDraw
+    rnd = random.Random(seed)
+    img = Image.new("L", (width, height), 255)
+    d = ImageDraw.Draw(img)
+    cell = 7
+    x = 0
+    while x < width:
+        x += rnd.choice([cell, cell * 2, cell * 3, cell * 5])
+        if rnd.random() < 0.55:
+            w = cell * rnd.choice([1, 1, 2, 3])
+            y = cell * rnd.randrange(height // cell)
+            d.rectangle([x, y, x + w - 1, y + cell - 1], fill=0)
+    return img
+
+
 def receipt_image(take, cfg, src):
-    from PIL import Image, ImageDraw, ImageFont
+    from PIL import Image, ImageDraw
+    W, M = DOTS, 24  # width and side margin, in printer dots
     frames = []
     for frac in (0.2, 0.5, 0.8):
         try:
             png = subprocess.run(["ffmpeg", "-v", "error", "-ss", f"{cfg['secs'] * frac:.2f}", "-i", src, "-frames:v",
-                                  "1", "-vf", f"scale={DOTS}:-2", "-f", "image2pipe", "-vcodec", "png", "-"],
+                                  "1", "-vf", f"scale={W}:-2", "-f", "image2pipe", "-vcodec", "png", "-"],
                                  capture_output=True, timeout=30).stdout
         except FileNotFoundError:  # no ffmpeg (a laptop test): a receipt without stills
             break
         if png:
             frames.append(Image.open(io.BytesIO(png)).convert("L"))
-    big = ImageFont.truetype(find_font(True), 40)
-    mid = ImageFont.truetype(find_font(), 26)
-    small = ImageFont.truetype(find_font(), 22)
+
+    title = brand_font("display", 34, 800)
+    said_font = brand_font("display", 30, 500)
+    mono = brand_font("mono", 21)
+    small = brand_font("mono", 17)
     probe = ImageDraw.Draw(Image.new("L", (1, 1)))
 
-    def wrap(text, font, width=DOTS - 32):
+    def wrap(text, font, width=W - 2 * M):
         lines, cur = [], ""
         for word in text.split():
             trial = f"{cur} {word}".strip()
@@ -815,27 +875,88 @@ def receipt_image(take, cfg, src):
                 cur = word
         return lines + ([cur] if cur else [])
 
-    said = wrap(f"“{take['prompt']}”", mid)
-    when = " · ".join(filter(None, [cfg["line"] and f"Line {cfg['line']}", time.strftime("%b %d, %Y  %I:%M %p")]))
-    how = f"{take['model']} on fal · {cfg['secs']} s · ready in {take['secs']:.1f} s"
-    img = Image.new("L", (DOTS, 3000), 255)  # cropped to what was drawn
+    img = Image.new("L", (W, 4000), 255)  # cropped to what was drawn
     d = ImageDraw.Draw(img)
-    y = 20
-    d.text((DOTS // 2, y), "fal call center", font=big, fill=0, anchor="mt"); y += 56
-    d.text((DOTS // 2, y), when, font=small, fill=0, anchor="mt"); y += 34
-    d.line([(16, y), (DOTS - 16, y)], fill=0, width=2); y += 20
-    for line in said:
-        d.text((DOTS // 2, y), line, font=mid, fill=0, anchor="mt"); y += 34
-    y += 12
+    y = 18
+
+    def row(left, right, font=mono, gap=30):
+        nonlocal y
+        d.text((M, y), left, font=font, fill=0)
+        d.text((W - M, y), right, font=font, fill=0, anchor="ra")
+        y += gap
+
+    def rule(dashed=False):
+        nonlocal y
+        if dashed:
+            for x in range(M, W - M, 12):
+                d.line([(x, y), (x + 6, y)], fill=0, width=2)
+        else:
+            d.line([(M, y), (W - M, y)], fill=0, width=2)
+        y += 18
+
+    # the logo, then the name of the line
+    logo = BRAND / "fal-wordmark.png"
+    if logo.exists():
+        rgba = Image.open(logo).convert("RGBA")
+        mark = Image.new("RGBA", rgba.size, "white")
+        mark.alpha_composite(rgba)  # transparent corners stay white, not black
+        mark = mark.convert("L")
+        mark = mark.resize((300, round(300 * mark.height / mark.width)), Image.LANCZOS)
+        img.paste(mark, ((W - mark.width) // 2, y))
+        y += mark.height + 6
+    else:
+        d.text((W // 2, y), "fal", font=brand_font("display", 90, 900), fill=0, anchor="mt")
+        y += 100
+    d.text((W // 2, y), "C A L L   C E N T E R", font=title, fill=0, anchor="mt"); y += 52
+    img.paste(glitch_row(W, take.get("call", 0)), (0, y)); y += 40
+
+    # who called, when
+    row(f"LINE {int(cfg['line'] or 0):02d}", f"CALL #{take.get('call', 0):04d}")
+    row(time.strftime("%b %d %Y").upper(), time.strftime("%I:%M %p"))
+    rule(dashed=True)
+
+    # what they asked for
+    d.text((M, y), "YOU SAID", font=small, fill=0); y += 28
+    for line in wrap(f"“{take['prompt']}”", said_font):
+        d.text((M, y), line, font=said_font, fill=0); y += 38
+    y += 14
+
+    # three stills, dithered like a thermal print
     gamma = 1 + cfg.get("print_lighten", 0) / 50  # 35 -> 1.7: lifts the darks and mids, keeps the whites
     for f in frames:
         f = f.point(lambda v: round(255 * (v / 255) ** (1 / gamma)))
         img.paste(f.convert("1", dither=Image.Dither.FLOYDSTEINBERG).convert("L"), (0, y))
-        y += f.height + 12
-    d.line([(16, y), (DOTS - 16, y)], fill=0, width=2); y += 16
-    d.text((DOTS // 2, y), how, font=small, fill=0, anchor="mt"); y += 36
-    d.text((DOTS // 2, y), "Thank you for calling.", font=mid, fill=0, anchor="mt"); y += 50
-    return img.crop((0, 0, DOTS, y)).point(lambda v: 255 if v > 127 else 0).convert("1")
+        y += f.height + 10
+    y += 8
+
+    # the bill
+    d.text((M, y), "ITEMIZED CALL", font=small, fill=0); y += 30
+    for label, detail, cost in take.get("costs") or []:
+        row(label, f"${cost:.3f}")
+        d.text((M + 16, y - 6), detail, font=small, fill=0); y += 22
+    total = sum(c for _, _, c in take.get("costs") or [])
+    rule()
+    row("TOTAL", f"${total:.2f}", font=brand_font("display", 30, 800), gap=40)
+    row("READY IN", f"{take['secs']:.1f} s")
+    rule(dashed=True)
+
+    # a QR code to keep the video
+    try:
+        import qrcode
+        qr = qrcode.QRCode(border=0, box_size=6, error_correction=qrcode.constants.ERROR_CORRECT_M)
+        qr.add_data(take["url"])
+        q = qr.make_image(fill_color="black", back_color="white").convert("L")
+        q = q.resize((220, 220), Image.NEAREST)
+        img.paste(q, ((W - q.width) // 2, y)); y += q.height + 12
+        d.text((W // 2, y), "SCAN TO KEEP YOUR VIDEO", font=small, fill=0, anchor="mt"); y += 36
+    except Exception:  # no qrcode package, or no URL: the receipt still prints
+        pass
+
+    img.paste(glitch_row(W, take.get("call", 0) + 1), (0, y)); y += 40
+    d.text((W // 2, y), "Thank you for calling.", font=said_font, fill=0, anchor="mt"); y += 44
+    d.text((W // 2, y), "fal.ai", font=title, fill=0, anchor="mt"); y += 46
+    d.text((W // 2, y), "generative media platform for developers", font=small, fill=0, anchor="mt"); y += 40
+    return img.crop((0, 0, W, y)).point(lambda v: 255 if v > 127 else 0).convert("1")
 
 
 def escpos(img):
@@ -895,6 +1016,20 @@ def test_print():
     print("sent. A receipt with a striped test pattern should come out and cut.")
 
 
+def next_call_number(path=HERE / "cache" / "calls.txt"):
+    """A running count of calls on this line, kept across restarts, for the receipt."""
+    try:
+        n = int(path.read_text().strip()) + 1
+    except Exception:
+        n = 1
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(str(n))
+    except Exception:
+        pass
+    return n
+
+
 # ---------- the call ----------
 class Booth:
     def __init__(self, cfg, line=None, screen=None, fal=None, printer=None, cache=None):
@@ -912,6 +1047,8 @@ class Booth:
         self.view = {"said": "", "status": "", "keys": None, "center": ""}
         self.attract = []
         self.slideshow = []
+        self.stt_secs = {}     # render id -> seconds the speech-to-text took (for the bill)
+        self.call_no = 0
         self.online = True
 
     def post(self, ev):
@@ -964,7 +1101,8 @@ class Booth:
     def pick_up(self):
         if self.off_hook:
             return
-        log.info("lifted")
+        self.call_no = next_call_number(Path(getattr(self.cache, "root", HERE / "cache")) / "calls.txt")
+        log.info("lifted (call #%d)", self.call_no)
         self.off_hook = True
         self.cid += 1
         self.attempt = 0
@@ -1028,7 +1166,8 @@ class Booth:
         t = time.monotonic()
         try:
             prompt = self.fal.transcribe(wav)
-            log.info("transcribed in %.1f s (%d KB of audio)", time.monotonic() - t, len(wav) // 1024)
+            self.stt_secs[rid] = time.monotonic() - t
+            log.info("transcribed in %.1f s (%d KB of audio)", self.stt_secs[rid], len(wav) // 1024)
         except Exception:
             return self.post(("failed", cid, rid, "Our lines are busy. Hang up and try again."))
         self.post(("prompt", cid, rid, prompt))
@@ -1071,6 +1210,8 @@ class Booth:
             return
         self.pending = None
         take["rid"] = rid
+        take["call"] = self.call_no
+        take["costs"] = self.costs(take, rid)
         self.take = take
         self.state = "ready"
         self.hold_from = None
@@ -1079,6 +1220,21 @@ class Booth:
         self.set_view(said=f"“{take['prompt']}”", status=f"Ready in {take['secs']:.1f} s", keys={})
         self.after(8, "menu", cid, rid)  # in case the clip never reports it's playing
         self.bump_idle()
+
+    def costs(self, take, rid):
+        """The receipt's bill: (item, detail, USD). Speech-to-text is billed by compute time, so it's an estimate."""
+        prices = getattr(self.fal, "prices", PRICES)
+        items = []
+        if rid in self.stt_secs:
+            stt = self.stt_secs.pop(rid)
+            items.append(("SPEECH TO TEXT", "wizper", stt * prices.get(Fal.STT, PRICES[Fal.STT])))
+        try:
+            endpoint = self.fal.endpoint(take["model"])
+        except (StopIteration, AttributeError):
+            endpoint = ""
+        price = prices.get(endpoint, PRICES.get(endpoint, 0))
+        items.append((f"VIDEO {self.cfg['secs']} s", take["model"], price * self.cfg["secs"]))
+        return items
 
     def on_file_loaded(self):
         t = self.take
@@ -1317,6 +1473,7 @@ def main():
     booth.line = Line(booth.post, cfg)
     booth.screen = Screen(booth.post)
     booth.fal = Fal(cfg)
+    threading.Thread(target=booth.fal.load_prices, daemon=True).start()
     booth.printer = Printer(cfg)
     booth.cache = Cache(cfg["history"], secs=cfg["secs"])
     Phone(booth.post, grab=cfg["grab"])

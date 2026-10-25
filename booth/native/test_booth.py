@@ -120,6 +120,7 @@ def talk(secs=1.0, start=0.3):
 # ---------- harness ----------
 def make(**over):
     cfg = B.load_config(Path("/nonexistent"))
+    (TMP / "printer.bin").touch()  # exists, so the booth prints here and never to a real printer on this machine
     cfg.update({"printer": str(TMP / "printer.bin"), "off_hook_idle": 30.0, "attract_after": 0.5,
                 "render_timeout": 2.0, **over})
     client = Client()
@@ -167,7 +168,7 @@ def test_full_call():
     wait(lambda: "menu" in booth.line.playing(), 6, "menu read")
     booth.post(("key", "2"))
     wait(lambda: ("mute", False) in booth.screen.log and booth.screen.calls("restart_clip"), 3, "sound on")
-    assert "menu" not in booth.line.playing(), "a key cuts the menu off"
+    wait(lambda: "menu" not in booth.line.playing(), 1, "a key cuts the menu off (after a short fade)")
     booth.post(("key", "0"))
     wait(lambda: booth.view["keys"].get("0") == "Printed", 25, "printed")
     data = (TMP / "printer.bin").read_bytes()
@@ -328,7 +329,7 @@ def test_receipt():
     take = {"prompt": "a red phone ringing on the moon while a cat in a tiny astronaut suit answers it",
             "model": "H3 Max", "secs": 9.6, "url": URL}
     img = B.receipt_image(take, cfg, str(CLIP))
-    assert img.width == B.DOTS and 900 < img.height < 2000, img.size
+    assert img.width == B.DOTS and 1200 < img.height < 2800, img.size
     img.save(TMP / "receipt.png")
     data = B.escpos(img)
     assert len(data) > img.height * B.DOTS // 8
