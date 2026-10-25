@@ -17,7 +17,8 @@ from adafruit_hid.keyboard import Keyboard
 from adafruit_hid.keycode import Keycode
 
 HOOK_PIN = board.GP15
-OFF_HOOK_READS_HIGH = True  # if pickup/hangup come out backwards, flip this
+OFF_HOOK_READS_HIGH = False  # HA9888 wall phone: pads 1+2 close when the handset is lifted, pulling GP15 low.
+                            # If pickup/hangup come out backwards, flip this.
 PICKUP_KEYS = (Keycode.F8,)
 HANGUP_KEYS = (Keycode.F9,)
 RELOAD_ON_HANGUP = False    # True = wipe the screen on hangup instead of leaving the image up

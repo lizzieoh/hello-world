@@ -92,7 +92,7 @@ You keep four parts of the phone: **the handset, its coiled cord, the hook switc
 3. From the matching Adafruit CircuitPython Bundle (circuitpython.org/libraries), copy the **`adafruit_hid`** folder into `CIRCUITPY/lib/`.
 4. Copy [`pico/code.py`](pico/code.py) onto `CIRCUITPY` as `code.py`.
 5. Test on a key-tester site (e.g. keyboard-test.space):
-   - Lift the handset: the Pico's LED lights and **F8** registers. Hang up: **F9**. If they're backwards, set `OFF_HOOK_READS_HIGH = False`.
+   - Lift the handset: the Pico's LED lights and **F8** registers. Hang up: **F9**. If they're backwards, flip `OFF_HOOK_READS_HIGH` in `code.py` (it's `False` for the HA9888 wall phone).
    - With the handset lifted, press every key, 0–9, \* and #. Each one should type its own character. Keys are ignored while the phone is hung up, so passersby poking the keypad can't trigger anything.
 
 ---

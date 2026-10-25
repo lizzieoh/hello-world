@@ -425,6 +425,7 @@
       <li>Try pairs of pads until you find a pair that <b>beeps in one position only</b>. There may be two such pairs. Either works; pick one.</li>
       <li>Write down which two pads (count from one edge) and whether it beeps <b>pressed</b> or <b>released</b>.</li>
     </ol>
+    <div class="note check"><b>Measured on the HA9888 wall phone</b><p>The <b>first two pads, counting from the edge nearest the phone's left side</b>, beep when the plunger is <b>released</b> (handset lifted). Use those two pads on every unit. The Pico code is already set for this: the switch closes on lift, pulling GP15 to ground, so <code>OFF_HOOK_READS_HIGH = False</code>. Still check each unit with the meter, because a different batch could be wired differently.</p></div>
     <div class="tablewrap"><table>
       <tr><th>Record for each phone</th><th>Your answer</th></tr>
       <tr><td>Hook pads (counted from the edge)</td><td class="blank">pad __ and pad __</td></tr>
@@ -574,7 +575,7 @@
       <li><b>Hook:</b> solder two wires onto the two hook pads you found, and connect them to <b>GP15 (pin 20)</b> and <b>GND (pin 18)</b>. Either wire can go to either pin.</li>
       <li>Use a different colour for each wire and write the colour list on tape inside the phone.</li>
     </ol>
-    <div class="note check"><b>Checkpoint · Pico</b><p>Plug the Pico into your laptop and open any text editor. Lift the handset: the Pico's small LED lights. Hang up: it goes out. With the handset lifted, press every key; each one types its own character (the hook itself types F8 and F9, which you won't see in a text editor). If the LED is lit with the handset <i>down</i>, open <code>code.py</code> and change <code>OFF_HOOK_READS_HIGH = True</code> to <code>False</code>. If a digit comes out wrong, fix the <code>LAYOUT</code> list in <code>code.py</code> rather than re-soldering.</p></div>
+    <div class="note check"><b>Checkpoint · Pico</b><p>Plug the Pico into your laptop and open any text editor. Lift the handset: the Pico's small LED lights. Hang up: it goes out. With the handset lifted, press every key; each one types its own character (the hook itself types F8 and F9, which you won't see in a text editor). If the LED is lit with the handset <i>down</i>, open <code>code.py</code> and flip <code>OFF_HOOK_READS_HIGH</code> (it's set to <code>False</code> for this phone). If a digit comes out wrong, fix the <code>LAYOUT</code> list in <code>code.py</code> rather than re-soldering.</p></div>
     <div class="note why"><b>Why the Pico types keys</b><p>Every computer understands a keyboard. The Pi doesn't need any driver or setup; the web page just listens for <kbd>F8</kbd>, <kbd>F9</kbd> and digits. If anything goes wrong you can test the whole booth with a normal keyboard.</p></div>
     <div class="note whynot"><b>Why not wire the switches straight to the Pi's pins</b><p>It's possible, but then you need custom software on the Pi to read the pins and pass them to the browser, and the Pi's pins are easy to damage. The Pico costs a few dollars, plugs in by USB, and keeps the phone and the computer independent: you can swap either one in seconds.</p></div>
   </section>

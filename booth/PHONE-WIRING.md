@@ -78,7 +78,9 @@ The board labels the 4 handset wires **G+ R− Y− B+**:
    - which two contacts (count from one end of the plug), and
    - whether it beeps with the lever **up** (handset lifted) or **down** (hung up).
 
-Those 2 wires go to the Pico: one to **GP15** (pin 20), the other to **GND** (pin 18).
+**Measured on this phone:** the **first two pads on the tan hook board, counting from the edge nearest the phone's left side**, beep when the plunger is **released** (handset lifted). Use those two on every unit, but check each one with the meter.
+
+Those 2 wires go to the Pico: one to **GP15** (pin 20), the other to **GND** (pin 18). Either way round works. Because the switch *closes* on lift, `code.py` already has `OFF_HOOK_READS_HIGH = False`.
 
 ---
 
