@@ -595,7 +595,9 @@ def make_background(path):
 
 
 def find_font(bold=False):
-    for p in ([f"/usr/share/fonts/truetype/dejavu/DejaVuSans{'-Bold' if bold else ''}.ttf"]):
+    b = "-Bold" if bold else ""
+    for p in (f"/usr/share/fonts/truetype/dejavu/DejaVuSans{b}.ttf",  # the Pi
+              f"/System/Library/Fonts/Supplemental/Arial{' Bold' if bold else ''}.ttf"):  # a Mac, for laptop tests
         if os.path.exists(p):
             return p
     return "DejaVuSans.ttf"
@@ -791,7 +793,12 @@ class Printer:
             take["done"].wait(20)
         src = take.get("file") or take["url"]
         data = escpos(receipt_image(take, self.cfg, src))
-        with open(printer_path(self.cfg), "wb") as f:
+        path = printer_path(self.cfg)
+        if "/" not in path:
+            # a printer queue name (e.g. on a Mac): the same bytes, passed through untouched
+            subprocess.run(["lp", "-d", path, "-o", "raw"], input=data, check=True, capture_output=True, timeout=30)
+            return
+        with open(path, "wb") as f:
             f.write(data)
 
 
@@ -809,8 +816,11 @@ def test_print():
     import tempfile
     cfg = load_config()
     clip = Path(tempfile.mkdtemp()) / "test.mp4"
-    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", f"testsrc2=s=1280x720:d={cfg['secs']}:r=24",
-                    "-pix_fmt", "yuv420p", str(clip)], check=True)
+    try:
+        subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", f"testsrc2=s=1280x720:d={cfg['secs']}:r=24",
+                        "-pix_fmt", "yuv420p", str(clip)], check=True)
+    except FileNotFoundError:
+        print("(no ffmpeg here, so the receipt has no pictures; the printer test still counts)")
     take = {"prompt": "This is a test print from the fal call center", "model": "Test pattern", "secs": 0.0,
             "url": str(clip)}
     path = printer_path(cfg)
