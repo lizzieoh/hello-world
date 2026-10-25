@@ -1,0 +1,5 @@
+fal.key
+cache/
+venv/
+booth.log*
+__pycache__/

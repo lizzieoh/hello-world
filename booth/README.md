@@ -114,6 +114,8 @@ The call center has a dedicated kiosk page, **`/booth`**, built for the phone (b
 
 Anything that fails (network, fal, no speech heard) plays the fast busy signal and shows "hang up and try again". Between calls, the screen cycles through recent videos.
 
+**Or run it without a browser:** [`native/`](native/README.md) is the same call as a Python app. It reads the Pico directly, prints straight to the receipt printer with no driver, and loops recent videos even with no Wi-Fi. Each Pi runs one or the other. Install it in step 5 with `cd ~/booth/native && ./setup-native.sh 1` instead of `pi/setup.sh`.
+
 ---
 
 ## 5. Build Pi #1 (≈45 min, then it's cloned)

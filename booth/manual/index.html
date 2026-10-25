@@ -635,6 +635,23 @@ sudo reboot</code></pre>
       <tr><td>Portrait monitor</td><td>Set <code>ROTATE="left"</code> or <code>"right"</code> in booth.conf.</td></tr>
       <tr><td>Need the desktop for maintenance</td><td>From a laptop: <code>ssh booth@fal-booth-1.local</code>, then <code>pkill -f kiosk.sh; pkill chromium</code>.</td></tr>
     </table></div>
+    <h3>11e · Recommended: the native app (no browser)</h3>
+    <p>Instead of the booth web page, the Pi can run the call as its own program. The call is the same: greeting, hold music, muted video, 2 · 3 · 0. Only what runs it changes. To switch, run this in Terminal instead of <code>setup.sh</code> (or after it; the last one you run wins):</p>
+<pre><code>cd ~/hello-world/booth/native
+./setup-native.sh 1
+sudo reboot</code></pre>
+    <p>It asks for the <b>fal API key</b> once (the letters don't show while you paste; that's normal), then runs a one-minute self-test. It should end with <b>13/13 passed</b>.</p>
+    <div class="note why"><b>Why native is more robust</b>
+      <ul>
+        <li><b>The phone can't lose focus.</b> The app reads the Pico directly. In a browser, keys only arrive while its window is in front, and one stray pop-up stops the booth.</li>
+        <li><b>The printer needs no driver.</b> It sends the receipt straight to the printer, so Part 12's driver install isn't needed.</li>
+        <li><b>The screen between calls works with no Wi-Fi.</b> The last 12 videos are saved on the Pi and keep looping even if the network drops.</li>
+        <li><b>It heals itself.</b> If the app ever stops, it's back in 2 seconds. If the video player crashes mid-call, the app reopens it and puts the video back.</li>
+        <li><b>A staff light.</b> A small dot at the top left is green when fal is reachable and red when the network is down, so you know whether to check the router.</li>
+      </ul>
+    </div>
+    <div class="note whynot"><b>Why keep the browser version</b><p>It's the same call, already tested, and anyone with the link can open it on a laptop. If the native app ever misbehaves at the show, <code>cd ~/hello-world/booth/pi &amp;&amp; ./setup.sh 1 &amp;&amp; sudo reboot</code> switches back in two minutes.</p></div>
+    <div class="note check"><b>Checkpoint · native</b><p>After the reboot: a dark screen that says "Pick up the phone." with a green dot at the top left. Lift the handset and you hear a ring, a click, then "Please leave your prompt after the beep." Settings live in <code>~/hello-world/booth/native/native.conf</code> (clip length, H3 Max or FLUX first, line number). After a change, hold <kbd>*</kbd> for 3 seconds to restart the app.</p></div>
     <div class="note whynot"><b>Why not a Mac mini</b><p>A Mac mini would also work, but costs about ten times as much per booth, is harder to lock into a single full-screen app, and loses its settings when updates run. The Pi does this one job reliably.</p></div>
   </section>
 
@@ -644,6 +661,7 @@ sudo reboot</code></pre>
     <h2>Connect the receipt printer</h2>
     <p class="time">About 30 minutes. Test this early: it's the step most likely to need help.</p>
     <p>Pressing <kbd>0</kbd> prints a receipt: the prompt, three black-and-white stills from the video and the time. The receipt is laid out for <b>80 mm</b> paper.</p>
+    <div class="note check"><b>Using the native app (Part 11e)? Skip the driver.</b><p>Load the paper, plug the printer into the Pi, make a call and press <kbd>0</kbd>. The receipt prints straight away. If the screen says "Printer offline", replug the printer's USB cable and press <kbd>0</kbd> again. Steps 2 to 4 below are only for the browser version.</p></div>
     <ol class="steps">
       <li>Load an 80 mm paper roll (thermal side facing out, the side that scratches dark with a fingernail) and connect the printer to the Pi by USB.</li>
       <li>On the Pi, open Terminal and install the print system and a free driver for 80 mm receipt printers:</li>
@@ -657,7 +675,7 @@ cd zj-58 &amp;&amp; mkdir build &amp;&amp; cd build &amp;&amp; cmake .. &amp;&am
       <li>On the printer's page, choose <b>Set As Server Default</b>.</li>
       <li>Make a call, press <kbd>0</kbd>. A receipt should print without any dialog.</li>
     </ol>
-    <div class="note warn"><b>If this doesn't work</b><p>Stop here and ask. There's a tested fallback: a small helper program on the Pi that prints straight to the printer without any driver. It doesn't change anything else in the booth.</p></div>
+    <div class="note warn"><b>If this doesn't work</b><p>Switch the Pi to the native app (Part 11e). It prints straight to the printer without any driver. Nothing else in the booth changes.</p></div>
     <div class="note why"><b>Why an 80 mm receipt printer</b><p>The receipt design is exactly 576 dots wide, the printing width of standard 80 mm receipt paper. Receipt printers are built to run all day in shops, cut automatically, and the paper is sold everywhere.</p></div>
     <div class="note whynot"><b>Why not</b>
       <ul>
