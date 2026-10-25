@@ -40,7 +40,8 @@ log = logging.getLogger("booth")
 
 # ---------- settings ----------
 def load_config(path=HERE / "native.conf"):
-    cfg = {"LINE": "1", "SECS": "10", "MODEL": "h3", "LANGUAGE": "en", "PRINTER": "/dev/usb/lp0", "GRAB": "1"}
+    cfg = {"LINE": "1", "SECS": "10", "MODEL": "h3", "LANGUAGE": "en", "PRINTER": "/dev/usb/lp0", "GRAB": "1",
+           "OUT_DEVICE": "", "IN_DEVICE": ""}
     if path.exists():
         for raw in path.read_text().splitlines():
             line = raw.split("#", 1)[0].strip()
@@ -55,6 +56,9 @@ def load_config(path=HERE / "native.conf"):
         "language": cfg["LANGUAGE"],
         "printer": cfg["PRINTER"],
         "grab": cfg["GRAB"] != "0",
+        # Sound devices by (part of) their name; empty = the system default (on the Pi, run.sh points that at the
+        # USB adapter). E.g. on a laptop: OUT_DEVICE="External Headphones", IN_DEVICE="USB Audio".
+        "out_device": cfg["OUT_DEVICE"] or None, "in_device": cfg["IN_DEVICE"] or None,
         "listen_max": 8.0, "no_speech": 6.0, "silence": 0.9,   # seconds: longest prompt, give up, end of speech
         "render_timeout": 45.0,                                  # per model, then the next model
         "menu_after": 3.0,                                       # seconds into the clip before the menu is read
@@ -302,16 +306,27 @@ class Line:
         threading.Thread(target=self._keep_open, daemon=True).start()
 
     # ----- streams -----
+    @staticmethod
+    def _device(sd, name, kind):
+        if not name:
+            return None
+        for i, d in enumerate(sd.query_devices()):
+            if name.lower() in d["name"].lower() and d[f"max_{kind}_channels"] > 0:
+                return i
+        raise RuntimeError(f"no {kind} device named like {name!r}")
+
     def _keep_open(self):
         import sounddevice as sd
         while True:
             try:
                 if not (self.out and self.out.active):
                     self.out = sd.OutputStream(samplerate=SR, channels=1, dtype="float32", latency="low",
+                                               device=self._device(sd, self.cfg["out_device"], "output"),
                                                callback=self._play)
                     self.out.start()
                 if not (self.inp and self.inp.active):
                     self.inp = sd.InputStream(samplerate=MIC_SR, channels=1, dtype="float32", blocksize=MIC_SR // 20,
+                                              device=self._device(sd, self.cfg["in_device"], "input"),
                                               callback=self._listen)
                     self.inp.start()
             except Exception as e:
@@ -322,6 +337,11 @@ class Line:
                     except Exception:
                         pass
                 self.out = self.inp = None
+                try:  # forget the old device list, so an adapter plugged in since shows up
+                    sd._terminate()
+                    sd._initialize()
+                except Exception:
+                    pass
             time.sleep(2)
 
     def _play(self, outdata, frames, _time, _status):
@@ -691,9 +711,12 @@ def receipt_image(take, cfg, src):
     from PIL import Image, ImageDraw, ImageFont
     frames = []
     for frac in (0.2, 0.5, 0.8):
-        png = subprocess.run(["ffmpeg", "-v", "error", "-ss", f"{cfg['secs'] * frac:.2f}", "-i", src, "-frames:v", "1",
-                              "-vf", f"scale={DOTS}:-2", "-f", "image2pipe", "-vcodec", "png", "-"],
-                             capture_output=True, timeout=30).stdout
+        try:
+            png = subprocess.run(["ffmpeg", "-v", "error", "-ss", f"{cfg['secs'] * frac:.2f}", "-i", src, "-frames:v",
+                                  "1", "-vf", f"scale={DOTS}:-2", "-f", "image2pipe", "-vcodec", "png", "-"],
+                                 capture_output=True, timeout=30).stdout
+        except FileNotFoundError:  # no ffmpeg (a laptop test): a receipt without stills
+            break
         if png:
             frames.append(Image.open(io.BytesIO(png)).convert("L"))
     big = ImageFont.truetype(find_font(True), 40)
