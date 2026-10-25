@@ -1,7 +1,7 @@
 # Wiring the HA9888 wall phone, step by step
 
 For the beige wall phone (board printed **HA9888TSD**). The same steps apply to every unit.
-The images were made with fal (Nano Banana 2.1 Edit) from photos of the real board, then checked against the board.
+Step 1's labels are drawn on your own photo. The other images were made with fal (Nano Banana 2.1 Edit) from photos of the real board.
 **Wherever an image and this text disagree, trust the text and the multimeter.**
 
 You need: a multimeter, the soldering iron, the two 3.5mm pigtails, the Sabrent USB audio adapter, heat-shrink, tape and a marker.
@@ -20,7 +20,7 @@ The phone is **not** plugged into anything during this work.
 | **PX2** (top left, next to the "HOOK" print) | Hook switch | **Keep.** It goes to the Pico. |
 | **MWLI** (2-pin, top) | Red light | Test it in step 5. |
 | **BELL** (two 2-pin plugs) | Mechanical bell | Unplug and ignore. |
-| Line jack wires (back plate) | Phone line | Unplug and ignore. |
+| **Red/white striped cords** (to the back-plate jack) | Phone LINE. They look like the light cord, but they are not. | Unplug and ignore. |
 
 1. Put a piece of tape on each cable and write its name: HANDSET, KEYPAD, HOOK, LIGHT, BELL, LINE.
 2. Photograph the board once more.
