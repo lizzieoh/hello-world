@@ -98,6 +98,8 @@ Those 2 wires go to the Pico: one to **GP15** (pin 20), the other to **GND** (pi
 | \* | _ and _ |
 | # | _ and _ |
 
+**No pair beeps?** That's common: many keypads use carbon pads that read a few hundred to a few thousand ohms, too much for the beeper. Try the meter on **Ω 20k** while holding the key firmly. If that doesn't work either, skip the table: wire the ribbon to the Pico in order (wire 1 → GP0, 2 → GP1, …), set `FIND_KEYS = True` in `pico/code.py`, and the Pico types the row and column pins into a text editor for you (see `pico/keyfinder.py`).
+
 **Red light.** Set the meter to **diode mode** and probe the light's 2 wires, then swap the probes. If it glows faintly, or reads about 1.6–2.0 V one way, it's an LED and the Pico can blink it.
 
 Send the step 4 and step 5 results back. The Pico pin map in `pico/code.py` gets set to match, and steps 6–7 (wiring the Pico) get written for this exact phone.

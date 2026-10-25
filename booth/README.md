@@ -75,6 +75,7 @@ You keep four parts of the phone: **the handset, its coiled cord, the hook switc
 6. **Wire the hook switch to the Pico.** One contact → **GP15** (physical pin 20), the other → **GND** (pin 18). Those are the only two wires.
 7. **Wire the keypad to the Pico.** Almost every phone keypad is a grid: **4 rows × 3 columns = 7 wires**, and pressing a button connects one row to one column.
    - Find the 7 keypad lines where they leave the keypad (a ribbon, a connector, or 7 traces going to one chip).
+   - No meter beep on any pair? Carbon-pad keypads read too high for the beeper. Wire the ribbon to the Pico in order (wire 1 → GP0, 2 → GP1, …) and set `FIND_KEYS = True` in `pico/code.py`: the Pico types the row and column pins for you.
    - Set the multimeter to continuity. Hold **1** and find the two lines that connect; that's Row 1 + Column 1. Hold **2**: Row 1 again + Column 2. Hold **4**: Row 2 + Column 1. Repeat until you know R1–R4 and C1–C3.
    - **Cut those 7 lines away from the phone's chip** (cut the traces, or lift the chip's pins), so the old electronics can't interfere.
    - Solder: **R1–R4 → GP0–GP3** (pins 1, 2, 4, 5) and **C1–C3 → GP4–GP6** (pins 6, 7, 9).

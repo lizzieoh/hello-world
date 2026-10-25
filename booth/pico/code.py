@@ -6,7 +6,8 @@
 #
 # Wiring:
 #   hook switch: GP15 (pin 20) and GND (pin 18)
-#   keypad matrix: rows R1-R4 -> GP0-GP3, columns C1-C3 -> GP4-GP6
+#   keypad ribbon: wire 1 (red stripe) -> GP0, wire 2 -> GP1, ... in order.
+#   Which of those are rows and columns: set FIND_KEYS = True once and the Pico works it out (keyfinder.py).
 import time
 
 import board
@@ -15,6 +16,8 @@ import keypad
 import usb_hid
 from adafruit_hid.keyboard import Keyboard
 from adafruit_hid.keycode import Keycode
+
+FIND_KEYS = False  # True: map the keypad (type into a text editor), then paste its two lines below and set False
 
 HOOK_PIN = board.GP15
 OFF_HOOK_READS_HIGH = False  # HA9888 wall phone: pads 1+2 close when the handset is lifted, pulling GP15 low.
@@ -26,7 +29,7 @@ DEBOUNCE_S = 0.08
 
 ROW_PINS = (board.GP0, board.GP1, board.GP2, board.GP3)
 COL_PINS = (board.GP4, board.GP5, board.GP6)
-# Key at (row, col). If digits come out wrong, swap entries here rather than rewiring.
+# Key at (row, col). Rows and columns above come from the key finder. If digits come out wrong, swap entries here.
 LAYOUT = ("1", "2", "3",
           "4", "5", "6",
           "7", "8", "9",
@@ -41,6 +44,9 @@ KEYCODES = {
 }
 STAFF_RESET_HOLD_S = 3.0
 KEYS_ONLY_WHEN_OFF_HOOK = True
+
+if FIND_KEYS:
+    import keyfinder  # noqa: F401  (runs until FIND_KEYS is set back to False)
 
 hook = digitalio.DigitalInOut(HOOK_PIN)
 hook.switch_to_input(pull=digitalio.Pull.UP)

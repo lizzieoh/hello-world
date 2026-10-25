@@ -487,6 +487,14 @@
     </table></div>
     <p><b>How to read it:</b> the wire that appears for 1, 2 and 3 is <b>R1</b>. The wire shared by 1, 4, 7 and * is <b>C1</b>. Keep going and every wire gets a name.</p>
     <p><b>Tip for probing tiny plugs:</b> tape a sewing pin to each probe and touch the pin to the metal contact inside each slot.</p>
+    <div class="note warn"><b>No pair beeps? That's common, and you can skip this table.</b>
+      <p>Many phone keypads press a <b>carbon pad</b> onto the board instead of closing a metal switch. A pressed carbon key reads a few hundred to a few thousand ohms, which is too much for the meter's beeper, so nothing beeps even though the key works. Two things to try, five minutes each:</p>
+      <ul>
+        <li>Switch the meter from the beep to <b>Ω on the 20k range</b>. Hold the key down firmly and watch for the reading to drop from "1" (open) to any number. That pair is the answer.</li>
+        <li>Probe the solder pads where the ribbon joins the keypad's small board, not the tiny plug.</li>
+      </ul>
+      <p><b>Still nothing? Move on.</b> The map matters, because the booth must know which button is 2, 3 and 0. But the meter is only one way to find it. The Pico can find it by itself and is far more sensitive than the beeper: wire the ribbon in order in Part 10, then let the <b>key finder</b> (10c) type out the answer.</p>
+    </div>
     <div class="note why"><b>Why a grid</b><p>Twelve separate switches would need 13 wires. A grid needs 7. The Pico scans the grid many times a second ("is row 1 touching column 1? column 2?…") and works out which key is down.</p></div>
   </section>
 
@@ -519,7 +527,7 @@
     <div class="note why"><b>Why CircuitPython</b><p>The program is a plain text file you can open and edit on the drive itself. Change a setting, save, and the Pico restarts with it. No special software to install.</p></div>
 
     <h3>10b · Wire it</h3>
-    <div class="diagram" role="img" aria-label="Pico left-side pins with USB at the top: pin 1 GP0 row 1, pin 2 GP1 row 2, pin 4 GP2 row 3, pin 5 GP3 row 4, pin 6 GP4 column 1, pin 7 GP5 column 2, pin 9 GP6 column 3, pin 18 ground to hook switch, pin 20 GP15 to hook switch. Pins 3, 8, 13 and 18 are ground.">
+    <div class="diagram" role="img" aria-label="Pico left-side pins with USB at the top: pin 1 GP0 ribbon wire 1, pin 2 GP1 wire 2, pin 4 GP2 wire 3, pin 5 GP3 wire 4, pin 6 GP4 wire 5, pin 7 GP5 wire 6, pin 9 GP6 wire 7, pin 18 ground to hook switch, pin 20 GP15 to hook switch. Pins 3, 8, 13 and 18 are ground.">
       <svg viewBox="0 0 700 560" xmlns="http://www.w3.org/2000/svg">
         <rect class="box" x="250" y="40" width="140" height="500" rx="8"/>
         <rect x="290" y="16" width="60" height="34" rx="4" fill="var(--rule)" stroke="var(--ink)" stroke-width="1.5"/><text x="302" y="38" font-size="13" font-weight="700">USB</text>
@@ -549,19 +557,19 @@
           <circle class="pin used" cx="262" cy="526" r="7"/><text x="228" y="530" text-anchor="end">GP15</text><text text-anchor="end" x="250" y="530" class="small">20</text>
         </g>
         <g font-size="14">
-          <path class="wire audio" d="M178 70 H110"/><text x="20" y="74">Row 1 (R1)</text>
-          <path class="wire audio" d="M178 94 H110"/><text x="20" y="98">Row 2 (R2)</text>
-          <path class="wire audio" d="M178 142 H110"/><text x="20" y="146">Row 3 (R3)</text>
-          <path class="wire audio" d="M178 166 H110"/><text x="20" y="170">Row 4 (R4)</text>
-          <path class="wire keys" d="M178 190 H110"/><text x="20" y="194">Col 1 (C1)</text>
-          <path class="wire keys" d="M178 214 H110"/><text x="20" y="218">Col 2 (C2)</text>
-          <path class="wire keys" d="M178 262 H110"/><text x="20" y="266">Col 3 (C3)</text>
+          <path class="wire audio" d="M178 70 H110"/><text x="20" y="74">Ribbon wire 1</text>
+          <path class="wire audio" d="M178 94 H110"/><text x="20" y="98">Ribbon wire 2</text>
+          <path class="wire audio" d="M178 142 H110"/><text x="20" y="146">Ribbon wire 3</text>
+          <path class="wire audio" d="M178 166 H110"/><text x="20" y="170">Ribbon wire 4</text>
+          <path class="wire keys" d="M178 190 H110"/><text x="20" y="194">Ribbon wire 5</text>
+          <path class="wire keys" d="M178 214 H110"/><text x="20" y="218">Ribbon wire 6</text>
+          <path class="wire keys" d="M178 262 H110"/><text x="20" y="266">Ribbon wire 7</text>
           <path class="wire" d="M178 478 H120 V500"/><path class="wire" d="M178 526 H120 V510"/>
           <text x="20" y="500">Hook switch</text><text x="20" y="518" class="small">(the 2 pads you found)</text>
         </g>
         <g font-size="13">
           <text x="420" y="74">Keypad: 7 wires</text>
-          <text x="420" y="94" class="small">rows to GP0–GP3, columns to GP4–GP6</text>
+          <text x="420" y="94" class="small">ribbon wires in order, 1 = red stripe</text>
           <text x="420" y="490">Hook: 2 wires</text>
           <text x="420" y="510" class="small">one to GP15 (pin 20), one to GND (pin 18)</text>
           <circle class="pin used" cx="428" cy="400" r="7"/><text x="444" y="404">used</text>
@@ -571,10 +579,18 @@
     </div>
     <p>Hold the Pico with the <b>USB plug pointing up</b> and the components facing you. The pins are numbered from 1 at the top-left, down the left side to 20.</p>
     <ol class="steps">
-      <li><b>Keypad:</b> solder a 26 AWG wire to each of the 7 ribbon wires (heat-shrink each joint), then push a female jumper onto the Pico pin: <b>R1 → GP0 (pin 1), R2 → GP1 (pin 2), R3 → GP2 (pin 4), R4 → GP3 (pin 5), C1 → GP4 (pin 6), C2 → GP5 (pin 7), C3 → GP6 (pin 9)</b>.</li>
+      <li><b>Keypad:</b> solder a 26 AWG wire to each ribbon wire (heat-shrink each joint) and connect them <b>in ribbon order</b>, starting from the red stripe: <b>wire 1 → GP0 (pin 1), 2 → GP1 (pin 2), 3 → GP2 (pin 4), 4 → GP3 (pin 5), 5 → GP4 (pin 6), 6 → GP5 (pin 7), 7 → GP6 (pin 9)</b>. If the ribbon has more wires, keep going: 8 → GP7 (pin 10), 9 → GP8 (pin 11), 10 → GP9 (pin 12). You don't need to know which wire is a row and which is a column. The key finder in 10c works that out.</li>
       <li><b>Hook:</b> solder two wires onto the two hook pads you found, and connect them to <b>GP15 (pin 20)</b> and <b>GND (pin 18)</b>. Either wire can go to either pin.</li>
       <li>Use a different colour for each wire and write the colour list on tape inside the phone.</li>
     </ol>
+    <h3>10c · Let the Pico map the keypad (the key finder)</h3>
+    <ol class="steps">
+      <li>Also copy <code>booth/pico/keyfinder.py</code> onto CIRCUITPY, next to code.py.</li>
+      <li>Open <code>code.py</code> on CIRCUITPY in a text editor. Change <code>FIND_KEYS = False</code> to <code>FIND_KEYS = True</code> and save. The Pico restarts by itself.</li>
+      <li>Open a new empty text document (TextEdit or Notes) and click into it. The Pico starts <b>typing into it</b>: "Hold 1 …". Hold each key it asks for until it types the wires and moves to the next key.</li>
+      <li>At the end it types two lines starting with <code>ROW_PINS =</code> and <code>COL_PINS =</code>. In code.py, replace the two lines with the same names with them, and set <code>FIND_KEYS = False</code> again. Save.</li>
+    </ol>
+    <div class="note why"><b>Why this works when the meter didn't</b><p>The Pico tests every pair of wires itself, hundreds of times a second, and notices a connection even through a carbon pad's few thousand ohms. It also does the row-and-column puzzle for you. If it types "Not a simple grid", send the typed list to Claude.</p></div>
     <div class="note check"><b>Checkpoint · Pico</b><p>Plug the Pico into your laptop and open any text editor. Lift the handset: the Pico's small LED lights. Hang up: it goes out. With the handset lifted, press every key; each one types its own character (the hook itself types F8 and F9, which you won't see in a text editor). If the LED is lit with the handset <i>down</i>, open <code>code.py</code> and flip <code>OFF_HOOK_READS_HIGH</code> (it's set to <code>False</code> for this phone). If a digit comes out wrong, fix the <code>LAYOUT</code> list in <code>code.py</code> rather than re-soldering.</p></div>
     <div class="note why"><b>Why the Pico types keys</b><p>Every computer understands a keyboard. The Pi doesn't need any driver or setup; the web page just listens for <kbd>F8</kbd>, <kbd>F9</kbd> and digits. If anything goes wrong you can test the whole booth with a normal keyboard.</p></div>
     <div class="note whynot"><b>Why not wire the switches straight to the Pi's pins</b><p>It's possible, but then you need custom software on the Pi to read the pins and pass them to the browser, and the Pi's pins are easy to damage. The Pico costs a few dollars, plugs in by USB, and keeps the phone and the computer independent: you can swap either one in seconds.</p></div>
