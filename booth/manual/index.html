@@ -194,7 +194,7 @@
 
     <div class="note why"><b>Why it's built this way</b>
       <ul>
-        <li><b>Nothing time-sensitive crosses the Wi-Fi.</b> Sound, keypad and screen all live inside the booth. Only small requests go out to fal. Bad conference Wi-Fi makes a video arrive a little later; it never makes the call break up.</li>
+        <li><b>Nothing time-sensitive crosses the Wi-Fi.</b> Sound, keypad and screen are all wired straight into the booth's own Pi (handset by USB, keypad through the Pico by USB, monitor by HDMI), so nothing about the call itself travels over the network. Only small requests go out to fal. Bad conference Wi-Fi makes a video arrive a little later; it never makes the call break up.</li>
         <li><b>The phone becomes a keyboard and a headset.</b> Computers already understand both, with no special drivers, so there's very little that can go wrong.</li>
         <li><b>The software is a web page</b> hosted on Vercel. Fix a typo once and all three booths get it on their next reload.</li>
       </ul>
