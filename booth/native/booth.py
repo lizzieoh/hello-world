@@ -91,6 +91,9 @@ def fal_key():
 NOT_SPEECH = {"", "you", "thank you", "thanks", "thanks for watching", "thank you for watching", "bye", "okay", "so"}
 
 
+SOUND_TAGS = re.compile(r"\*[^*]*\*|\[[^\]]*\]|\([^)]*\)")  # *sniff*, [laughter], (music): sounds, not words
+
+
 def heard_nothing(prompt):
     return re.sub(r"[^a-z ]", "", prompt.lower()).strip() in NOT_SPEECH
 
@@ -162,7 +165,8 @@ class Fal:
 
         def one(endpoint, args):
             try:
-                answers.put((endpoint, (self.client.run(endpoint, args, timeout=15).get("text") or "").strip(), None))
+                text = SOUND_TAGS.sub("", self.client.run(endpoint, args, timeout=15).get("text") or "")
+                answers.put((endpoint, " ".join(text.split()), None))
             except Exception as e:
                 answers.put((endpoint, None, e))
 

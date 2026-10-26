@@ -26,6 +26,7 @@ PICKUP_KEYS = (Keycode.F8,)
 HANGUP_KEYS = (Keycode.F9,)
 RELOAD_ON_HANGUP = False    # True = wipe the screen on hangup instead of leaving the image up
 DEBOUNCE_S = 0.08
+HANGUP_STEADY_S = 0.4       # a hang-up has to last this long: a worn hook switch flickers open as it's lifted
 
 # HA9888 wall phone, mapped with the key monitor: ribbon wires 1-4 are rows 1-4, wire 7 is the left column,
 # 6 the middle, 5 the right (ribbon wire n on GP n-1).
@@ -111,7 +112,10 @@ candidate = set()  # what the last scan saw; a change has to show up twice in a 
 while True:
     reading = off_hook()
     if reading != state:
-        time.sleep(DEBOUNCE_S)
+        steady = DEBOUNCE_S if reading else HANGUP_STEADY_S
+        t0 = time.monotonic()
+        while off_hook() == reading and time.monotonic() - t0 < steady:
+            time.sleep(0.01)
         if off_hook() == reading:
             state = reading
             led.value = state
