@@ -2,6 +2,23 @@
 
 Quantities cover 4 complete units. Check that each listing is the exact model before buying, since Amazon has many look-alikes.
 
+## Prototype: one complete booth (buy this first)
+
+Everything for one working line, end to end. Already in hand from the build so far: the wall phone, Pico, Sabrent adapter, 3.5 mm pigtails, soldering kit + multimeter, Rongta 80 mm printer.
+
+| Item | Pick | Qty | Why this one won't fail |
+|---|---|---|---|
+| Computer | **Raspberry Pi 5, 4GB** from an official reseller (PiShop.us, Adafruit, CanaKit) | 1 | The booth app uses well under 1 GB. 8GB/16GB cost much more since the 2026 RAM price rises and add nothing here. Avoid the Pi 4 (slower) and the Pi 5 2GB (no headroom for the browser fallback). |
+| Cooling | **Official Raspberry Pi Active Cooler** | 1 | Heatsink + fan on the chip. `setup-native.sh` sets a stronger fan curve for it, and the app logs the temperature. Behind a monitor in a warm booth, passive cooling throttles. |
+| Power | **Official Raspberry Pi 27W USB-C PSU** | 1 | The #1 cause of random Pi reboots is a weak supply. |
+| Storage | **Official Raspberry Pi microSD card, 64GB (A2)** | 2 | Second one is a pre-imaged spare: a dead card becomes a 2-minute swap. The read-only filesystem (manual Part 15) means power cuts can't corrupt it. |
+| Monitor | **Dell P2725H, 27" 1080p IPS** ([Staples](https://www.staples.com/dell-27-fhd-100hz-monitor-matte-black-silver-p2725h/product_24601206), [CDW](https://www.cdw.com/product/Dell-27-Monitor-P2725H/7878801)) | 1 | Matte anti-glare (booth lights), VESA 100×100, HDMI + DisplayPort, Dell's business line. 1080p is plenty: the videos are 768p/720p. |
+| Video cable | **Official Raspberry Pi micro-HDMI to HDMI cable** | 1 (+1 spare) | The Pi's micro-HDMI port is the most fragile plug in the booth: zip-tie the cable to the mount so nobody can lever it. |
+| Receipt paper | 80 mm × 80 mm thermal rolls | 1 box | The printer ships with a sample roll only. |
+| Setup | Any USB keyboard + Ethernet cable | 1 | Only for setup; after that it's SSH. |
+
+For show conditions at home: add the **GL.iNet travel router** and a phone tethered by USB as the backup, then unplug the Wi-Fi mid-call to watch it fail over.
+
 ## Per unit (×4)
 
 | Item | Pick | Qty | Why |
@@ -11,13 +28,13 @@ Quantities cover 4 complete units. Check that each listing is the exact model be
 | Phone, wall-mount option | [Sangyn retro wall phone, beige](https://www.amazon.com/Mechanical-Sangyn-Adjustable-Fashioned-Telephone/dp/B0BRC8TM4W) · [red](https://www.amazon.com/Landline-Telehone-Waterproof-Moisture-Bathroom/dp/B07RBMP5V4) | (5) | Screws to the booth wall, so it can't be knocked over or carried off, and cables hide behind the wall. Monitor mounts directly above. Buy 1 first and open it to check the keypad and hook switch. |
 | Raspberry Pi 5 (4GB) | [Raspberry Pi 5 4GB](https://www.amazon.com/Raspberry-4GB-Single-Board-Computer/dp/B0CPM3SM72) | 4 | Amazon Pi listings are third-party. PiShop.us, Adafruit and CanaKit are official resellers and often cheaper. |
 | Official 27W PSU | [Raspberry Pi 27W USB-C Power Supply](https://www.amazon.com/Raspberry-Pi-USB-C-Power-Supply/dp/B0D3MFLNC1) | 5 | Official only. Cheap PSUs cause random reboots. |
-| Official case with fan | [Raspberry Pi 5 Official Case](https://www.amazon.com/Official-Raspberry-Pi-5-Case/dp/B0CLY2974P) | 4 | |
-| microSD | [SanDisk Extreme 64GB A2](https://www.amazon.com/SanDisk-Extreme-microSDXC-Memory-Adapter/dp/B09X7C7LL1) | 8 | 2 per unit; the second is a pre-imaged spare. |
+| Cooling | Official Raspberry Pi Active Cooler | 4 | The fan curve in `setup-native.sh` is tuned for it. Mount the Pi on the open VESA plate, not in a closed box. |
+| microSD | Official Raspberry Pi microSD 64GB (A2), or [SanDisk Extreme 64GB A2](https://www.amazon.com/SanDisk-Extreme-microSDXC-Memory-Adapter/dp/B09X7C7LL1) | 8 | 2 per unit; the second is a pre-imaged spare. |
 | Pico (hook + keypad) | [Waveshare Pico, pre-soldered headers + USB cable](https://www.amazon.com/waveshare-Pre-Soldered-Raspberry-Beginner-Friendly-Microcontroller/dp/B0CNXF4PV9) | 5 | Pre-soldered headers let you use plug-on jumper wires. |
 | USB audio adapter | [Sabrent AU-MMSA](https://www.amazon.com/dp/B00IRVQ0F8) | 5 | Separate mic and headphone jacks, driverless on Linux. |
 | 3.5mm pigtails | [Fancasee 3.5mm TRS to bare wire, 2-pack](https://www.amazon.com/Fancasee-Replacement-Connector-Headphone-Earphone/dp/B07Y8KGJKL) | 5 packs | |
-| Micro-HDMI → HDMI | [Cable Matters 6ft, 2-pack](https://www.amazon.com/Cable-Matters-2-Pack-Speed-Resolution/dp/B00B9H6VT2) | 3 packs | |
-| Monitor | [Dell S2721NX 27" IPS, VESA](https://us.amazon.com/Dell-27-Inch-Monitor-S2721NX-1920x1080/dp/B08VNTQDKS) | 3 | VESA mount for the booth build. It's glossy, so under bright booth lights choose a matte model instead (e.g. Dell SE2725HM). |
+| Micro-HDMI → HDMI | Official Raspberry Pi micro-HDMI to HDMI cable, or [Cable Matters 6ft, 2-pack](https://www.amazon.com/Cable-Matters-2-Pack-Speed-Resolution/dp/B00B9H6VT2) | 6 | One per unit + spares. Zip-tie it to the mount: the Pi's micro-HDMI port is the most fragile plug in the booth. |
+| Monitor | **Dell P2725H 27" 1080p IPS, matte** ([Staples](https://www.staples.com/dell-27-fhd-100hz-monitor-matte-black-silver-p2725h/product_24601206)) | **4** | Matte, VESA 100×100, HDMI + DP. The 4th makes the spare unit complete: a dead monitor is a 5-minute swap, not a dark booth. (Replaces the glossy S2721NX.) |
 | Spare handset cords | [Power Gear coiled handset cord](https://www.amazon.com/Power-Gear-Telephone-White-76122/dp/B003YKG8HW) or [NAC 25ft black](https://www.amazon.com/Telephone-Handset-Coiled-COnducter-Hand-Set/dp/B00ULSEDHM) | 4 | 4P4C ends. The booth's most-yanked part becomes a 10-second swap. |
 | Electret mic capsules | [uxcell 9.7mm electret, 10-pack](https://www.amazon.com/uxcell-Capsule-Electret-Condenser-Microphone/dp/B00OK65LKY) | 1 pack | Only needed if the handset turns out to have an old carbon mic. Cheap insurance. |
 
