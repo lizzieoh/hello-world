@@ -27,6 +27,22 @@ Not needed any more (covered by the CanaKit kit): separate Pi boards, official 2
 
 **Alternatives considered:** CanaKit Essentials 4GB ($189.99, official Active Cooler, 32GB, 1 cable) is fine too but wouldn't match your PRO. RasTech 8GB kit: skip (third-party parts, unnamed card). Bigger screens if the screen goes on the wall instead of inside the booth: Dell P2725H 27" (matte) or Samsung QB43C 43" (commercial, 24/7). Zero-burn-in small screen: Waveshare 15.6" FHD (B), 100% sRGB IPS.
 
+## Cables, per booth (decided Oct 30: CanaKit PRO + ARZOPA Z1FC + Rongta)
+
+| Connection | Cable | In a box already? | Order (4 units) |
+|---|---|---|---|
+| Pi → screen | **Micro-HDMI to mini-HDMI**, 3–6 ft | No (kit has micro→HDMI, screen has mini→HDMI) | **6** (2 spare) |
+| Screen power | **USB-C wall charger, 30W PD** + USB-C to USB-C cable | Cable usually yes; charger check the box | **4 chargers** |
+| Pi power | CanaKit 45W USB-C | ✅ kit | — |
+| Printer → Pi | USB-B to USB-A | ✅ printer box (plus its own power brick) | 2 spare |
+| Audio adapter → Pi | plugs straight in | — | USB-A extension 3 ft only if the phone is >1 ft from the Pi |
+| Pico → Pi | micro-USB to USB-A | ✅ Waveshare Pico box | 2 spare |
+| Pi → network | Cat6, 10 ft | No (office test can use Wi-Fi) | in the network section |
+| Wall power | Power strip, 4+ outlets | No | **1 per booth** (Pi, screen, printer) |
+| Strain relief | Zip ties, adhesive tie mounts, Velcro straps | No | 1 set |
+
+Tonight, before the micro-to-mini cable arrives: the kit's micro-HDMI→HDMI cable + the screen's mini-HDMI→HDMI cable + an **HDMI female-to-female coupler** works as a stopgap.
+
 ## Shared network (×1)
 
 | Item | Pick | Qty | Why |
