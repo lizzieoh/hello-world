@@ -12,7 +12,9 @@ Everything for one working line, end to end. Already in hand from the build so f
 | Cooling | **Official Raspberry Pi Active Cooler** | 1 | Heatsink + fan on the chip. `setup-native.sh` sets a stronger fan curve for it, and the app logs the temperature. Behind a monitor in a warm booth, passive cooling throttles. |
 | Power | **Official Raspberry Pi 27W USB-C PSU** | 1 | The #1 cause of random Pi reboots is a weak supply. |
 | Storage | **Official Raspberry Pi microSD card, 64GB (A2)** | 2 | Second one is a pre-imaged spare: a dead card becomes a 2-minute swap. The read-only filesystem (manual Part 15) means power cuts can't corrupt it. |
-| Monitor | **Dell P2725H, 27" 1080p IPS** ([Staples](https://www.staples.com/dell-27-fhd-100hz-monitor-matte-black-silver-p2725h/product_24601206), [CDW](https://www.cdw.com/product/Dell-27-Monitor-P2725H/7878801)) | 1 | Matte anti-glare (booth lights), VESA 100×100, HDMI + DisplayPort, Dell's business line. 1080p is plenty: the videos are 768p/720p. |
+| Monitor (small, for a phone-booth enclosure) | **Official [Raspberry Pi Monitor](https://www.raspberrypi.com/products/raspberry-pi-monitor/), 15.6" 1080p IPS** (black SC1228 / red-white SC0940) | 1 | Made for the Pi, anti-glare, full-size HDMI, VESA or screw mount, in production until at least 2034. Fits inside a payphone-style shroud above the phone. Give it **its own USB-C power supply**: powered from the Pi it's capped at 60% brightness. |
+| Monitor power | Official Raspberry Pi USB-C power supply (a second one) | 1 | Full brightness for the monitor. |
+| Larger-screen alternative | Dell P2725H 27" (matte) or Samsung QB43C 43" commercial display | — | If the screen goes on the wall behind the booth instead of inside it. |
 | Video cable | **Official Raspberry Pi micro-HDMI to HDMI cable** | 1 (+1 spare) | The Pi's micro-HDMI port is the most fragile plug in the booth: zip-tie the cable to the mount so nobody can lever it. |
 | Receipt paper | 80 mm × 80 mm thermal rolls | 1 box | The printer ships with a sample roll only. |
 | Setup | Any USB keyboard + Ethernet cable | 1 | Only for setup; after that it's SSH. |
