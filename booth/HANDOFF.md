@@ -17,7 +17,7 @@ Priorities, in order: **speed and reliability** (heavy foot traffic, a weak 20 M
 
 | Area | State |
 |---|---|
-| Booth software (native Python app) | **Built.** 13-scenario self-test passes. Running on a laptop in test mode. Not yet run end to end on a Pi with the real phone, screen and printer. |
+| Booth software (native Python app) | **Built.** 17-scenario self-test. Running on a laptop in test mode. Not yet run end to end on a Pi with the real phone, screen and printer. |
 | Browser version (`/booth` page) | Built, on branch `booth` of `lizzieoh/fal-call-center`. **Not merged.** Kept as the fallback. |
 | Phone #1 (beige HA9888 wall phone) | Handset wired to the USB audio adapter. Hook switch measured. Keypad mapped. Pico code set for this phone. |
 | Phone #2 (pink XY-1980 wall phone) | Opened and photographed; different board (see §7). Not wired. |
