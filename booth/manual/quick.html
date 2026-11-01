@@ -1,0 +1,275 @@
+<title>Booth Quick Build</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+  /* Layout: a field manual. One reading column, numbered parts that really are a sequence, and two kinds of margin
+     note the reader learns to scan for: WHY (the reason) and WHY NOT (the options ruled out). The safety-yellow of the
+     photo callouts is the one accent. */
+  :root {
+    --paper: #f6f4ee;      /* warm off-white, like a printed manual */
+    --ink: #17191c;
+    --muted: #5d6066;
+    --rule: #d9d5ca;
+    --panel: #ece8dd;
+    --yellow: #ffd600;     /* the callout yellow used on every photo */
+    --why: #1d5c4d;        /* deep phone-cord green for WHY notes */
+    --whynot: #8a3b12;     /* rust for WHY NOT notes */
+    --warn: #b42318;
+    --code-bg: #1f2227;
+    --code-fg: #f2efe6;
+    --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+    --body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #16181b; --ink: #ece9e1; --muted: #a3a6ad; --rule: #34373d; --panel: #202328;
+      --yellow: #ffd600; --why: #6fc3ad; --whynot: #f0a37a; --warn: #ff8a7a; --code-bg: #0e1013; --code-fg: #ece9e1;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #16181b; --ink: #ece9e1; --muted: #a3a6ad; --rule: #34373d; --panel: #202328;
+    --yellow: #ffd600; --why: #6fc3ad; --whynot: #f0a37a; --warn: #ff8a7a; --code-bg: #0e1013; --code-fg: #ece9e1;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--paper); color: var(--ink); font: 400 17px/1.6 var(--body); }
+  .wrap { max-width: 780px; margin: 0 auto; padding-block: 28px 80px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  h1, h2, h3 { font-family: var(--display); text-wrap: balance; letter-spacing: -.01em; }
+  h1 { font-size: clamp(36px, 7vw, 58px); font-weight: 800; line-height: 1; margin: 18px 0 12px; }
+  h2 { font-size: clamp(26px, 4.4vw, 34px); font-weight: 800; line-height: 1.1; margin: 0 0 6px; }
+  h3 { font-size: 20px; font-weight: 700; margin: 30px 0 6px; }
+  p, li { max-width: 68ch; }
+  a { color: inherit; text-decoration-color: var(--yellow); text-decoration-thickness: 3px; text-underline-offset: 3px; }
+  .eyebrow { font: 700 12px/1 var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+  .lede { font-size: 20px; line-height: 1.5; }
+  hr { border: 0; border-top: 1px solid var(--rule); margin: 40px 0; }
+
+  section.part { border-top: 3px solid var(--ink); padding-top: 18px; margin-top: 64px; scroll-margin-top: 16px; }
+  .partno { display: inline-block; font: 800 13px/1 var(--display); letter-spacing: .12em; text-transform: uppercase; background: var(--yellow); color: #17191c; padding: 5px 8px; margin-bottom: 10px; }
+  .time { font-size: 14px; color: var(--muted); margin: 0 0 14px; }
+
+  figure { margin: 22px 0; }
+  figure img { display: block; width: 100%; max-width: 100%; height: auto; border: 1px solid var(--rule); background: #fff; }
+  figure.tall img { max-width: 440px; margin: 0 auto; }
+  figcaption { font-size: 14px; color: var(--muted); margin-top: 8px; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .pair figure { margin: 0; }
+  @media (max-width: 560px) { .pair { grid-template-columns: 1fr; } }
+
+  .note { border-left: 4px solid; padding: 10px 14px; margin: 16px 0; background: var(--panel); }
+  .note > b:first-child { display: block; font: 800 12px/1 var(--display); letter-spacing: .14em; text-transform: uppercase; margin-bottom: 6px; }
+  .note p, .note ul { margin: 0; }
+  .note ul { padding-left: 20px; }
+  .note.why { border-color: var(--why); } .note.why > b:first-child { color: var(--why); }
+  .note.whynot { border-color: var(--whynot); } .note.whynot > b:first-child { color: var(--whynot); }
+  .note.warn { border-color: var(--warn); } .note.warn > b:first-child { color: var(--warn); }
+  .note.check { border-color: var(--yellow); background: transparent; border: 2px solid var(--yellow); border-left-width: 8px; }
+  .note.check > b:first-child { color: var(--ink); }
+
+  ol.steps { padding-left: 0; list-style: none; counter-reset: step; }
+  ol.steps > li { counter-increment: step; position: relative; padding-left: 44px; margin: 14px 0; }
+  ol.steps > li::before { content: counter(step); position: absolute; left: 0; top: 1px; width: 30px; height: 30px; border-radius: 50%; background: var(--ink); color: var(--paper); font: 700 15px/30px var(--display); text-align: center; }
+
+  code { font: 400 .88em var(--mono); background: var(--panel); padding: 1px 5px; border-radius: 3px; }
+  pre { background: var(--code-bg); color: var(--code-fg); padding: 14px 16px; overflow-x: auto; font: 400 14px/1.55 var(--mono); border-radius: 4px; }
+  pre code { background: none; padding: 0; color: inherit; }
+  kbd { font: 600 .85em var(--mono); border: 1.5px solid var(--ink); border-bottom-width: 3px; border-radius: 4px; padding: 0 6px; background: var(--paper); }
+
+  .tablewrap { overflow-x: auto; margin: 16px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 15px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { font: 700 13px/1.2 var(--display); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  td.blank { min-width: 120px; color: var(--muted); }
+
+  nav.toc { background: var(--panel); padding: 16px 20px; margin: 28px 0; }
+  nav.toc ol { margin: 8px 0 0; padding-left: 22px; columns: 2; column-gap: 28px; }
+  @media (max-width: 560px) { nav.toc ol { columns: 1; } }
+  nav.toc li { break-inside: avoid; margin: 2px 0; }
+
+  .diagram { overflow-x: auto; margin: 22px 0; border: 1px solid var(--rule); background: var(--paper); }
+  .diagram svg { display: block; min-width: 640px; width: 100%; height: auto; }
+  .diagram svg text { font-family: var(--body); fill: var(--ink); }
+  .diagram .box { fill: var(--panel); stroke: var(--ink); stroke-width: 1.5; }
+  .diagram .hot { fill: var(--yellow); stroke: #17191c; stroke-width: 1.5; }
+  .diagram .hot + text, .diagram text.onhot { fill: #17191c; }
+  .diagram .wire { stroke: var(--ink); stroke-width: 2; fill: none; }
+  .diagram .wire.audio { stroke: var(--why); }
+  .diagram .wire.keys { stroke: var(--whynot); }
+  .diagram .small { font-size: 12px; fill: var(--muted); }
+  .diagram .pin { fill: var(--paper); stroke: var(--ink); stroke-width: 1.2; }
+  .diagram .pin.used { fill: var(--yellow); }
+  .diagram .gnd { fill: var(--ink); }
+  .checklist { list-style: none; padding-left: 0; }
+  .checklist li { padding-left: 30px; position: relative; margin: 6px 0; }
+  .checklist li::before { content: ""; position: absolute; left: 0; top: 4px; width: 16px; height: 16px; border: 2px solid var(--ink); border-radius: 3px; }
+  @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+<div class="wrap">
+  <div class="eyebrow">Call-a-fal · Adobe MAX · quick build, one booth</div>
+  <h1>Booth Quick Build</h1>
+  <p class="lede">The short version of the booth manual: one phone, one Pi, one screen, one printer, in nine steps. About 3 hours for the first booth and 1.5 hours for each one after. When something needs more explanation, the full manual has the why.</p>
+
+  <figure>
+    <img src="img/hero.webp" alt="Illustration: a visitor holds the handset of a wall phone mounted on a booth wall; a screen above shows a video and a receipt curls out below.">
+    <figcaption>What you're building: lift the handset, say a prompt, wait on hold, watch the video, press 0 for a receipt.</figcaption>
+  </figure>
+
+  <h3>What you need for one booth</h3>
+  <ul class="checklist">
+    <li>Wall phone (HA9888 beige)</li>
+    <li>CanaKit Raspberry Pi 5 Starter Kit PRO (Pi, power supply, case, memory card, cables)</li>
+    <li>ARZOPA Z1FC 16.1" screen, plus a USB-C charger for it</li>
+    <li>Micro-HDMI to mini-HDMI cable</li>
+    <li>Raspberry Pi Pico</li>
+    <li>Sabrent USB audio adapter and 2 × 3.5 mm pigtail cables</li>
+    <li>Rongta 80 mm receipt printer and paper</li>
+    <li>26 AWG wire in several colours, heat-shrink, zip ties with adhesive mounts, 1" (25 mm) clear heat-shrink for the Pico</li>
+    <li>Power strip</li>
+  </ul>
+  <p><b>Tools:</b> soldering iron set to 350 °C (660 °F), solder, multimeter, wire strippers, flush cutters, heat gun, small screwdriver, tape and a marker.</p>
+
+  <section class="part" id="s1">
+    <span class="partno">Step 1</span>
+    <h2>Open the phone</h2>
+    <p class="time">15 minutes</p>
+    <ol class="steps">
+      <li>Unscrew the metal back plate and lift the front shell away gently.</li>
+      <li>Put a tape label on every cable: <b>HANDSET, KEYPAD, HOOK, LIGHT, BELL, LINE</b>.</li>
+      <li>Take a photo. Then unplug everything from the green main board and take the board out.</li>
+    </ol>
+    <figure class="tall">
+      <img src="img/step1-what-is-what.webp" alt="The opened phone with every connector labelled.">
+      <figcaption>Which cable is which. The two look-alike striped cords are LINE, not the light.</figcaption>
+    </figure>
+  </section>
+
+  <section class="part" id="s2">
+    <span class="partno">Step 2</span>
+    <h2>Handset to audio adapter</h2>
+    <p class="time">20 minutes</p>
+    <p>Cut the plug off the 4 handset wires and solder each one to a pigtail. On each pigtail, tape off the third wire (the ring); it isn't used.</p>
+    <div class="tablewrap"><table>
+      <tr><th>Handset wire</th><th>Goes to</th></tr>
+      <tr><td>Green</td><td>Earpiece pigtail <b>tip</b></td></tr>
+      <tr><td>Red</td><td>Earpiece pigtail <b>sleeve</b></td></tr>
+      <tr><td>Black</td><td>Mic pigtail <b>tip</b></td></tr>
+      <tr><td>Yellow</td><td>Mic pigtail <b>sleeve</b></td></tr>
+    </table></div>
+    <p>Cover each joint with heat-shrink. Plug the earpiece pigtail into the Sabrent's 🎧 jack and the mic pigtail into 🎤.</p>
+    <figure>
+      <img src="img/step3-solder-handset.webp" alt="Diagram: the four handset wires soldered to two 3.5 mm pigtails, which plug into the USB audio adapter.">
+    </figure>
+    <div class="note check"><b>Check</b><p>Green to red reads about 230 Ω on the meter.</p></div>
+  </section>
+
+  <section class="part" id="s3">
+    <span class="partno">Step 3</span>
+    <h2>Hook switch to the Pico</h2>
+    <p class="time">15 minutes</p>
+    <ol class="steps">
+      <li>Find the hook switch's grey ribbon. Leave the hot-glued pads on its little board alone.</li>
+      <li>Cut the ribbon about 2 cm (¾ in) before its plug. Peel off the <b>first two wires</b> on the side nearest the phone's left edge.</li>
+      <li>Solder one to <b>pin 20 (GP15)</b> and the other to <b>pin 18 (GND)</b>. Either way round works.</li>
+    </ol>
+    <div class="note check"><b>Check</b><p>Those two wires beep on the meter only when the handset is <b>lifted</b>.</p></div>
+  </section>
+
+  <section class="part" id="s4">
+    <span class="partno">Step 4</span>
+    <h2>Keypad to the Pico</h2>
+    <p class="time">20 minutes</p>
+    <p>Unplug the keypad ribbon and number its wires from the <b>red stripe</b> (wire 1). Solder them to the Pico in order. Hold the Pico with its USB port at the top: pin 1 is top left, counting down the left side.</p>
+    <div class="tablewrap"><table>
+      <tr><th>Ribbon wire</th><td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td><td>7</td></tr>
+      <tr><th>Pico pin</th><td>1</td><td>2</td><td>4</td><td>5</td><td>6</td><td>7</td><td>9</td></tr>
+      <tr><th>Name</th><td>GP0</td><td>GP1</td><td>GP2</td><td>GP3</td><td>GP4</td><td>GP5</td><td>GP6</td></tr>
+    </table></div>
+    <div class="note warn"><b>Watch for bridges</b><p>Pins are only 2.54 mm (0.1 in) apart. After each joint, touch the meter to the neighbouring pins: they must not beep together.</p></div>
+  </section>
+
+  <section class="part" id="s5">
+    <span class="partno">Step 5</span>
+    <h2>Load the Pico</h2>
+    <p class="time">10 minutes</p>
+    <ol class="steps">
+      <li>Hold the white <b>BOOTSEL</b> button, plug the Pico into a laptop, then let go. A drive called <b>RPI-RP2</b> appears.</li>
+      <li>From circuitpython.org, download CircuitPython for <b>Pico</b> (or <b>Pico W</b> if that's the board you have) and drag the <code>.uf2</code> file onto RPI-RP2. It comes back as <b>CIRCUITPY</b>.</li>
+      <li>Copy everything in <code>booth/pico/</code> onto CIRCUITPY: <code>code.py</code>, <code>keymonitor.py</code>, <code>keyfinder.py</code> and the <code>lib</code> folder.</li>
+    </ol>
+    <div class="note check"><b>Check</b><p>Lift the handset: the Pico's small LED lights. Open a text editor and press each key: it types its digit. The settings already match the HA9888 phone. A different phone model needs its keypad mapped first (full manual, Part 10c).</p></div>
+  </section>
+
+  <section class="part" id="s6">
+    <span class="partno">Step 6</span>
+    <h2>Close up the phone</h2>
+    <p class="time">15 minutes</p>
+    <ol class="steps">
+      <li>Slide the Pico into the clear 1" heat-shrink with the USB end open, and shrink it with the heat gun on low. This stops it shorting on the metal back plate.</li>
+      <li>Stick the Pico and the Sabrent inside with adhesive mounts, away from the metal. Add a screw through each mount where the plastic allows.</li>
+      <li>Zip-tie the wires next to the Pico, so a tug pulls on the ties and never on a solder joint.</li>
+      <li>Run both USB cables out through the old <b>LINE</b> jack hole, anchor them inside with a zip tie, and close the phone.</li>
+    </ol>
+  </section>
+
+  <section class="part" id="s7">
+    <span class="partno">Step 7</span>
+    <h2>Set up the Pi</h2>
+    <p class="time">30 minutes, mostly waiting</p>
+    <ol class="steps">
+      <li>Assemble the CanaKit: heatsink on the chip, fan plugged into the socket marked <b>FAN</b>, case closed.</li>
+      <li>Plug in the screen (micro-HDMI to mini-HDMI), a keyboard and Ethernet. Plug in power last.</li>
+      <li>When the desktop appears, open Terminal and type these lines, pressing Enter after each:</li>
+    </ol>
+<pre><code>git clone -b claude/landline-demo-booth-setup-05lxch https://github.com/lizzieoh/hello-world.git
+cd hello-world/booth/native
+./setup-native.sh 1
+sudo reboot</code></pre>
+    <p>The <code>1</code> is the booth number: use 2, 3 or 4 on the other Pis. Paste the fal key when it asks (the letters don't show; that's normal). The self-test at the end should say every test passed.</p>
+  </section>
+
+  <section class="part" id="s8">
+    <span class="partno">Step 8</span>
+    <h2>Connect everything</h2>
+    <p class="time">10 minutes</p>
+    <div class="tablewrap"><table>
+      <tr><th>From</th><th>Plug into</th></tr>
+      <tr><td>Phone: Sabrent USB cable</td><td>Pi USB port</td></tr>
+      <tr><td>Phone: Pico USB cable</td><td>Pi USB port</td></tr>
+      <tr><td>Printer USB cable</td><td>Pi USB port</td></tr>
+      <tr><td>Screen power</td><td>Its own USB-C charger, never the Pi</td></tr>
+      <tr><td>Pi, screen and printer chargers</td><td>Power strip</td></tr>
+    </table></div>
+  </section>
+
+  <section class="part" id="s9">
+    <span class="partno">Step 9</span>
+    <h2>Test call</h2>
+    <p class="time">15 minutes</p>
+    <ul class="checklist">
+      <li>Lift the handset: you hear a ring, a click, the greeting, then a beep</li>
+      <li>Say a prompt: "please hold" and music play, then the video appears, muted</li>
+      <li>Press <kbd>2</kbd>: sound on. Press <kbd>3</kbd>: a new take. Press <kbd>0</kbd>: the receipt prints and cuts.</li>
+      <li>Hang up: the screen loops recent videos</li>
+      <li>Unplug the screen's power and plug it back in: it switches itself back on</li>
+      <li>Pull the Ethernet while on hold: you hear a busy signal. Plug it back in: the next call works.</li>
+      <li>20 calls in a row with no problems: this booth is done</li>
+    </ul>
+  </section>
+
+  <section class="part" id="showday">
+    <span class="partno">Show day</span>
+    <h2>Quick fixes</h2>
+    <div class="tablewrap"><table>
+      <tr><th>Problem</th><th>Fix</th></tr>
+      <tr><td>Something's stuck</td><td>Hold <kbd>*</kbd> for 3 seconds. The app restarts in a few seconds.</td></tr>
+      <tr><td>Time to power off</td><td>Hold <kbd>#</kbd> for 5 seconds, wait for the Pi's green light to stop blinking, then unplug.</td></tr>
+      <tr><td>Red dot on the screen</td><td>The network is down. Check the router.</td></tr>
+      <tr><td>"Printer offline"</td><td>Replug the printer's USB cable, then press <kbd>0</kbd> again.</td></tr>
+      <tr><td>A booth is dead</td><td>Swap in the spare. Any booth's memory card works in any Pi.</td></tr>
+    </table></div>
+  </section>
+</div>
