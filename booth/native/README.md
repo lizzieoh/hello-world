@@ -30,6 +30,7 @@ sudo reboot
 The setup script:
 - installs mpv, ffmpeg, PortAudio and the Python packages
 - sets X11, auto-login and no screen blanking
+- always drives the main HDMI port (next to the power plug) at 1920×1080 from a saved screen profile, with HDMI audio off, so a slow-to-wake screen like the ARZOPA can't leave it black. The profile is the screen plugged in during setup, else the ARZOPA's in `edid/`. A different monitor later: run setup again with it plugged in, then reboot.
 - names the Pi `fal-booth-N`
 - adds you to the `input` and `lp` groups (Pico and printer without root)
 - asks for the fal key once, saved to `fal.key`, readable only by you
