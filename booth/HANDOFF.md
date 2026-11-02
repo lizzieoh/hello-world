@@ -112,7 +112,7 @@ Full quantities, cables and small parts are in `booth/SHOPPING.md`.
 - **Front panel:** ringer on/off and volume sliders on a small board with a white plug: unplug, ignore. The label window under the keypad is for an instruction card.
 - **Ignore:** BZ (buzzer, red/black), TIP/RING (phone line, red/green twisted).
 
-**Volume slider (MS-303 front panel):** wanted. Not built yet; waiting on meter readings of the front panel's 5 wires (potentiometer or switch). It will use spare Pico pins on the other edge.
+**Volume slider (MS-303 front panel):** built. The panel's 4 wires (ringer + volume) go to GP16–GP19 (pins 21, 22, 24, 25) in any order. The Pico scans which wires are joined, prints `panel: [...]` over USB serial, and maps pairs to loudness with `VOLUME_PAIRS` in `code.py` (**still empty: fill in from a one-time reading**). It sends F13/F14/F15 (quiet/normal/loud) on every move and on every lift; `booth.py` sets the sink volume from `VOLUME_STEPS` in `native.conf` (default 60,85,100).
 
 **Pink XY-1980 wall phone (board XY-1980C(M)CE, keypad XY-2550-KB)**
 - **Keypad:** 8-wire white ribbon on JK1. The extra wire serves the F/RD keys, probably a 4th column. Wire all 8 to GP0–GP7 and map with the key monitor.

@@ -134,7 +134,7 @@
       <li><a href="#handset">Wire the handset to the audio adapter</a></li>
       <li><a href="#hook">Find the hook switch</a></li>
       <li><a href="#keypad">Free the keypad ribbon</a></li>
-      <li><a href="#light">The front panel: ringer, volume, label window</a></li>
+      <li><a href="#light">The front panel: volume, ringer, label window</a></li>
       <li><a href="#pico">Set up and wire the Pico</a></li>
       <li><a href="#pi">Set up the Raspberry Pi</a></li>
       <li><a href="#printer">Connect the receipt printer</a></li>
@@ -329,7 +329,7 @@
       <li>Lay the phone face-down on a towel. Remove the screws from the metal back plate and lift the beige front shell away. <b>Go slowly:</b> the small ringer and volume board on the front shell is still plugged into the inside.</li>
       <li>Find each part in the photos below. Put a strip of masking tape on each cable and write its name: <b>HANDSET</b>, <b>KEYPAD</b>, <b>HOOK</b>, <b>FRONT</b>, <b>BUZZER</b>, <b>LINE</b>.</li>
       <li>Take a clear photo of the board before you change anything. This is your undo button.</li>
-      <li>Unplug the white plug from the front panel (it sits on the right side of the main board). That's the only plug on this phone; everything else is soldered, and you'll cut those wires in the next parts.</li>
+      <li>Unplug the white plug from the front panel (it sits on the right side of the main board). That's the only plug on this phone; everything else is soldered, and you'll cut those wires in the next parts. Keep the front panel's 4 wires: they become the volume control in Part 9.</li>
     </ol>
     <figure class="tall">
       <img src="img/ms303-overview.webp" alt="The opened MS-303 phone with labels: the MS-303 HK hook-switch board at the top left, the bell, the grey keypad ribbon, the red and black buzzer wires, the front-panel ringer and volume board and where its plug goes, the M− M+ R+ R− handset pads, the handset jack to keep, and the red/green LINE wires to ignore." loading="lazy">
@@ -344,7 +344,7 @@
       <tr><td>Handset (yellow, black, green, red, from the grey jack)</td><td>M− M+ R+ R−</td><td><b>Keep</b> → audio adapter (Part 6)</td></tr>
       <tr><td>Hook switch (white wires from the small MS-303 HK board)</td><td>HK</td><td><b>Keep</b> → Pico (Part 7)</td></tr>
       <tr><td>Keypad (flat grey ribbon, soldered to the board)</td><td>(no label)</td><td><b>Keep</b> → Pico (Part 8)</td></tr>
-      <tr><td>Front panel: ringer and volume sliders (white plug)</td><td>white 4-pin socket</td><td>Unplug, ignore (Part 9)</td></tr>
+      <tr><td>Front panel: ringer and volume sliders (white plug, 4 wires)</td><td>white 4-pin socket</td><td><b>Keep</b> → Pico, for volume (Part 9)</td></tr>
       <tr><td>Buzzer (red and black wires)</td><td>BZ</td><td>Ignore</td></tr>
       <tr><td>Phone line (red and green, twisted)</td><td>TIP, RING</td><td>Ignore</td></tr>
     </table></div>
@@ -476,18 +476,29 @@
   <!-- 9 -->
   <section class="part" id="light">
     <span class="partno">Part 9</span>
-    <h2>The front panel: ringer, volume, label window</h2>
-    <p class="time">5 minutes.</p>
+    <h2>The front panel: volume, ringer, label window</h2>
+    <p class="time">About 30 minutes.</p>
     <figure class="tall">
       <img src="img/ms303-front.webp" alt="The MS-303 front shell: a label window under the keypad, and RINGER on/off and VOLUME sliders below it." loading="lazy">
-      <figcaption>The front shell. The sliders stay for looks; the label window becomes your instruction card.</figcaption>
+      <figcaption>The front shell. The VOLUME slider will set the earpiece loudness; the label window becomes your instruction card.</figcaption>
     </figure>
+    <p>Behind the sliders is a small green board with <b>4 wires</b> to a white plug. Wired to the Pico, the <b>VOLUME</b> slider lets each visitor turn the earpiece up or down, live, during the call. The RINGER slider shares those wires; the booth doesn't use it.</p>
+    <h3>9a · Wire it</h3>
     <ol class="steps">
-      <li><b>Ringer and volume:</b> the small green board behind them is already unplugged (Part 5). Leave it screwed to the front shell so the sliders stay in place, and tuck its cable inside or snip it off at the plug. Nothing rings without a phone line, and the earpiece volume now comes from the Pi.</li>
-      <li><b>Label window:</b> the white strip under the keypad is where a phone's own number used to go. Print a card for it, for example <i>"Pick up · say what you want to see · 2 sound · 3 again · 0 receipt"</i>, or the Call-a-fal mark.</li>
+      <li>Leave the green board screwed to the front shell. Cut the white plug off its 4 wires (or push male jumper pins into the plug's slots instead).</li>
+      <li>Connect the 4 wires to <b>GP16, GP17, GP18, GP19</b> (pins 21, 22, 24, 25), <b>in any order</b>. On the Pico's underside they're at the bottom of the left edge (see the solder map in Part 10). Note which wire went to GP16; that's front-panel wire 1, GP17 is wire 2, and so on.</li>
+      <li>Leave enough slack for the front shell to open flat without pulling on the wires.</li>
     </ol>
-    <div class="note why"><b>Why use the label window</b><p>It's exactly where people look while they dial. A short instruction there answers "what do I do?" before anyone has to ask.</p></div>
-    <div class="note whynot"><b>Why not make the volume slider work</b><p>The Pico could read it, so visitors set their own earpiece loudness. It's possible, but it adds wiring and one more thing to fail. Set the volume once in the Pi's settings instead.</p></div>
+    <h3>9b · Teach the Pico the slider (one time)</h3>
+    <ol class="steps">
+      <li>Plug the Pico into the laptop. With Claude running on the Mac, say <b>"read the volume slider"</b>. The Pico reports a line such as <code>panel: [(1, 3)]</code> every time a slider moves.</li>
+      <li>Slide <b>VOLUME</b> to each end (and the middle, if it clicks there) and note what the Pico reports for each position. Do the same once with RINGER, so you know which line is the ringer and can ignore it.</li>
+      <li>In the Pico's <code>code.py</code>, fill in <code>VOLUME_PAIRS</code>: the wire pair for loud gets 2, for quiet 0. A position with no pair of its own counts as normal (1). Claude can fill it in from the readings for you.</li>
+    </ol>
+    <div class="note check"><b>Checkpoint · volume</b><p>During a test call, slide VOLUME: the hold music gets louder and quieter. Loudness for each position is set in the Pi's <code>native.conf</code> as <code>VOLUME_STEPS=60,85,100</code> (percent for quiet, normal, loud).</p></div>
+    <div class="note why"><b>Why it's done this way</b><p>The Pico watches which of the four wires touch each other, so it doesn't matter what kind of switch is inside or which wire goes where: a one-time reading tells it. It also re-sends the slider position every time the handset is lifted, so the booth always has the right volume, even after a restart.</p></div>
+    <h3>9c · The label window</h3>
+    <p>The white strip under the keypad is where a phone's own number used to go. Print a card for it, for example <i>"Pick up · say what you want to see · 2 sound · 3 again · 0 receipt"</i>, or the Call-a-fal mark. It's exactly where people look while they dial.</p>
   </section>
 
   <!-- 10 -->
@@ -821,7 +832,8 @@ sudo reboot</code></pre>
       <tr><td><code>SECS</code></td><td>10</td><td>Clip length, 5 to 15 seconds. 8 is about 3 seconds faster.</td></tr>
       <tr><td><code>MODEL</code></td><td>h3</td><td><code>h3</code>: H3 Max first, FLUX 3 Max as backup. <code>flux</code>: the other way round.</td></tr>
       <tr><td><code>LANGUAGE</code></td><td>en</td><td><code>auto</code> detects the visitor's language (a little slower).</td></tr>
-      <tr><td><code>SPEAKER_VOLUME</code>, <code>MIC_VOLUME</code></td><td>85, 90</td><td>Handset levels in percent</td></tr>
+      <tr><td><code>SPEAKER_VOLUME</code>, <code>MIC_VOLUME</code></td><td>85, 90</td><td>Handset levels in percent at start-up</td></tr>
+      <tr><td><code>VOLUME_STEPS</code></td><td>60,85,100</td><td>Earpiece percent for the VOLUME slider: quiet, normal, loud</td></tr>
     </table></div>
     <h3>What the phone types</h3>
     <div class="tablewrap"><table>
@@ -834,6 +846,7 @@ sudo reboot</code></pre>
       <tr><td>Hang up</td><td><kbd>F9</kbd></td><td>Goes quiet; the screen returns to recent videos</td></tr>
       <tr><td>Hold * for 3 s</td><td><kbd>Ctrl</kbd>+<kbd>R</kbd></td><td>Restarts the app (staff)</td></tr>
       <tr><td>Hold # for 5 s</td><td><kbd>F10</kbd></td><td>Shuts the Pi down safely (staff)</td></tr>
+      <tr><td>Move the VOLUME slider (and on every lift)</td><td><kbd>F13</kbd> / <kbd>F14</kbd> / <kbd>F15</kbd></td><td>Earpiece quiet / normal / loud</td></tr>
       <tr><td>Dial *123#</td><td>digits</td><td>Clears the feed of earlier videos (staff)</td></tr>
     </table></div>
     <h3>Glossary</h3>

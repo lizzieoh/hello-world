@@ -45,7 +45,7 @@ log = logging.getLogger("booth")
 def load_config(path=HERE / "native.conf"):
     cfg = {"LINE": "1", "SECS": "10", "MODEL": "h3", "LANGUAGE": "en", "PRINTER": "/dev/usb/lp0", "GRAB": "1",
            "PLAYS_BEFORE_SLIDES": "4", "SLIDES": "6", "SLIDE_SECS": "2.5", "PRINT_LIGHTEN": "35",
-           "OUT_DEVICE": "", "IN_DEVICE": ""}
+           "OUT_DEVICE": "", "IN_DEVICE": "", "VOLUME_STEPS": "60,85,100"}
     if path.exists():
         for raw in path.read_text().splitlines():
             line = raw.split("#", 1)[0].strip()
@@ -62,6 +62,8 @@ def load_config(path=HERE / "native.conf"):
         # How much lighter the receipt's pictures print, 0-100 (0 = as filmed). Thermal paper prints dark.
         "print_lighten": min(100, max(0, int(cfg["PRINT_LIGHTEN"]))),
         "grab": cfg["GRAB"] != "0",
+        # Earpiece loudness (percent) for the phone's VOLUME slider positions: quiet, normal, loud.
+        "volume_steps": [min(150, max(0, int(v))) for v in cfg["VOLUME_STEPS"].split(",")][:3],
         # Sound devices by (part of) their name; empty = the system default (on the Pi, run.sh points that at the
         # USB adapter). E.g. on a laptop: OUT_DEVICE="External Headphones", IN_DEVICE="USB Audio".
         "out_device": cfg["OUT_DEVICE"] or None, "in_device": cfg["IN_DEVICE"] or None,
@@ -730,6 +732,8 @@ class Phone:
                         self.post(("restart",))
                     elif c == e.KEY_F10:
                         self.post(("shutdown",))
+                    elif c in (e.KEY_F13, e.KEY_F14, e.KEY_F15):  # the phone's VOLUME slider: quiet, normal, loud
+                        self.post(("volume", (e.KEY_F13, e.KEY_F14, e.KEY_F15).index(c)))
                     elif (c == e.KEY_8 and shift) or c == e.KEY_KPASTERISK:
                         self.post(("key", "*"))
                     elif (c == e.KEY_3 and shift) or c == e.KEY_KPENTER:
@@ -1207,6 +1211,20 @@ class Booth:
         self.screen.background()
         self.set_view(center="Shutting down. Unplug when the green light stops blinking.")
         threading.Timer(3, lambda: subprocess.run(["sudo", "-n", "shutdown", "-h", "now"], check=False)).start()
+
+    def on_volume(self, level):
+        """The VOLUME slider on the phone's front panel moved (the Pico also repeats it on every lift)."""
+        steps = self.cfg["volume_steps"]
+        pct = steps[min(level, len(steps) - 1)]
+        log.info("volume: step %d -> %d%%", level, pct)
+
+        def apply():
+            try:
+                subprocess.run(["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{pct}%"], check=False, timeout=5,
+                               capture_output=True)
+            except (FileNotFoundError, subprocess.TimeoutExpired) as err:  # a laptop test without pactl
+                log.warning("volume not set: %s", err)
+        threading.Thread(target=apply, daemon=True).start()
 
     def on_restart(self):
         log.info("restart requested")

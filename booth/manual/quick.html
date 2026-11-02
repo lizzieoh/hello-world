@@ -138,7 +138,7 @@
     <p class="time">15 minutes</p>
     <ol class="steps">
       <li>Unscrew the metal back plate and lift the front shell away gently.</li>
-      <li>Unplug the white plug from the front panel (ringer and volume sliders). It's the only plug; every other wire gets cut.</li>
+      <li>Unplug the white plug from the front panel (ringer and volume sliders). It's the only plug; keep its 4 wires for the volume control. Every other wire gets cut.</li>
       <li>Take a photo before you cut anything. Always cut wires <b>close to the main board</b>, so you keep the most length.</li>
     </ol>
     <figure class="tall">
@@ -184,6 +184,7 @@
       <li>The board prints the keypad map beside its ribbon: <b>C3, C2, C1, R4, R3, R2, R1</b>. Put a marker dot on the <b>R1</b> wire, then cut the ribbon close to the board.</li>
       <li>Turn the Pico <b>underside up</b> (the side where the pins stick out and the pin names are printed), USB at the top. Pins 1–20 run down the right edge.</li>
       <li>Connect each wire as in the map. For the prototype, solder each wire to half a female-to-female jumper and push it onto the pin; hot-glue the rows once it all works.</li>
+      <li><b>Volume:</b> the front panel's 4 wires (ringer + volume sliders) go to GP16, GP17, GP18, GP19 (pins 21, 22, 24, 25), in any order. Then move the VOLUME slider with the Pico on the laptop and tell Claude what it reports; it fills in the setting (full manual, Part 9).</li>
     </ol>
     <figure>
       <img src="img/pico-solder-map.png" alt="Pico W underside, USB at the top: R1 to GP0, R2 to GP1, R3 to GP2, R4 to GP3, C3 to GP4, C2 to GP5, C1 to GP6, hook wires to GND pin 18 and GP15 pin 20.">

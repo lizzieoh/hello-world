@@ -4,9 +4,11 @@
 # Keypad 0-9 * # -> types that character (site: "press 2 for audio", "press 3 to regenerate")
 # Hold * for 3 s -> Ctrl+R (staff reset: restarts the booth app)
 # Hold # for 5 s -> F10 (staff: shut the booth down safely, then it can be unplugged)
+# VOLUME slider    -> F13 / F14 / F15 (quiet / normal / loud), on every move and again on every lift
 #
 # Wiring:
 #   hook switch: GP15 (pin 20) and GND (pin 18)
+#   front panel (MS-303 ringer + volume sliders, 4 wires, any order): GP16, GP17, GP18, GP19 (pins 21, 22, 24, 25)
 #   keypad ribbon: wire 1 (red stripe) -> GP0, wire 2 -> GP1, ... in order.
 #   Which of those are rows and columns: set FIND_KEYS = True once and the Pico works it out (keyfinder.py).
 import time
@@ -45,6 +47,14 @@ KEYCODES = {
     "*": (Keycode.SHIFT, Keycode.EIGHT),
     "#": (Keycode.SHIFT, Keycode.THREE),
 }
+# Front panel: the Pico watches which of the 4 slider wires are joined, and prints "panel: [(1, 3)]" over USB
+# serial whenever a slider moves (wires numbered 1-4 in PANEL_PINS order). VOLUME_PAIRS says which joined pair
+# means which loudness: 0 quiet, 1 normal, 2 loud. Positions with no listed pair are VOLUME_DEFAULT.
+PANEL_PINS = (board.GP16, board.GP17, board.GP18, board.GP19)
+VOLUME_PAIRS = {}           # fill in from the serial log, e.g. {(1, 3): 2} or {(1, 2): 0, (1, 3): 2}
+VOLUME_DEFAULT = 1
+VOLUME_KEYS = (Keycode.F13, Keycode.F14, Keycode.F15)
+
 STAFF_RESET_HOLD_S = 3.0
 STAFF_SHUTDOWN_HOLD_S = 5.0
 SHUTDOWN_KEYS = (Keycode.F10,)
@@ -70,6 +80,31 @@ for pin in COL_PINS:
     c = digitalio.DigitalInOut(pin)
     c.switch_to_input(pull=digitalio.Pull.UP)
     cols.append(c)
+
+
+panel = []
+for pin in PANEL_PINS:
+    p = digitalio.DigitalInOut(pin)
+    p.switch_to_input(pull=digitalio.Pull.UP)
+    panel.append(p)
+
+
+def panel_pairs():
+    """Which front-panel wires are joined right now, as (lower, higher) wire numbers from 1."""
+    joined = set()
+    for i, drive in enumerate(panel):
+        drive.switch_to_output(value=False)
+        time.sleep(SETTLE_S)
+        for j in range(i + 1, len(panel)):
+            if not panel[j].value:
+                joined.add((i + 1, j + 1))
+        drive.switch_to_input(pull=digitalio.Pull.UP)
+    return joined
+
+
+def volume_for(pairs):
+    levels = [VOLUME_PAIRS[p] for p in pairs if p in VOLUME_PAIRS]
+    return max(levels) if levels else VOLUME_DEFAULT
 
 
 def held_keys():
@@ -104,6 +139,10 @@ def tap(*codes):
 
 state = off_hook()
 led.value = state
+panel_now = panel_pairs()
+panel_candidate = panel_now
+volume = volume_for(panel_now)
+print("panel:", sorted(panel_now), "volume:", volume)
 print("booth ready, handset", "lifted" if state else "hung up")
 star_down_at = None
 hash_down_at = None
@@ -121,6 +160,7 @@ while True:
             led.value = state
             print("hook:", "lifted" if state else "hung up")  # USB serial log, for testing
             if state:
+                tap(VOLUME_KEYS[volume])  # the booth always knows the slider, even after an app restart
                 tap(*PICKUP_KEYS)
             else:
                 tap(*HANGUP_KEYS)
@@ -145,6 +185,16 @@ while True:
             hash_down_at = None
         down = now
     candidate = now
+
+    pairs = panel_pairs()
+    if pairs == panel_candidate and pairs != panel_now:
+        panel_now = pairs
+        print("panel:", sorted(pairs))  # USB serial log: move each slider and note what it prints
+        if volume_for(pairs) != volume:
+            volume = volume_for(pairs)
+            print("volume:", volume)
+            tap(VOLUME_KEYS[volume])
+    panel_candidate = pairs
 
     if star_down_at is not None and time.monotonic() - star_down_at > STAFF_RESET_HOLD_S:
         star_down_at = None

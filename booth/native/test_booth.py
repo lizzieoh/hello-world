@@ -342,6 +342,15 @@ def test_reset_code_clears_the_feed():
     stop.set()
 
 
+def test_volume_slider():
+    booth, client, stop = make()
+    booth.post(("volume", 2))
+    booth.post(("volume", 0))
+    time.sleep(0.3)
+    assert booth.cfg["volume_steps"] == [60, 85, 100]
+    stop.set()
+
+
 def test_sounds():
     music = B.elevator_loop()
     assert abs(len(music) / B.SR - 10.0) < 0.01 and 0.05 < np.abs(music).max() <= 1.0
