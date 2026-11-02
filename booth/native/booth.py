@@ -114,10 +114,11 @@ BLOCKED = re.compile(r"\b(nude|naked|nudity|porn\w*|sex\w*|nsfw|genital\w*|gore|
 # Nobody else's intellectual property, ever: the booth only makes original ideas. These names are refused at once;
 # everything else is read by a language model first (Fal.check_ip), which also catches characters that are
 # described rather than named.
-IP_NAMES = re.compile(r"\b(sponge ?bob|spider[- ]?man|mickey|minnie|disney|pixar|marvel|avengers|batman|superman|"
-                      r"pok[eé]mon|pikachu|mario|luigi|zelda|sonic|star ?wars|darth|yoda|harry potter|hogwarts|barbie|"
-                      r"elsa|frozen|shrek|simpsons|minecraft|fortnite|hello kitty|ghibli|totoro|adobe|photoshop|nike|"
-                      r"coca[- ]?cola|pepsi|mcdonald'?s|starbucks|apple logo|iphone|google|tesla|lego)\b", re.I)
+# Only names that can't mean anything else ("frozen", "sonic", "mario" are left to the model).
+IP_NAMES = re.compile(r"\b(sponge ?bob|spider[- ]?man|mickey mouse|disney|pixar|marvel|avengers|batman|superman|"
+                      r"pok[eé]mon|pikachu|star ?wars|darth vader|yoda|harry potter|hogwarts|barbie|shrek|simpsons|"
+                      r"minecraft|fortnite|hello kitty|ghibli|totoro|adobe|photoshop|nike|coca[- ]?cola|pepsi|"
+                      r"mcdonald'?s|starbucks|iphone)\b", re.I)
 IP_CHECK_PROMPT = (
     "You screen prompts for a public video booth. The booth must NEVER make anyone else's intellectual property. "
     'Reply with JSON only: {"ok": true} or {"ok": false, "what": "<short name of the IP>"}.\n'
@@ -125,9 +126,20 @@ IP_CHECK_PROMPT = (
     "named OR clearly described (e.g. a yellow square sponge in brown shorts who lives in a pineapple); any brand, "
     "company, logo, product or app (Adobe, Nike, Coca-Cola, iPhone, fal included); any real person, celebrity, "
     "politician or public figure; any named artist's or studio's style (Pixar, Ghibli, Disney, Wes Anderson).\n"
-    "Ok: original ideas, generic animals, objects, places, cities, landmarks, jobs, genres and moods "
-    "(a sponge, a spider, a superhero I made up, a cartoon, anime style, Miami at night).")
-NO_IP = "We only make original ideas: no characters, brands or famous people. Hang up and try another one."
+    "Ok: original ideas, generic animals, objects, foods, drinks, places, cities, landmarks, sports, jobs, genres "
+    "and moods (a sponge, a spider, a superhero I made up, a cartoon, anime style, Miami at night, a pumpkin spice "
+    "latte, a burger, sneakers, a smartphone, a quarterback). Words used in their ordinary meaning are ok (frozen "
+    "lake, a sonic boom). Judge only what is actually asked for.")
+REMIX_PROMPT = (
+    "You work at a video booth that only makes original ideas. The caller asked for something that borrows "
+    "someone else's intellectual property ({what}). Change only the borrowed part: replace each borrowed character, "
+    "brand, logo or real person with an original one nobody could mistake for it: a different kind of character "
+    "altogether (a superhero becomes, say, a chef, a robot or an animal), NOT its colours, NOT its shape, NOT its outfit, none of its signature traits, no names (SpongeBob is "
+    "yellow and square, so not yellow and not square). Keep everything else "
+    "exactly as they said it: the places, the action, the time of day and the mood. Make it fun. Reply with the "
+    "new prompt only: one sentence, under 30 words.")
+REMIXING = "That one's someone else's character, so our agent is making you an original."
+ASK_AGAIN = "That one belongs to someone else. Try your own idea after the beep."
 ORIGINAL_ONLY = " Original characters and designs only: no logos, brand names or famous people."
 
 
@@ -143,6 +155,15 @@ class Fal:
     STT_DEADLINE = 12       # s, then the caller hears "lines are busy"
     IP_CHECK = "openrouter/router"
     IP_CHECK_MODELS = ("anthropic/claude-haiku-4.5", "openai/gpt-6-luna")  # about 1 s; the second if the first fails
+    LLM_NAMES = {"anthropic/claude-haiku-4.5": "Claude Haiku 4.5", "openai/gpt-6-luna": "GPT-6 Luna"}
+
+    def _llm(self, model, system, prompt, bill, label, timeout=8, **kw):
+        """One language-model call through fal. Its cost (fal reports it) goes on the receipt's bill."""
+        r = self.client.run(self.IP_CHECK, {"model": model, "system_prompt": system, "prompt": prompt, **kw},
+                            timeout=timeout)
+        if bill is not None:
+            bill.append((label, self.LLM_NAMES.get(model, model), float((r.get("usage") or {}).get("cost") or 0)))
+        return r.get("output") or ""
 
     def __init__(self, cfg, client=None):
         self.cfg = cfg
@@ -224,21 +245,42 @@ class Fal:
             if failed == len(tries):
                 raise err
 
-    def check_ip(self, prompt):
+    def check_ip(self, prompt, bill=None):
         """None if the prompt is an original idea, else what it borrows (a character, brand, real person...).
-        Raises if no checker answered: then the booth makes nothing, rather than risk it."""
+        Raises if no checker answered: then the booth makes nothing, rather than risk it. Each check's model and
+        cost are added to `bill`, for the receipt."""
         m = IP_NAMES.search(prompt)
-        if m:
+        if m:  # free, so it isn't on the bill
             return m.group(0)
         last = None
         for model in self.IP_CHECK_MODELS:
             try:
-                out = self.client.run(self.IP_CHECK, {"model": model, "system_prompt": IP_CHECK_PROMPT, "prompt": prompt,
-                                                      "temperature": 0, "max_tokens": 60}, timeout=6).get("output") or ""
+                out = self._llm(model, IP_CHECK_PROMPT, prompt, bill, "IP CHECK", timeout=6, temperature=0,
+                                max_tokens=60)
                 verdict = json.loads(re.search(r"\{.*?\}", out, re.S).group(0))
                 return None if verdict.get("ok") is True else str(verdict.get("what") or "someone else's IP")
             except Exception as e:
                 log.warning("IP check failed (%s): %s", model, e)
+                last = e
+        raise last
+
+    def remix(self, prompt, borrowed, bill=None):
+        """The prompt turned into an original idea with the same energy, checked again before it's used. Raises
+        if it can't be made original (the caller is then asked for another idea)."""
+        last = None
+        for model in self.IP_CHECK_MODELS:
+            try:
+                out = self._llm(model, REMIX_PROMPT.format(what=borrowed), prompt, bill, "MADE ORIGINAL",
+                                temperature=0.7, max_tokens=80)
+                original = " ".join(out.strip().strip('"“”').split())
+                if not original:
+                    raise RuntimeError("empty remix")
+                still = self.check_ip(original, bill)
+                if still:
+                    raise RuntimeError(f"the remix still borrows {still}: {original!r}")
+                return original
+            except Exception as e:
+                log.warning("remix failed (%s): %s", model, e)
                 last = e
         raise last
 
@@ -424,6 +466,7 @@ class Line:
             "busy": np.concatenate([np.concatenate([tone([480, 620], 0.25), silence(0.25)])] * 12),
             "music": elevator_loop(),
             "ring": ring(),
+            "beep": tone([1000], 0.4),
         }
         self.out = self.inp = None
         threading.Thread(target=self._keep_open, daemon=True).start()
@@ -989,6 +1032,36 @@ def brand_font(kind, size, weight=None):
     return ImageFont.truetype(find_font(bold=(weight or 400) >= 600 or kind == "display"), size)
 
 
+def sharpest_frame(src, at, vf, spread=0.3):
+    """The frame at `at` seconds, or one either side of it if that's sharper (less motion blur): three tries,
+    scored by how much fine detail they have (the variance of the Laplacian)."""
+    from PIL import Image
+    best, score = None, -1.0
+    for t in (at - spread, at, at + spread):
+        png = subprocess.run(["ffmpeg", "-v", "error", "-ss", f"{max(0.0, t):.2f}", "-i", src, "-frames:v", "1",
+                              "-vf", vf, "-f", "image2pipe", "-vcodec", "png", "-"],
+                             capture_output=True, timeout=30).stdout
+        if not png:
+            continue
+        f = Image.open(io.BytesIO(png)).convert("L")
+        a = np.asarray(f, np.float32)
+        s = float((4 * a[1:-1, 1:-1] - a[:-2, 1:-1] - a[2:, 1:-1] - a[1:-1, :-2] - a[1:-1, 2:]).var())
+        if s > score:
+            best, score = f, s
+    return best
+
+
+def thermal_photo(f, gamma):
+    """A still made as legible as a thermal printer allows: full contrast, local contrast and edges brought up
+    (fine detail is what survives 1-bit dots), lifted for dot spread, then error-diffused at every printer dot."""
+    from PIL import Image, ImageFilter, ImageOps
+    f = ImageOps.autocontrast(f, cutoff=0.5)
+    f = f.filter(ImageFilter.UnsharpMask(radius=24, percent=45, threshold=0))   # shapes stand apart
+    f = f.filter(ImageFilter.UnsharpMask(radius=1.0, percent=140, threshold=2))  # edges and faces
+    f = f.point(lambda v: round(255 * (v / 255) ** (1 / gamma)))
+    return f.convert("1", dither=Image.Dither.FLOYDSTEINBERG).convert("L")
+
+
 def receipt_image(take, cfg, src):
     """The receipt: lots of white, the logo, small square stills that step from side to side, a few big lines in
     mono, and the itemized bill."""
@@ -997,15 +1070,14 @@ def receipt_image(take, cfg, src):
     S = 230          # each still, square
     frames = []
     # the first and last stills are squares; the middle one is the whole frame, across the receipt
-    for frac, vf in ((0.2, f"scale=-2:{S},crop={S}:{S}"), (0.5, f"scale={W}:-2"), (0.8, f"scale=-2:{S},crop={S}:{S}")):
+    for frac, vf in ((0.2, f"scale=-2:{S}:flags=lanczos,crop={S}:{S}"), (0.5, f"scale={W}:-2:flags=lanczos"),
+                     (0.8, f"scale=-2:{S}:flags=lanczos,crop={S}:{S}")):
         try:
-            png = subprocess.run(["ffmpeg", "-v", "error", "-ss", f"{cfg['secs'] * frac:.2f}", "-i", src, "-frames:v",
-                                  "1", "-vf", vf, "-f", "image2pipe", "-vcodec", "png", "-"],
-                                 capture_output=True, timeout=30).stdout
+            f = sharpest_frame(src, cfg["secs"] * frac, vf)
         except FileNotFoundError:  # no ffmpeg (a laptop test): a receipt without stills
             break
-        if png:
-            frames.append(Image.open(io.BytesIO(png)).convert("L"))
+        if f:
+            frames.append(f)
 
     # Thermal paper drops strokes one dot thin, so everything below the big lines is bold.
     big = brand_font("mono", 50, 700)
@@ -1041,19 +1113,19 @@ def receipt_image(take, cfg, src):
         d.text((W - M, y), right, font=font, fill=0, anchor="ra")
         y += gap
 
-    gamma = 1 + cfg.get("print_lighten", 0) / 50  # 35 -> 1.7: lifts the darks and mids, keeps the whites
+    # Thermal dots spread, so the pictures are lifted to print true: 35 (the default) -> 1.5 for the squares, and
+    # 1.3 for the big middle one, which prints a little darker.
+    lighten = cfg.get("print_lighten", 0)
     stills = iter(frames)
 
-    def still(right, lighten=True):
+    def still(right, darker=False):
         nonlocal y
         f = next(stills, None)
         if f is None:
             return
-        g = gamma if lighten else 1.0
-        f = ImageOps.autocontrast(f, cutoff=1).point(lambda v: round(255 * (v / 255) ** (1 / g)))
-        # every printer dot used (error diffusion), so the still keeps the video's full detail
+        f = thermal_photo(f, 1 + lighten / (120 if darker else 70))
         x = 0 if f.width >= W else (W - M - f.width if right else M)
-        img.paste(f.convert("1", dither=Image.Dither.FLOYDSTEINBERG).convert("L"), (x, y))
+        img.paste(f, (x, y))
         y += f.height + 44
 
     # the logo (the fal mark, "fal" and CALL-A-FAL in one line)
@@ -1076,17 +1148,21 @@ def receipt_image(take, cfg, src):
 
     # what they asked for
     text(["YOU SAID"], small, 30)
-    text(wrap(f"“{take['prompt']}”", said_font), said_font, 36)
+    text(wrap(f"“{take.get('you_said') or take['prompt']}”", said_font), said_font, 36)
+    if take.get("you_said"):  # someone else's IP: what the agent made instead
+        y += 20
+        text(["WE MADE YOU AN ORIGINAL"], small, 30)
+        text(wrap(f"“{take['prompt']}”", said_font), said_font, 36)
     y += 40
 
-    still(right=False, lighten=False)  # full width, and as dark as filmed
+    still(right=False, darker=True)  # full width
     text(["RESOLVED", f"IN {take['secs']:.1f} s"], big, 60)
     y += 36
 
     # the bill: every model the call used, and what it cost
     text(["ITEMIZED CALL"], small, 34)
     for label, detail, cost in take.get("costs") or []:
-        row(label, f"${cost:.3f}")
+        row(label, f"${cost:.3f}" if cost >= 0.001 or not cost else f"${cost:.4f}")
         text([detail], small, 30, x=M + 16)
     total = sum(c for _, _, c in take.get("costs") or [])
     d.line([(M, y), (W - M, y)], fill=0, width=2); y += 16
@@ -1095,17 +1171,20 @@ def receipt_image(take, cfg, src):
 
     still(right=True)
 
-    # a QR code to keep the video, with its caption beside it
+    # a QR code to keep the video, with its caption beside it: small, but every module a whole number of dots
+    # (at least 3, about 0.4 mm), so phones still read it
     try:
         import qrcode
-        qr = qrcode.QRCode(border=0, box_size=6, error_correction=qrcode.constants.ERROR_CORRECT_M)
+        qr = qrcode.QRCode(border=0, box_size=1, error_correction=qrcode.constants.ERROR_CORRECT_L)
         qr.add_data(take["url"])
+        qr.make(fit=True)
+        k = max(3, 120 // qr.modules_count)
         q = qr.make_image(fill_color="black", back_color="white").convert("L")
-        q = q.resize((170, 170), Image.NEAREST)
+        q = q.resize((q.width * k, q.height * k), Image.NEAREST)
         img.paste(q, (M, y))
         for i, line in enumerate(("SCAN TO KEEP", "YOUR VIDEO")):
-            d.text((M + q.width + 28, y + 55 + i * 30), line, font=small, fill=0)
-        y += q.height + 48
+            d.text((M + q.width + 28, y + q.height // 2 - 28 + i * 30), line, font=small, fill=0)
+        y += q.height + 36
     except Exception:  # no qrcode package, or no URL: the receipt still prints
         pass
 
@@ -1244,6 +1323,7 @@ class Booth:
         self.stt_secs = {}     # render id -> seconds the speech-to-text took (for the bill)
         self.hung_up_cid = None  # a call hung up mid-sentence: what they'd said is still made
         self.orphans = set()     # renders whose caller hung up: shown on the screen when they arrive
+        self.llm_bill = {}       # render id -> [(item, model, USD)] for the IP check and remix, for the receipt
         self.call_no = 0
         self.online = True
         self.loud = True       # the phone's volume switch
@@ -1442,14 +1522,38 @@ class Booth:
         self.post(("prompt", cid, rid, prompt))
         if heard_nothing(prompt) or BLOCKED.search(prompt):
             return
+        self.llm_bill[rid] = bill = []
         try:
-            borrowed = self.fal.check_ip(prompt)
+            borrowed = self.fal.check_ip(prompt, bill)
         except Exception:
             return self.post(("failed", cid, rid, "Our lines are busy. Hang up and try again."))
-        if borrowed:
-            log.info("not made, someone else's IP (%s): %r", borrowed, prompt)
-            return self.post(("failed", cid, rid, NO_IP))
-        self._render(cid, rid, prompt, t0)
+        if not borrowed:
+            return self._render(cid, rid, prompt, t0)
+        # Someone else's IP: never made. The agent makes them an original with the same energy instead.
+        log.info("someone else's IP (%s): %r", borrowed, prompt)
+        self.post(("remixing", cid, rid))
+        try:
+            original = self.fal.remix(prompt, borrowed, bill)
+        except Exception:
+            return self.post(("ask_again", cid, rid))
+        log.info("made an original instead: %r", original)
+        self._render(cid, rid, original, t0, you_said=prompt)
+
+    def on_remixing(self, cid, rid):
+        if cid == self.cid and rid == self.pending:
+            self.view["said"] = REMIXING
+
+    def on_ask_again(self, cid, rid):
+        """Couldn't make it original: no busy tone, just another go after the beep."""
+        if cid != self.cid or rid != self.pending or not self.off_hook:
+            return
+        self.pending = None
+        self.hold_from = None
+        self.line.stop()
+        self.screen.background()
+        self.state = "greeting"
+        self.set_view(center=ASK_AGAIN)
+        self.play("beep", "greeted")
 
     def on_prompt(self, cid, rid, prompt):
         log.info("heard: %r", prompt)
@@ -1461,15 +1565,16 @@ class Booth:
             return self.busy("Let's keep it friendly. Hang up and try another one.")
         self.view["said"] = f"“{prompt}”"
 
-    def regenerate(self, prompt, take=1):
+    def regenerate(self, prompt, take=1, you_said=None):
         """3: the same prompt again, but a different take of it. The model reads the same words the same way every
         time (same person, same street), so each take adds its own direction. The screen and receipt keep their words."""
         self.line.hold()
         self.start_hold(time.monotonic(), said=f"“{prompt}”", keep_video=True)
         self.pending = rid = next(self.seq)
-        threading.Thread(target=self._render, args=(self.cid, rid, prompt, time.monotonic(), take), daemon=True).start()
+        threading.Thread(target=self._render, args=(self.cid, rid, prompt, time.monotonic(), take, you_said),
+                         daemon=True).start()
 
-    def _render(self, cid, rid, prompt, t0, take=0):
+    def _render(self, cid, rid, prompt, t0, take=0, you_said=None):
         t = time.monotonic()
         asked = prompt
         if take:
@@ -1482,8 +1587,9 @@ class Booth:
             return self.post(("failed", cid, rid, "That one didn't go through. Hang up and try another."))
         except Exception:
             return self.post(("failed", cid, rid, "Our lines are busy. Hang up and try again."))
-        self.post(("rendered", cid, rid, {"prompt": prompt, "take": take, "url": url, "model": model, "secs": time.monotonic() - t0,
-                                          "at": time.time(), "printed": False, "answered": False, "sound": False}))
+        self.post(("rendered", cid, rid, {"prompt": prompt, "you_said": you_said, "take": take, "url": url, "model": model,
+                                          "secs": time.monotonic() - t0, "at": time.time(), "printed": False,
+                                          "answered": False, "sound": False}))
 
     def on_rendered(self, cid, rid, take):
         log.info("video: %s, %.1f s after they stopped talking", take["model"], take["secs"])
@@ -1491,6 +1597,7 @@ class Booth:
         if rid in self.orphans:
             self.orphans.discard(rid)
             self.stt_secs.pop(rid, None)
+            self.llm_bill.pop(rid, None)
             if self.state == "idle" and not self.off_hook:  # their caller hung up: it goes up now, then the loop
                 self.take = take
                 self.screen.video(take["url"], mute=True)
@@ -1522,6 +1629,12 @@ class Booth:
                 items.append(("SPEECH TO TEXT", "wizper", secs * prices.get(endpoint, PRICES[endpoint])))
             else:  # billed per minute of audio
                 items.append(("SPEECH TO TEXT", "scribe", audio_secs / 60 * prices.get(endpoint, PRICES[endpoint])))
+        # the IP check (and the original made instead, if it borrowed), one line per kind and model
+        merged = {}
+        for label, model, usd in self.llm_bill.pop(rid, []):
+            merged[(label, model)] = merged.get((label, model), 0.0) + usd
+        items += sorted(((label, model, usd) for (label, model), usd in merged.items()),
+                        key=lambda i: i[0] != "IP CHECK")  # the check first, then the original it made
         try:
             endpoint = self.fal.endpoint(take["model"])
         except (StopIteration, AttributeError):
@@ -1604,7 +1717,7 @@ class Booth:
         elif k == "3":
             self.screen.mute(True)
             self.take = None
-            return self.regenerate(t["prompt"], t.get("take", 0) + 1)
+            return self.regenerate(t["prompt"], t.get("take", 0) + 1, t.get("you_said"))
         elif k == "0" and not t["printed"]:
             t["printed"] = True
             keys["0"] = "Printing…"

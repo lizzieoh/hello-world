@@ -56,7 +56,9 @@ class Client:
 
     def __init__(self):
         self.plan, self.text, self.calls = {}, "a red phone ringing on the moon", []
-        self.ip = None  # what the IP check says the prompt borrows; None = an original idea
+        self.ip = None  # a word the IP check flags wherever it appears (the remix too); None = all original
+        self.remix = "a round pink sea creature in a tiny top hat dancing on the beach"
+        self.prompts = []  # what each video model was asked for
 
     def run(self, endpoint, args, timeout=None):
         self.calls.append(endpoint)
@@ -64,8 +66,12 @@ class Client:
             if isinstance(self.plan.get(endpoint), int):
                 raise HTTPError(self.plan[endpoint])
             time.sleep(0.05)
-            verdict = {"ok": False, "what": self.ip} if self.ip else {"ok": True}
-            return {"output": f"```json\n{json.dumps(verdict)}\n```"}  # with the fences some models add
+            usage = {"cost": 0.0003}
+            if args["system_prompt"] != B.IP_CHECK_PROMPT:  # asked to remix it into an original
+                return {"output": f'"{self.remix}"', "usage": usage}
+            borrowed = self.ip and self.ip in args["prompt"].lower()
+            verdict = {"ok": False, "what": self.ip} if borrowed else {"ok": True}
+            return {"output": f"```json\n{json.dumps(verdict)}\n```", "usage": usage}  # fenced, as some models do
         assert args["audio_url"].startswith("data:audio/x-wav;base64,")
         assert args.get("language", "en") == "en"
         if self.plan.get(endpoint) == "hang":
@@ -75,6 +81,7 @@ class Client:
 
     def submit(self, endpoint, args):
         self.calls.append(endpoint)
+        self.prompts.append(args["prompt"])
         assert args["duration"] == 10
         what, polls = self.plan.get(endpoint, "ok"), [0]
 
@@ -313,23 +320,40 @@ def test_hang_up_before_speaking_makes_nothing():
     stop.set()
 
 
-def test_ip_is_never_made():
+def test_ip_is_remixed_into_an_original():
     booth, client, stop = make()
-    client.ip = "Spider-Man"  # a described character the name list misses
-    lift_and_say(booth, talk())
-    wait(lambda: booth.state == "busy", 10, "busy")
-    assert "original ideas" in booth.view["center"]
-    assert not any("text-to-video" in c for c in client.calls), client.calls
+    client.text, client.ip = "a man in a red and blue spider suit swinging between skyscrapers", "spider"
+    lift_and_say(booth, talk())  # described, not named: the name list misses it, the model doesn't
+    wait(lambda: booth.view["said"] == B.REMIXING, 5, "on hold, making an original")
+    wait(lambda: booth.state == "ready", 10, "ready")
+    assert client.prompts == [client.remix + B.ORIGINAL_ONLY], client.prompts  # their words never reach the model
+    assert booth.take["prompt"] == client.remix and booth.take["you_said"] == client.text
+    bill = {(label, model): round(usd, 4) for label, model, usd in booth.take["costs"]}
+    # two checks (their words, then the original) on one line, and the remix on its own
+    assert bill[("IP CHECK", "Claude Haiku 4.5")] == 0.0006 and bill[("MADE ORIGINAL", "Claude Haiku 4.5")] == 0.0003, bill
+    img = B.receipt_image(booth.take, booth.cfg, "/nonexistent.mp4")
+    assert img.height > 600
     stop.set()
 
 
-def test_ip_name_refused_without_asking():
+def test_ip_name_is_remixed_too():
     booth, client, stop = make()
     client.text = "SpongeBob dancing on the beach"
     lift_and_say(booth, talk())
-    wait(lambda: booth.state == "busy", 10, "busy")
-    assert "original ideas" in booth.view["center"]
-    assert client.calls == ["fal-ai/wizper"], client.calls  # refused on the name alone
+    wait(lambda: booth.state == "ready", 10, "ready")
+    assert client.prompts == [client.remix + B.ORIGINAL_ONLY], client.prompts
+    stop.set()
+
+
+def test_ip_that_cant_be_remixed_asks_again():
+    booth, client, stop = make()
+    client.text = "SpongeBob dancing on the beach"
+    client.remix = "SpongeBob in a top hat dancing on the beach"  # still borrowed, from both models
+    lift_and_say(booth, talk())
+    wait(lambda: booth.view["center"] == B.ASK_AGAIN, 10, "asked for another idea")
+    assert booth.state in ("greeting", "listening") and booth.state != "busy"
+    wait(lambda: booth.state == "listening", 5, "listening again after the beep")
+    assert not any("text-to-video" in c for c in client.calls), client.calls
     stop.set()
 
 

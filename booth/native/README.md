@@ -43,7 +43,14 @@ To go back to the browser version, run `cd ~/hello-world/booth/pi && ./setup.sh 
 
 ## What it won't make
 
-Only original ideas. Before anything is generated, each prompt is checked for anyone else's intellectual property: characters, franchises, brands, logos, real people and named styles, named or just described (a yellow sponge in brown shorts who lives in a pineapple counts). Well-known names are refused at once (`IP_NAMES` in `booth.py`). Everything else goes to Claude Haiku 4.5 on fal, with GPT-6 Luna if Haiku doesn't answer, which takes about a second. A refused prompt hears the busy tone, and the screen says "We only make original ideas". If neither checker answers, nothing is made. Every video prompt also asks for original characters and designs only. Rude words are refused the same way (`BLOCKED`).
+Only original ideas, and nobody walks away without a video. Before anything is generated, each prompt is checked for anyone else's intellectual property: characters, franchises, brands, logos, real people and named styles, named or just described (a yellow sponge in brown shorts who lives in a pineapple counts).
+- **The check:** a few unmistakable names are caught at once (`IP_NAMES` in `booth.py`). Everything else goes to Claude Haiku 4.5 on fal, with GPT-6 Luna if Haiku doesn't answer, which takes about a second.
+- **If it borrows:** the same model rewrites it into an original idea with the same places, action and mood, but a different kind of character ("Spider-Man swinging through Miami" becomes "an acrobatic flamingo swinging through Miami"). The rewrite is checked again before it's made. On hold, the screen says "That one's someone else's character, so our agent is making you an original." Their words never reach the video model.
+- **If no original works:** no busy tone. The screen asks for another idea and they get the beep again.
+- **If the checker can't be reached:** nothing is made.
+- **On the receipt:** the check and the rewrite are on the itemized bill with their model and cost (each a fraction of a cent). "YOU SAID" shows the caller's words, and "WE MADE YOU AN ORIGINAL" shows what was made.
+
+Every video prompt also asks for original characters and designs only. Rude words get the busy tone (`BLOCKED`).
 
 Hanging up doesn't lose the video. Hang up after **#**, or mid-sentence without pressing it, and the video is still made and goes up on the screen when it's ready.
 
