@@ -1,5 +1,14 @@
 fal booth: Pico setup kit (about 5 minutes)
 
+Quick way (does steps 1 and 2 for you, one Pico after another):
+   - In Terminal: booth/pico/load-pico.sh
+   - Hold BOOTSEL, plug in a Pico, wait for "Done: Pico #1 loaded", unplug, plug in the next.
+   - It uses the newest Pico W CircuitPython .uf2 in ~/Downloads. For a plain Pico (no "W"
+     printed on the board), pass the Pico .uf2 instead: load-pico.sh path/to/file.uf2
+   - Then do step 3 on each Pico.
+
+By hand:
+
 1. Put CircuitPython on the Pico (one time only)
    - Unplug the Pico. Hold its white BOOTSEL button, plug it into the Mac, then let go.
      A drive called RPI-RP2 appears.

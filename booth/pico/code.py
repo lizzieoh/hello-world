@@ -4,10 +4,13 @@
 # Keypad 0-9 * # -> types that character (site: "press 2 for audio", "press 3 to regenerate")
 # Hold * for 3 s -> Ctrl+R (staff reset: restarts the booth app)
 # Hold # for 5 s -> F10 (staff: shut the booth down safely, then it can be unplugged)
+# Volume switch  -> F17 loud, F18 low  (each switch's position is sent at startup, on every flip, and again on
+# Ringer switch  -> F19 on,   F20 off   every lift and hang-up, so the app always knows where they are)
 #
 # Wiring:
 #   hook switch: GP15 (pin 20) and GND (pin 18)
 #   keypad ribbon: wire 1 (red stripe) -> GP0, wire 2 -> GP1, ... in order.
+#   volume switch: GP16 (pin 21) and GP17 (pin 22). ringer switch: GP18 (pin 24) and GP19 (pin 25).
 #   Which of those are rows and columns: set FIND_KEYS = True once and the Pico works it out (keyfinder.py).
 import time
 
@@ -50,6 +53,13 @@ STAFF_SHUTDOWN_HOLD_S = 5.0
 SHUTDOWN_KEYS = (Keycode.F10,)
 KEYS_ONLY_WHEN_OFF_HOOK = True
 
+# Volume and ringer switches on the phone body, each wired across two GPs. The second pin of each pair is held low
+# as its ground, so the first reads low when the switch joins them. Mapped on the HA9888 with the pin watcher.
+VOLUME_PINS = (board.GP16, board.GP17)  # joined = loud
+RINGER_PINS = (board.GP18, board.GP19)  # joined = ringer on
+VOLUME_KEYS = {True: (Keycode.F17,), False: (Keycode.F18,)}  # loud, low
+RINGER_KEYS = {True: (Keycode.F19,), False: (Keycode.F20,)}  # on, off
+
 if FIND_KEYS:
     import keymonitor  # noqa: F401  (runs until FIND_KEYS is set back to False)
 
@@ -70,6 +80,22 @@ for pin in COL_PINS:
     c = digitalio.DigitalInOut(pin)
     c.switch_to_input(pull=digitalio.Pull.UP)
     cols.append(c)
+
+
+def switch_input(pins):
+    sense, ground = (digitalio.DigitalInOut(p) for p in pins)
+    ground.switch_to_output(value=False)
+    sense.switch_to_input(pull=digitalio.Pull.UP)
+    return sense, ground  # keep the ground pin referenced so it stays low
+
+
+volume_sw = switch_input(VOLUME_PINS)
+ringer_sw = switch_input(RINGER_PINS)
+
+
+def read_switches():
+    """(volume loud, ringer on) right now."""
+    return (not volume_sw[0].value, not ringer_sw[0].value)
 
 
 def held_keys():
@@ -102,9 +128,19 @@ def tap(*codes):
     kbd.release_all()
 
 
+def report_switches(sw):
+    print("volume:", "loud" if sw[0] else "low", " ringer:", "on" if sw[1] else "off")
+    tap(*VOLUME_KEYS[sw[0]])
+    tap(*RINGER_KEYS[sw[1]])
+
+
 state = off_hook()
 led.value = state
 print("booth ready, handset", "lifted" if state else "hung up")
+time.sleep(1)  # give the laptop a moment to take keys before the first report
+switches = read_switches()
+switch_candidate = switches
+report_switches(switches)
 star_down_at = None
 hash_down_at = None
 down = set()      # keys reported as pressed
@@ -127,6 +163,13 @@ while True:
                 if RELOAD_ON_HANGUP:
                     time.sleep(0.5)
                     tap(Keycode.CONTROL, Keycode.R)
+            report_switches(switches)
+
+    sw = read_switches()
+    if sw == switch_candidate and sw != switches:  # same reading twice in a row (debounce)
+        switches = sw
+        report_switches(switches)
+    switch_candidate = sw
 
     now = held_keys()
     if now == candidate and now != down:
