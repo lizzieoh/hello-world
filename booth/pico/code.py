@@ -10,8 +10,8 @@
 # Wiring:
 #   hook switch: GP15 (pin 20) and GND (pin 18)
 #   keypad ribbon: wire 1 (red stripe) -> GP0, wire 2 -> GP1, ... in order.
-#   volume switch: GP16 (pin 21) and GP17 (pin 22). ringer switch: GP18 (pin 24) and GP19 (pin 25).
 #   Which of those are rows and columns: set FIND_KEYS = True once and the Pico works it out (keyfinder.py).
+#   front panel (MS-303): VOLUME slider on GP16 + GP17 (pins 21, 22), RINGER on GP18 + GP19 (pins 24, 25).
 import time
 
 import board
@@ -53,8 +53,8 @@ STAFF_SHUTDOWN_HOLD_S = 5.0
 SHUTDOWN_KEYS = (Keycode.F10,)
 KEYS_ONLY_WHEN_OFF_HOOK = True
 
-# Volume and ringer switches on the phone body, each wired across two GPs. The second pin of each pair is held low
-# as its ground, so the first reads low when the switch joins them. Mapped on the HA9888 with the pin watcher.
+# The VOLUME and RINGER sliders on the front panel, each wired across two GPs. The second pin of each pair is
+# held low as its ground, so the first reads low when the switch joins them. Mapped with a pin watcher.
 VOLUME_PINS = (board.GP16, board.GP17)  # joined = loud
 RINGER_PINS = (board.GP18, board.GP19)  # joined = ringer on
 VOLUME_KEYS = {True: (Keycode.F17,), False: (Keycode.F18,)}  # loud, low

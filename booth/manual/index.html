@@ -110,12 +110,12 @@
 </style>
 
 <div class="wrap">
-  <div class="eyebrow">fal call center · Adobe MAX · build manual for 3 booths + 1 spare</div>
+  <div class="eyebrow">Call-a-fal · Adobe MAX · build manual for 3 booths + 1 spare · MS-303 wall phone</div>
   <h1>Call Center Booth Manual</h1>
-  <p class="lede">How to turn a beige wall phone, a Raspberry Pi, a small screen and a receipt printer into a booth where a visitor lifts the handset, says what they want to see, waits on hold to elevator music, and watches the video arrive. Written for someone who has never soldered.</p>
+  <p class="lede">How to turn a beige MS-303 wall phone, a Raspberry Pi, a 16" screen and a receipt printer into a booth where a visitor lifts the handset, says what they want to see, waits on hold to elevator music, and watches the video arrive. Written for someone who has never soldered.</p>
 
   <figure>
-    <img src="img/hero.webp" alt="Illustration: a visitor holds the handset of a beige wall phone mounted on a white booth wall; a monitor above shows a generated video and a receipt curls out of a slot below.">
+    <img src="img/hero.webp" alt="Illustration: a visitor holds the handset of a beige wall phone mounted on a white booth wall; a screen above shows a generated video and a receipt curls out of a slot below.">
     <figcaption>The finished booth: the phone at chest height, the screen above it, the receipt slot below. Everything else hides behind the wall.</figcaption>
   </figure>
 
@@ -133,13 +133,13 @@
       <li><a href="#open">Open the phone and label everything</a></li>
       <li><a href="#handset">Wire the handset to the audio adapter</a></li>
       <li><a href="#hook">Find the hook switch</a></li>
-      <li><a href="#keypad">Map the keypad</a></li>
-      <li><a href="#light">The red light (optional)</a></li>
+      <li><a href="#keypad">Free the keypad ribbon</a></li>
+      <li><a href="#light">The front panel: volume, ringer, label window</a></li>
       <li><a href="#pico">Set up and wire the Pico</a></li>
       <li><a href="#pi">Set up the Raspberry Pi</a></li>
       <li><a href="#printer">Connect the receipt printer</a></li>
       <li><a href="#network">The booth network</a></li>
-      <li><a href="#mount">Mount it in the booth wall</a></li>
+      <li><a href="#mount">Mount it in the booth</a></li>
       <li><a href="#copies">Make units 2, 3 and the spare</a></li>
       <li><a href="#burnin">Lock it down and burn it in</a></li>
       <li><a href="#showday">Show day</a></li>
@@ -154,7 +154,7 @@
     <p class="time">Read time: 5 minutes. No tools.</p>
     <p>Before touching anything, it helps to know what each piece does. There are only five boxes and they talk in one direction.</p>
 
-    <div class="diagram" role="img" aria-label="Signal flow: the phone's handset connects to a USB audio adapter, the hook switch and keypad connect to a Pico board; both plug into the Raspberry Pi by USB; the Pi drives the monitor over HDMI and the receipt printer over USB, and reaches the internet through the booth router.">
+    <div class="diagram" role="img" aria-label="Signal flow: the phone's handset connects to a USB audio adapter, the hook switch and keypad connect to a Pico board; both plug into the Raspberry Pi by USB; the Pi drives the screen over HDMI and the receipt printer over USB, and reaches the internet through the booth router.">
       <svg viewBox="0 0 760 330" xmlns="http://www.w3.org/2000/svg">
         <rect class="box" x="16" y="30" width="170" height="270" rx="6"/>
         <text x="30" y="56" font-weight="700" font-size="15">THE PHONE</text>
@@ -170,12 +170,12 @@
         <path class="wire keys" d="M172 162 H215 V185 H250"/>
         <path class="wire keys" d="M172 226 H215 V197 H250"/>
 
-        <rect class="box" x="460" y="100" width="130" height="100" rx="6"/><text x="474" y="130" font-weight="700" font-size="15">Raspberry Pi</text><text class="small" x="474" y="152">runs the booth web</text><text class="small" x="474" y="168">page full-screen</text>
+        <rect class="box" x="460" y="100" width="130" height="100" rx="6"/><text x="474" y="130" font-weight="700" font-size="15">Raspberry Pi</text><text class="small" x="474" y="152">runs the booth app</text><text class="small" x="474" y="168">full-screen</text>
         <path class="wire" d="M400 97 H430 V135 H460"/>
         <path class="wire" d="M400 191 H430 V165 H460"/>
         <text class="small" x="404" y="88">USB</text><text class="small" x="404" y="212">USB</text>
 
-        <rect class="box" x="640" y="20" width="110" height="56" rx="6"/><text x="654" y="54" font-weight="700" font-size="14">Monitor</text>
+        <rect class="box" x="640" y="20" width="110" height="56" rx="6"/><text x="654" y="54" font-weight="700" font-size="14">16" screen</text>
         <rect class="box" x="640" y="122" width="110" height="56" rx="6"/><text x="654" y="148" font-weight="700" font-size="14">Receipt</text><text x="654" y="166" font-weight="700" font-size="14">printer</text>
         <rect class="box" x="640" y="224" width="110" height="76" rx="6"/><text x="654" y="250" font-weight="700" font-size="14">Booth router</text><text class="small" x="654" y="270">→ internet → fal</text>
         <path class="wire" d="M590 120 H615 V48 H640"/><text class="small" x="596" y="40">HDMI</text>
@@ -185,25 +185,25 @@
     </div>
 
     <ol class="steps">
-      <li><b>Lift the handset.</b> The hook switch opens. The <b>Pico</b> (a coin-sized computer inside the phone) notices and "types" the key <kbd>F8</kbd> into the Raspberry Pi, exactly as if someone pressed it on a keyboard.</li>
-      <li><b>The web page hears F8</b> and plays "Please leave your prompt after the beep" through the <b>USB audio adapter</b>, which is wired to the handset's earpiece.</li>
-      <li><b>The visitor speaks.</b> The handset microphone goes back through the same adapter. The page records it, sends it to fal to turn speech into text, then asks fal's video model (H3 Max) for a 10-second clip.</li>
-      <li><b>While it renders,</b> the page plays "Please hold while I connect you to our fastest agent" and elevator music. The clip appears on the monitor in about 10 seconds.</li>
+      <li><b>Lift the handset.</b> The hook switch changes position. The <b>Pico</b> (a coin-sized computer inside the phone) notices and "types" the key <kbd>F8</kbd> into the Raspberry Pi, exactly as if someone pressed it on a keyboard.</li>
+      <li><b>The booth app hears F8</b> and plays "Please leave your prompt after the beep" through the <b>USB audio adapter</b>, which is wired to the handset's earpiece.</li>
+      <li><b>The visitor speaks.</b> The handset microphone goes back through the same adapter. The app records it, sends it to fal to turn speech into text, then asks fal's video model (H3 Max) for a 10-second clip. If H3 Max is slow or down, FLUX 3 Max takes over by itself.</li>
+      <li><b>While it renders,</b> the app plays "Please hold while I connect you to our fastest agent" and elevator music. The clip appears on the screen, muted, in about 10 seconds.</li>
       <li><b>Keypad presses</b> (2 for sound, 3 to regenerate, 0 to print) are also typed by the Pico. Hanging up types <kbd>F9</kbd>.</li>
     </ol>
 
     <div class="note why"><b>Why it's built this way</b>
       <ul>
-        <li><b>Nothing time-sensitive crosses the Wi-Fi.</b> Sound, keypad and screen are all wired straight into the booth's own Pi (handset by USB, keypad through the Pico by USB, monitor by HDMI), so nothing about the call itself travels over the network. Only small requests go out to fal. Bad conference Wi-Fi makes a video arrive a little later; it never makes the call break up.</li>
+        <li><b>Nothing time-sensitive crosses the Wi-Fi.</b> Sound, keypad and screen are all wired straight into the booth's own Pi (handset by USB, keypad through the Pico by USB, screen by HDMI), so nothing about the call itself travels over the network. Only small requests go out to fal. Bad conference Wi-Fi makes a video arrive a little later; it never makes the call break up.</li>
         <li><b>The phone becomes a keyboard and a headset.</b> Computers already understand both, with no special drivers, so there's very little that can go wrong.</li>
-        <li><b>The software is a web page</b> hosted on Vercel. Fix a typo once and all three booths get it on their next reload.</li>
+        <li><b>The software is one program on each Pi</b> (the "native app"). It reads the phone directly, prints without a driver, keeps the last videos on the Pi so the screen works even with no Wi-Fi, and restarts itself in 2 seconds if anything goes wrong.</li>
       </ul>
     </div>
     <div class="note whynot"><b>Why not</b>
       <ul>
-        <li><b>A real phone line (a Grandstream HT801 + a phone number).</b> The voice call itself would travel over the venue internet. Conference Wi-Fi drops data in bursts, which means choppy, one-way or dropped calls. It also can't drive a web page.</li>
-        <li><b>A tablet instead of a Pi and monitor.</b> iPads keep asking for microphone permission and drop USB accessories. A Pi boots straight into the page with no prompts.</li>
-        <li><b>An off-the-shelf USB phone.</b> Office USB phones talk to Teams and Zoom, not to a web page, and look like office gear. We keep your landline's look.</li>
+        <li><b>A real phone line (a Grandstream HT801 + a phone number).</b> The voice call itself would travel over the venue internet. Conference Wi-Fi drops data in bursts, which means choppy, one-way or dropped calls. It also can't show a video.</li>
+        <li><b>A tablet instead of a Pi and screen.</b> iPads keep asking for microphone permission and drop USB accessories. A Pi boots straight into the booth with no prompts.</li>
+        <li><b>An off-the-shelf USB phone.</b> Office USB phones talk to Teams and Zoom, not to our booth, and look like office gear. We keep your landline's look.</li>
       </ul>
     </div>
   </section>
@@ -228,44 +228,41 @@
     <span class="partno">Part 3</span>
     <h2>Parts and tools</h2>
     <p class="time">Unboxing and checking: 15 minutes.</p>
-
-    <figure>
-      <img src="img/parts-phone.jpg" alt="Photo of the parts on a desk, labelled: Raspberry Pi 5, coiled handset cord, straight line cord (not used), phone body with metal back plate, and handset." loading="lazy">
-      <figcaption>The phone as it comes out of the box, plus the Raspberry Pi. The straight cord is the phone-line cord; we never use it.</figcaption>
-    </figure>
-
-    <h3>Per booth (buy 4 of each: 3 booths + 1 spare)</h3>
+    <h3>Per booth (4 sets: 3 booths + 1 spare)</h3>
     <div class="tablewrap"><table>
       <tr><th>Part</th><th>What it does</th><th>Why this one</th></tr>
-      <tr><td>Beige wall phone (HA9888-style, Sangyn listing)</td><td>The thing people touch</td><td>Screws to the wall so it can't be knocked over or carried off; keypad and hook switch plug in with small connectors, so no cutting inside.</td></tr>
-      <tr><td>Raspberry Pi 5 (4 GB) + official 27 W power supply + official case</td><td>The booth's computer</td><td>Cheap, silent, boots in seconds, runs Chromium well. The <b>official</b> power supply matters: cheap ones cause random reboots.</td></tr>
-      <tr><td>2 × SanDisk Extreme 64 GB microSD</td><td>The Pi's "hard drive"</td><td>Fast and reliable. The second card is a ready-to-swap spare.</td></tr>
-      <tr><td>Raspberry Pi Pico (pre-soldered pins) + USB cable</td><td>Turns the hook and keypad into key presses</td><td>Shows up as a normal keyboard on any computer. Pre-soldered pins mean you can test with clip-on wires.</td></tr>
-      <tr><td>Sabrent AU-MMSA USB audio adapter</td><td>Connects the handset to the Pi</td><td>Separate headphone and mic jacks (no guessing about 4-pin plugs), and needs no driver on Linux.</td></tr>
-      <tr><td>2 × 3.5 mm pigtail cables</td><td>A plug on one end, bare wires on the other</td><td>Lets you solder the handset wires to a plug without touching the adapter.</td></tr>
-      <tr><td>Micro-HDMI to HDMI cable</td><td>Pi to monitor</td><td>The Pi 5 only has micro-HDMI ports.</td></tr>
-      <tr><td>Monitor (27", VESA mount)</td><td>Shows the video</td><td>VESA holes let you hang it on the wall and hang the Pi on its back.</td></tr>
-      <tr><td>Spare coiled handset cord</td><td>Replacement</td><td>The most-yanked part. A swap takes 10 seconds because we keep the cord's plug.</td></tr>
-      <tr><td>2 × USB extension cables (6 ft)</td><td>Phone to Pi, through the wall</td><td>The phone and Pi are on opposite sides of the wall.</td></tr>
+      <tr><td>Beige <b>MS-303</b> wall phone (clear cradle, ringer and volume sliders on the front)</td><td>The thing people touch</td><td>Screws to the wall so it can't be knocked over or carried off. Every booth uses the same model, so one keypad map and one spare fit all.</td></tr>
+      <tr><td><b>CanaKit Raspberry Pi 5 Starter Kit PRO</b>, 4 GB (Turbine Black, 128 GB)</td><td>The booth's computer</td><td>One box with the Pi, a 45 W power supply, a case with a fan, a heatsink, a 128 GB memory card, a card reader and two micro-HDMI cables. Four identical kits mean the spare is a true drop-in.</td></tr>
+      <tr><td><b>ARZOPA Z1FC 16.1"</b> screen (1080p) + a 30 W USB-C charger</td><td>Shows the video</td><td>The best-tested small screen under $150 (337 nits, measured by PCWorld), and the same 16:9 shape as the videos. Its own charger keeps it at full brightness.</td></tr>
+      <tr><td>Micro-HDMI to <b>mini</b>-HDMI cable</td><td>Pi to screen</td><td>The Pi has micro-HDMI and the ARZOPA has mini-HDMI. One cable, no adapters.</td></tr>
+      <tr><td>Raspberry Pi Pico + USB cable</td><td>Turns the hook switch and keypad into key presses</td><td>Shows up as a normal keyboard on any computer.</td></tr>
+      <tr><td>Sabrent AU-MMSA USB audio adapter</td><td>Connects the handset to the Pi</td><td>Separate headphone and mic jacks, so there's no guessing, and it needs no driver.</td></tr>
+      <tr><td>2 × 3.5 mm pigtail cables (Fancasee)</td><td>A plug on one end, bare wires on the other</td><td>Lets you solder the handset wires to a plug.</td></tr>
+      <tr><td>Rongta 80 mm receipt printer + paper</td><td>Prints the receipt when someone presses 0</td><td>The booth sends it the receipt directly, with no driver to install.</td></tr>
+      <tr><td>Spare coiled handset cord</td><td>Replacement</td><td>The most-yanked part. A swap takes 10 seconds because we keep the phone's handset jack.</td></tr>
+      <tr><td>Spare microSD card (SanDisk, Samsung or official, 32 GB+)</td><td>Backup copy of the Pi's card</td><td>A dead card becomes a 2-minute swap.</td></tr>
     </table></div>
 
     <h3>Shared by all booths</h3>
     <ul>
-      <li>GL.iNet travel router (Beryl AX or Beryl 7) ×2, 8-port switch, Ethernet cables, a 5G hotspot or a phone with a data plan, two battery backups (APC 600 VA), power strips.</li>
-      <li>80 mm receipt printer per booth (Epson TM-T20III renewed, or Rongta RP326), plus a case of 80 mm thermal paper.</li>
+      <li>GL.iNet travel router ×2, 8-port switch, Cat6 Ethernet cables, a 5G hotspot or a phone to tether, two battery backups (APC 600 VA), power strips.</li>
+      <li>A case of 80 × 80 mm thermal paper.</li>
     </ul>
 
-    <h3>Tools</h3>
+    <h3>Tools and supplies</h3>
     <ul>
       <li><b>Multimeter</b> with a continuity beep (Klein MM325 or similar).</li>
-      <li><b>Soldering station</b> (X-Tronic 3020-XTS) with its helping hands, 0.8 mm rosin-core solder, a flux pen, desoldering braid.</li>
-      <li>Fine wire strippers, flush cutters, heat-shrink tubing and a heat gun or hair dryer, 26 AWG hookup wire in several colours, female-to-female jumper wires, masking tape and a marker, small screwdrivers.</li>
+      <li><b>Soldering station</b> with helping hands, 0.8 mm 63/37 rosin-core solder, a flux pen, desoldering braid.</li>
+      <li><b>Wire:</b> 26 AWG stranded silicone wire in several colours, and Dupont jumper wires (male-to-female) for testing.</li>
+      <li><b>Mounting:</b> ¾" (20 mm) adhesive zip-tie mounts with screws, 4" (100 mm) zip ties, 1" (25 mm) clear heat-shrink (the plain kind, not adhesive-lined) to sleeve the Pico, a heat-shrink assortment for the joints, Kapton tape.</li>
+      <li>Fine wire strippers, flush cutters, a heat gun, masking tape and a marker, small screwdrivers.</li>
     </ul>
     <div class="note whynot"><b>Why not</b>
       <ul>
-        <li><b>A Raspberry Pi 4 or older.</b> Slower at playing video and running the browser; the price difference is small.</li>
+        <li><b>Mixing phone models.</b> Each model wires its keypad differently, so each would need its own Pico settings, and the spare Pico would only fit one of them.</li>
+        <li><b>A bigger monitor inside the booth.</b> A 27" screen won't fit a phone-booth enclosure. The 16" screen sits right above the phone, at reading distance.</li>
+        <li><b>A cheaper no-name screen.</b> Unverified brightness and colour. A dim, washed-out screen is the first thing visitors notice.</li>
         <li><b>A USB audio adapter with one 4-pin jack</b> (like Apple's). Which ring is the mic depends on the brand. Separate jacks remove that guesswork.</li>
-        <li><b>An Arduino instead of the Pico.</b> Most Arduinos can't act as a USB keyboard; the ones that can cost more and are harder to set up.</li>
       </ul>
     </div>
   </section>
@@ -329,37 +326,30 @@
     <h2>Open the phone and label everything</h2>
     <p class="time">About 20 minutes.</p>
     <ol class="steps">
-      <li>Lay the phone face-down on a towel. Remove the screws from the metal back plate and lift the beige front shell away. <b>Go slowly:</b> the red light in the shell is still wired to the inside.</li>
-      <li>Find each cable in the photo below. Put a strip of masking tape on each one and write its name: <b>HANDSET</b>, <b>KEYPAD</b>, <b>HOOK</b>, <b>LIGHT</b>, <b>BELL</b>, <b>LINE</b>.</li>
-      <li>Take a clear photo of the board with all its plugs still in place. This is your undo button.</li>
-      <li>Unplug every connector from the main green board. Pull on the white plastic plug, never on the wires.</li>
-      <li>Remove the board's 2 screws, put the board in a zip bag and write the phone's number on it.</li>
+      <li>Lay the phone face-down on a towel. Remove the screws from the metal back plate and lift the beige front shell away. <b>Go slowly:</b> the small ringer and volume board on the front shell is still plugged into the inside.</li>
+      <li>Find each part in the photos below. Put a strip of masking tape on each cable and write its name: <b>HANDSET</b>, <b>KEYPAD</b>, <b>HOOK</b>, <b>FRONT</b>, <b>BUZZER</b>, <b>LINE</b>.</li>
+      <li>Take a clear photo of the board before you change anything. This is your undo button.</li>
+      <li>Unplug the white plug from the front panel (it sits on the right side of the main board). That's the only plug on this phone; everything else is soldered, and you'll cut those wires in the next parts. Keep the front panel's 4 wires: they become the volume control in Part 9.</li>
     </ol>
     <figure class="tall">
-      <img src="img/step1-what-is-what.webp" alt="Your opened phone with labels: the small plugs at the top of the board (MWLI red light, PX2 hook switch, BELL), the grey keypad ribbon with a red edge going to the Pico, the red and black bell wires and the red/white striped LINE cords to unplug and ignore, the HSM handset plug going to the audio adapter, and the handset jack to keep." loading="lazy">
-      <figcaption>What each connector is, labeled on your own photo. The two look-alike striped cords are LINE (to the back jack), not the light. For the small plugs, trust the names printed on the board.</figcaption>
+      <img src="img/ms303-overview.webp" alt="The opened MS-303 phone with labels: the MS-303 HK hook-switch board at the top left, the bell, the grey keypad ribbon, the red and black buzzer wires, the front-panel ringer and volume board and where its plug goes, the M− M+ R+ R− handset pads, the handset jack to keep, and the red/green LINE wires to ignore." loading="lazy">
+      <figcaption>The whole phone. Yellow labels were drawn by hand on your own photo.</figcaption>
     </figure>
-    <div class="pair">
-      <figure>
-        <img src="img/back-plate.jpg" alt="Photo of the metal back plate: the LINE jack in the middle is never used, and its opening becomes the exit hole for the USB cables." loading="lazy">
-        <figcaption>The jack on the back is the phone LINE. We never connect it. Its hole is where our cables will leave the phone.</figcaption>
-      </figure>
-      <figure>
-        <img src="img/red-light.jpg" alt="Photo of the front shell's red light with its 2-wire cord, and the handset jack." loading="lazy">
-        <figcaption>The red light lives in the front shell. Two red-striped cords look alike: the one to the red lens is LIGHT; the one to the back jack is LINE.</figcaption>
-      </figure>
-    </div>
+    <figure class="tall">
+      <img src="img/ms303-board.webp" alt="Close-up of the MS-303 MB main board with labels: HK hook-switch wires glued at the top left, the soldered keypad ribbon, the BZ buzzer wires, the TIP/RING phone line, the front-panel plug, and the handset pads M− M+ R+ R− with the yellow, black, green and red handset wires." loading="lazy">
+      <figcaption>The main board, printed <b>MS-303 MB</b>. The board labels every connection: HK, BZ, TIP, RING, and M−, M+, R+, R− for the handset.</figcaption>
+    </figure>
     <div class="tablewrap"><table>
       <tr><th>Cable</th><th>Board label</th><th>Keep or ignore</th></tr>
-      <tr><td>Handset jack (4 wires: green, red, yellow, black)</td><td>HSM</td><td><b>Keep</b> → audio adapter</td></tr>
-      <tr><td>Keypad (flat grey ribbon with a red edge)</td><td>its own small board</td><td><b>Keep</b> → Pico</td></tr>
-      <tr><td>Hook switch (ribbon from the tan board in the cradle)</td><td>PX2</td><td><b>Keep</b> → Pico</td></tr>
-      <tr><td>Red light (2-wire cord)</td><td>MWLI</td><td>Optional → Pico</td></tr>
-      <tr><td>Bell (red and black wires)</td><td>BELL</td><td>Ignore</td></tr>
-      <tr><td>Line jack (back plate)</td><td>(line)</td><td>Ignore</td></tr>
+      <tr><td>Handset (yellow, black, green, red, from the grey jack)</td><td>M− M+ R+ R−</td><td><b>Keep</b> → audio adapter (Part 6)</td></tr>
+      <tr><td>Hook switch (white wires from the small MS-303 HK board)</td><td>HK</td><td><b>Keep</b> → Pico (Part 7)</td></tr>
+      <tr><td>Keypad (flat grey ribbon, soldered to the board)</td><td>(no label)</td><td><b>Keep</b> → Pico (Part 8)</td></tr>
+      <tr><td>Front panel: ringer and volume sliders (white plug, 4 wires)</td><td>white 4-pin socket</td><td><b>Keep</b> → Pico, for volume and ringer (Part 9)</td></tr>
+      <tr><td>Buzzer (red and black wires)</td><td>BZ</td><td>Ignore</td></tr>
+      <tr><td>Phone line (red and green, twisted)</td><td>TIP, RING</td><td>Ignore</td></tr>
     </table></div>
-    <div class="note why"><b>Why remove the whole board</b><p>Everything we need already unplugs from it. Taking it out means no cutting of circuit-board tracks and no risk that the old electronics interfere with our signals. Bagging it means the phone can be restored later.</p></div>
-    <div class="note whynot"><b>Why not keep the phone's own electronics</b><p>The board is designed to talk to a phone line: it needs line voltage to power it and turns keypad presses into tones. We want simple on/off signals, which is exactly what the bare switches give us.</p></div>
+    <div class="note why"><b>Why the board comes out in the end</b><p>Once the handset, hook and keypad wires are cut free, nothing on the board is needed. It was built to run on phone-line power and turn key presses into tones. We want simple on/off signals, which is what the bare switches give us. Keep it in a zip bag so the phone could be restored.</p></div>
+    <div class="note warn"><b>Cut close to the board, never close to the part</b><p>Every wire you cut on this phone should be cut right where it meets the main board. That leaves you the most length to work with, and if you need more, you can always add wire. You can't add length to a wire that's too short to reach.</p></div>
   </section>
 
   <!-- 6 -->
@@ -369,44 +359,52 @@
     <p class="time">About 45 minutes the first time.</p>
 
     <h3>6a · Identify the four handset wires</h3>
-    <figure class="tall">
-      <img src="img/step2-handset-plug.webp" alt="Annotated close-up of the HSM plug: green to earpiece tip, red to earpiece sleeve, yellow to mic sleeve, black (+) to mic tip. Also shows the PX2 hook switch plug." loading="lazy">
-      <figcaption>The board prints the four pins as <b>G+ R− Y− B+</b>: green and red are the earpiece, black (+) and yellow (−) are the microphone.</figcaption>
-    </figure>
+    <p>On this phone the handset's four wires run from the grey handset jack straight onto four pads printed <b>M−, M+, R+, R−</b>. <b>R</b> is the receiver (the earpiece) and <b>M</b> is the microphone. The wires are soldered from underneath. Measured on the MS-303:</p>
+    <div class="tablewrap"><table>
+      <tr><th>Wire</th><th>Pad</th><th>What it is</th></tr>
+      <tr><td>Black</td><td>R+</td><td>earpiece +</td></tr>
+      <tr><td>Yellow</td><td>R−</td><td>earpiece −</td></tr>
+      <tr><td>Red</td><td>M+</td><td>microphone +</td></tr>
+      <tr><td>Green</td><td>M−</td><td>microphone −</td></tr>
+    </table></div>
+    <div class="note warn"><b>Different from other phones</b><p>On the HA9888, green and red were the earpiece. On the MS-303, <b>black and yellow are the earpiece</b> and <b>red and green are the mic</b>. Go by this table, not by colour habits.</p></div>
     <ol class="steps">
-      <li>Plug the handset into its jack so the cord is connected.</li>
-      <li>Meter on <b>Ω, 2k</b>. Touch the probes into the white HSM plug on the <b>green</b> and <b>red</b> contacts. Expect <b>100–300 Ω</b>. That's the earpiece.</li>
-      <li>Now <b>black</b> and <b>yellow</b>. Read the number, swap the probes, read again. The two numbers should be <b>different</b>. That means it's an electret microphone, the kind the adapter can power.</li>
+      <li>Cut the four wires <b>close to the board</b>, so you keep as much length as possible.</li>
+      <li>Plug the handset into its jack so the coiled cord is connected.</li>
+      <li>Meter on <b>Ω, 2k</b>. Touch the probes to the bare ends of <b>black</b> and <b>yellow</b>. Expect <b>100–300 Ω</b>. That's the earpiece.</li>
+      <li>Now <b>red</b> and <b>green</b>. Read the number, swap the probes, read again. The two numbers should be <b>different</b>. That means it's an electret microphone, the kind the adapter can power.</li>
     </ol>
-    <div class="note check"><b>Checkpoint · handset</b><p>Green–red reads 100–300 Ω, and black–yellow reads differently each way round. If green–red doesn't read 100–300 Ω, stop and recheck before cutting anything.</p></div>
-    <div class="note why"><b>Why test before cutting</b><p>Cutting is the one step you can't undo. Thirty seconds with the meter means you never solder the earpiece to the mic jack.</p></div>
+    <div class="note check"><b>Checkpoint · handset</b><p>Black–yellow reads 100–300 Ω, and red–green reads differently each way round. If black–yellow reads nothing but another pair reads 100–300 Ω, that other pair is the earpiece: use it instead, and the remaining two are the mic.</p></div>
+    <div class="note why"><b>Why test after cutting here</b><p>On a phone with a plug you test before cutting. On this phone the wires are soldered underneath the board, so cutting first is simpler, and the meter still tells you which pair is which before anything gets soldered.</p></div>
 
     <h3>6b · Know your 3.5 mm plug</h3>
     <figure>
       <img src="img/trs.webp" alt="Illustration of a 3.5 mm plug with three metal sections labelled tip, ring and sleeve, and three bare wires coming out of the cable." loading="lazy">
       <figcaption>A headphone plug has three metal contacts: <b>tip</b> (the point), <b>ring</b> (the middle band) and <b>sleeve</b> (the last metal section before the plastic handle). The sleeve is always ground.</figcaption>
     </figure>
-    <ol class="steps">
-      <li>Each pigtail has three bare wires. Their colours vary by brand, so <b>find out which is which with the meter</b>: continuity mode, one probe on a bare wire, the other touching the tip of the plug. The beep tells you which wire is the tip. Repeat for ring and sleeve.</li>
-      <li>Write it on tape on each pigtail, for example "red = tip, white = ring, copper = sleeve".</li>
-    </ol>
+    <p>On the Fancasee pigtails the colours are usually <b>red = tip</b>, <b>white = ring</b> and <b>black = sleeve</b>. Check once with the meter's beep: one probe on the red wire, the other on the very tip of the plug.</p>
 
     <h3>6c · Solder</h3>
-    <figure>
-      <img src="img/step3-solder-handset.webp" alt="Diagram: earpiece green wire to tip and red wire to sleeve of pigtail 1 going to the headphone jack; mic black (+) to tip and yellow (−) to sleeve of pigtail 2 going to the mic jack; ring wires taped off." loading="lazy">
-      <figcaption>The whole handset in one picture. Ring wires are taped off, not connected.</figcaption>
-    </figure>
+    <div class="tablewrap"><table>
+      <tr><th>Handset wire</th><th>Pigtail wire</th><th>Plug part</th></tr>
+      <tr><td colspan="3"><b>Earpiece pigtail</b> (plugs into the 🎧 jack)</td></tr>
+      <tr><td>Black (R+)</td><td>Red</td><td>tip</td></tr>
+      <tr><td>Yellow (R−)</td><td>Black</td><td>sleeve</td></tr>
+      <tr><td>(none)</td><td>White</td><td>ring: tape it off</td></tr>
+      <tr><td colspan="3"><b>Mic pigtail</b> (plugs into the 🎤 jack)</td></tr>
+      <tr><td>Red (M+)</td><td>Red</td><td>tip</td></tr>
+      <tr><td>Green (M−)</td><td>Black</td><td>sleeve</td></tr>
+      <tr><td>(none)</td><td>White</td><td>ring: tape it off</td></tr>
+    </table></div>
     <ol class="steps">
-      <li>Cut the white HSM plug off, about 1 cm from the plug. Strip 5 mm from each of the four wires.</li>
-      <li>Slide heat-shrink onto each wire.</li>
-      <li><b>Earpiece pigtail (#1):</b> solder <b>green → tip</b>, <b>red → sleeve</b>. Tape off its ring wire.</li>
-      <li><b>Microphone pigtail (#2):</b> solder <b>black → tip</b>, <b>yellow → sleeve</b>. Tape off its ring wire.</li>
-      <li>Shrink the tubing. Label the plugs <b>EAR</b> and <b>MIC</b>.</li>
-      <li>Plug EAR into the adapter's headphone jack (pink or headphone icon) and MIC into the mic jack (green or mic icon).</li>
+      <li>Strip 5 mm (³⁄₁₆ in) from each of the four handset wires and each pigtail wire.</li>
+      <li>Slide heat-shrink onto each wire before you solder.</li>
+      <li>Solder the pairs in the table, then shrink the tubing. Label the plugs <b>EAR</b> and <b>MIC</b>.</li>
+      <li>Plug EAR into the adapter's headphone jack and MIC into its mic jack.</li>
     </ol>
-    <div class="note check"><b>Checkpoint · audio</b><p>Plug the adapter into a laptop. Open a voice recorder, talk into the handset, then play it back with the handset at your ear. You should hear yourself clearly. Mic silent? Swap black and yellow. Earpiece silent? Recheck green and red.</p></div>
+    <div class="note check"><b>Checkpoint · audio</b><p>Plug the adapter into a laptop. Open a voice recorder, talk into the handset, then play it back with the handset at your ear. You should hear yourself clearly. Mic very quiet or silent? Swap red and green on the mic pigtail; getting it backwards does no harm. Earpiece silent? Recheck black and yellow.</p></div>
     <div class="note why"><b>Why tip for the earpiece and not tip + ring</b><p>Tip is the left channel, ring the right. Joining them ties the adapter's two outputs together, which can distort the sound or stress the adapter. One channel is plenty for a single earpiece.</p></div>
-    <div class="note whynot"><b>Why not cut the coiled cord instead</b><p>We solder at the phone's own jack and keep the cord's plug. When a visitor yanks the cord out of shape, you swap in a spare cord in 10 seconds instead of re-soldering on the show floor.</p></div>
+    <div class="note whynot"><b>Why not cut the coiled cord instead</b><p>We keep the phone's own handset jack and the cord's plug. When a visitor yanks the cord out of shape, you swap in a spare cord in 10 seconds instead of re-soldering on the show floor.</p></div>
   </section>
 
   <!-- 7 -->
@@ -414,31 +412,26 @@
     <span class="partno">Part 7</span>
     <h2>Find the hook switch</h2>
     <p class="time">About 15 minutes.</p>
-    <figure class="tall">
-      <img src="img/hook-switch.jpg" alt="Annotated photo: the hook switch is a blue block with a white plunger on a small tan board printed PX2; a grey ribbon runs from it to the PX2 plug on the main board." loading="lazy">
-      <figcaption>The hook switch: a blue block whose white plunger is pressed when the handset hangs on the cradle.</figcaption>
-    </figure>
+    <p>The hook switch is on the small tan board printed <b>MS-303 HK</b>, at the top left under the clear cradle: a blue block with a plunger that the handset presses down when it hangs up. <b>Two white wires</b> run from it to the spot marked <b>HK</b> on the main board, where they're soldered and covered in glue. Those two wires are the switch.</p>
     <ol class="steps">
-      <li>Meter on <b>continuity</b>.</li>
-      <li>Touch the probes to two of the solder pads where the ribbon joins the tan board.</li>
-      <li>Press the white plunger in with a finger (that's "hung up"), then let go (that's "lifted").</li>
-      <li>Try pairs of pads until you find a pair that <b>beeps in one position only</b>. There may be two such pairs. Either works; pick one.</li>
-      <li>Write down which two pads (count from one edge) and whether it beeps <b>pressed</b> or <b>released</b>.</li>
+      <li>Leave the glue alone. Cut both white HK wires <b>close to the main board</b>, so the full length stays attached to the hook board.</li>
+      <li>Strip about 3 mm (⅛ in) from each cut end.</li>
+      <li>Meter on <b>continuity</b>, probes on the two wires. Press the plunger in with a finger (that's "hung up"), then let go (that's "lifted").</li>
+      <li>Write down whether it beeps <b>pressed</b> or <b>released</b>.</li>
     </ol>
-    <div class="note check"><b>Measured on the HA9888 wall phone</b><p>The <b>first two pads, counting from the edge nearest the phone's left side</b>, beep when the plunger is <b>released</b> (handset lifted). Use those two pads on every unit. The Pico code is already set for this: the switch closes on lift, pulling GP15 to ground, so <code>OFF_HOOK_READS_HIGH = False</code>. Still check each unit with the meter, because a different batch could be wired differently.</p></div>
     <div class="tablewrap"><table>
       <tr><th>Record for each phone</th><th>Your answer</th></tr>
-      <tr><td>Hook pads (counted from the edge)</td><td class="blank">pad __ and pad __</td></tr>
       <tr><td>Beeps when the plunger is…</td><td class="blank">pressed / released</td></tr>
     </table></div>
-    <div class="note why"><b>Why only two wires</b><p>A switch is just two metal contacts that touch or don't. The Pico only needs to know which, so it needs only the two contacts that change. Extra contacts are for the old phone circuit.</p></div>
+    <div class="note check"><b>What the answer means for the Pico</b><p>If it beeps when <b>released</b> (handset lifted), the switch closes on lift: keep <code>OFF_HOOK_READS_HIGH = False</code> in the Pico's <code>code.py</code>. If it beeps when <b>pressed</b> (hung up), change it to <code>True</code>. Either way, the two wires go to <b>GP15 (pin 20)</b> and <b>GND (pin 18)</b>, either way round. Every MS-303 should give the same answer, but check each one.</p></div>
+    <div class="note why"><b>Why only two wires</b><p>A switch is just two metal contacts that touch or don't. The Pico only needs to know which, so it needs only the two contacts that change. Any extra wire was for the old phone circuit.</p></div>
   </section>
 
   <!-- 8 -->
   <section class="part" id="keypad">
     <span class="partno">Part 8</span>
-    <h2>Map the keypad</h2>
-    <p class="time">About 30 minutes.</p>
+    <h2>Free the keypad ribbon</h2>
+    <p class="time">About 15 minutes here, 10 more in Part 10.</p>
     <p>Twelve buttons, but only about seven wires. That's because the keypad is a <b>grid</b>: four row wires and three column wires. Pressing a button connects one row to one column.</p>
     <div class="diagram" role="img" aria-label="Keypad matrix: rows R1 to R4 run horizontally, columns C1 to C3 vertically; each key sits where a row and a column cross, for example key 1 at R1 and C1, key 5 at R2 and C2, key hash at R4 and C3.">
       <svg viewBox="0 0 640 330" xmlns="http://www.w3.org/2000/svg">
@@ -471,44 +464,41 @@
       </svg>
     </div>
     <ol class="steps">
-      <li>Unplug the grey keypad ribbon from the main board (if you haven't). <b>No unscrewing needed:</b> hold the white plastic plug and wiggle it straight off the board's pins. Leave the keypad and its small board screwed into the front shell. Count the ribbon's wires and number them <b>1, 2, 3…</b> starting from the wire with the <b>red stripe</b>.</li>
-      <li>Meter on <b>continuity</b>. Hold down key <b>1</b> and touch the probes to pairs of contacts in the ribbon's plug until it beeps. Write down the two wire numbers. If the plug's contacts are too small to reach, probe the solder pads where the ribbon joins the keypad's own small board instead: same wires, bigger targets.</li>
-      <li>Repeat for keys <b>2, 3, 4, 7, *, #</b>. These seven keys are enough to work out every row and column.</li>
+      <li>On this phone the grey keypad ribbon is <b>soldered straight to the main board</b>, with no plug, and the board <b>prints the map</b> beside it: from top to bottom <b>C3, C2, C1, R4, R3, R2, R1</b> (3 columns, 4 rows, 7 wires).</li>
+      <li><b>Before cutting,</b> put a marker dot on the wire at the <b>R1</b> end. Once it's cut, the grey wires all look the same.</li>
+      <li>Cut the ribbon <b>close to the main board</b>, so its full length stays attached to the keypad.</li>
+      <li>Number the wires from the dot: 1 = R1, 2 = R2, 3 = R3, 4 = R4, 5 = C1, 6 = C2, 7 = C3. Peel them apart about 3 cm (1¼ in) and strip 3 mm (⅛ in) from each. Extend them in rainbow order: R1 red, R2 orange, R3 yellow, R4 green, C1 blue, C2 purple, C3 grey.</li>
     </ol>
-    <div class="tablewrap"><table>
-      <tr><th>Key held</th><th>Wires that beep</th><th>So it's…</th></tr>
-      <tr><td>1</td><td class="blank">__ and __</td><td>R1 + C1</td></tr>
-      <tr><td>2</td><td class="blank">__ and __</td><td>R1 + C2</td></tr>
-      <tr><td>3</td><td class="blank">__ and __</td><td>R1 + C3</td></tr>
-      <tr><td>4</td><td class="blank">__ and __</td><td>R2 + C1</td></tr>
-      <tr><td>7</td><td class="blank">__ and __</td><td>R3 + C1</td></tr>
-      <tr><td>*</td><td class="blank">__ and __</td><td>R4 + C1</td></tr>
-      <tr><td>#</td><td class="blank">__ and __</td><td>R4 + C3</td></tr>
-    </table></div>
-    <p><b>How to read it:</b> the wire that appears for 1, 2 and 3 is <b>R1</b>. The wire shared by 1, 4, 7 and * is <b>C1</b>. Keep going and every wire gets a name.</p>
-    <p><b>Tip for probing tiny plugs:</b> tape a sewing pin to each probe and touch the pin to the metal contact inside each slot.</p>
-    <div class="note warn"><b>No pair beeps? That's common, and you can skip this table.</b>
-      <p>Many phone keypads press a <b>carbon pad</b> onto the board instead of closing a metal switch. A pressed carbon key reads a few hundred to a few thousand ohms, which is too much for the meter's beeper, so nothing beeps even though the key works. Two things to try, five minutes each:</p>
-      <ul>
-        <li>Switch the meter from the beep to <b>Ω on the 20k range</b>. Hold the key down firmly and watch for the reading to drop from "1" (open) to any number. That pair is the answer.</li>
-        <li>Probe the solder pads where the ribbon joins the keypad's small board, not the tiny plug.</li>
-      </ul>
-      <p><b>Still nothing? Move on.</b> The map matters, because the booth must know which button is 2, 3 and 0. But the meter is only one way to find it. The Pico can find it by itself and is far more sensitive than the beeper: wire the ribbon in order in Part 10, then let the <b>key finder</b> (10c) type out the answer.</p>
-    </div>
+    <div class="note check"><b>No meter mapping needed on the MS-303</b><p>The board's labels already say which wire is which row and column. (On a phone without labels, wire the ribbon in order and let the Pico's key monitor work it out; see Part 10c.)</p></div>
     <div class="note why"><b>Why a grid</b><p>Twelve separate switches would need 13 wires. A grid needs 7. The Pico scans the grid many times a second ("is row 1 touching column 1? column 2?…") and works out which key is down.</p></div>
   </section>
 
   <!-- 9 -->
   <section class="part" id="light">
     <span class="partno">Part 9</span>
-    <h2>The red light (optional)</h2>
-    <p class="time">5 minutes to test.</p>
+    <h2>The front panel: volume, ringer, label window</h2>
+    <p class="time">About 30 minutes.</p>
+    <figure class="tall">
+      <img src="img/ms303-front.webp" alt="The MS-303 front shell: a label window under the keypad, and RINGER on/off and VOLUME sliders below it." loading="lazy">
+      <figcaption>The front shell. The VOLUME slider turns the earpiece down, the RINGER slider makes the booth ring while it's idle, and the label window becomes your instruction card.</figcaption>
+    </figure>
+    <p>Behind the sliders is a small green board with <b>4 wires</b> to a white plug. Each slider is a simple on/off switch across 2 of those wires. Wired to the Pico, <b>VOLUME</b> turns the earpiece (and the video's sound) down to a quieter level, live, during the call, and <b>RINGER</b> on makes the booth ring every couple of minutes while nobody's on the phone, to draw people over.</p>
+    <h3>9a · Wire it</h3>
     <ol class="steps">
-      <li>Meter on <b>diode</b> (▶|). On most meters this is the <b>same dial position as continuity</b>: turn to the spot with the ▶| and speaker symbols, then press <b>SELECT</b> (or <b>FUNC</b>) until the screen shows ▶| instead of the speaker. The difference: continuity just beeps, while diode mode shows a number. Touch the probes to the two contacts of the LIGHT cord's plug, then swap them.</li>
-      <li><b>It glows faintly, or reads about 1.6–2.0 V one way round:</b> it's an LED. Later the Pico can blink it while a video renders.</li>
-      <li><b>Nothing either way:</b> it's probably a neon bulb that needs high voltage. Skip it.</li>
+      <li>Leave the green board screwed to the front shell. Cut the white plug off its 4 wires (or push male jumper pins into the plug's slots instead).</li>
+      <li>Connect the VOLUME slider's 2 wires to <b>GP16 and GP17</b> (pins 21, 22) and the RINGER slider's 2 wires to <b>GP18 and GP19</b> (pins 24, 25). Within each pair, either way round works. On the Pico's underside they're at the bottom of the left edge (see the solder map in Part 10). Once the first booth checks out in 9b, wire every other booth the same way: the same plug position to the same pin.</li>
+      <li>Leave enough slack for the front shell to open flat without pulling on the wires.</li>
     </ol>
-    <div class="note why"><b>Why bother</b><p>A blinking red light is a strong "something is happening" signal for people walking past. It's a bonus, not a requirement; the booth works without it.</p></div>
+    <h3>9b · Check the sliders</h3>
+    <ol class="steps">
+      <li>Plug the Pico into the laptop. With Claude running on the Mac, say <b>"watch the Pico's switches"</b>. The Pico reports a line such as <code>volume: loud  ringer: off</code> at start-up and every time a slider moves.</li>
+      <li>Slide <b>VOLUME</b> back and forth: only the <code>volume:</code> word should change. Slide <b>RINGER</b>: only <code>ringer:</code> should change.</li>
+      <li>A slider changes the other word: swap the two pairs (GP16/GP17 with GP18/GP19). A slider changes nothing: its wires are split across the pairs; Claude can run a pin watcher that shows which two wires each slider joins.</li>
+    </ol>
+    <div class="note check"><b>Checkpoint · volume and ringer</b><p>During a test call, slide VOLUME to low: the hold music and the video's sound get quieter (<code>LOW_VOLUME</code> in the Pi's <code>native.conf</code>, 40% of loud by default). Hang up and slide RINGER on: a few seconds later the earpiece rings and the screen says "Incoming call", then again every <code>RING_EVERY</code> seconds (120 by default). Lifting the handset stops it.</p></div>
+    <div class="note why"><b>Why it's done this way</b><p>Each slider just joins its two wires or doesn't. The Pico holds one wire of each pair low and watches the other, the same trick as the hook switch. It sends both positions at start-up, on every move, on every lift and hang-up, and every 30 seconds, so a booth app that restarted is back in step within half a minute.</p></div>
+    <h3>9c · The label window</h3>
+    <p>The white strip under the keypad is where a phone's own number used to go. Print a card for it, for example <i>"Pick up · say what you want to see · 2 sound · 3 again · 0 receipt"</i>, or the Call-a-fal mark. It's exactly where people look while they dial.</p>
   </section>
 
   <!-- 10 -->
@@ -521,8 +511,8 @@
     <ol class="steps">
       <li>Hold the white <b>BOOTSEL</b> button on the Pico while plugging its USB cable into your laptop. A drive called <b>RPI-RP2</b> appears.</li>
       <li>From <b>circuitpython.org</b>, download the latest stable <b>.uf2</b> file for the board "Pico" by Raspberry Pi and drag it onto RPI-RP2. The drive restarts as <b>CIRCUITPY</b>.</li>
-      <li>From <b>circuitpython.org/libraries</b>, download the bundle that matches that version. Copy its <code>lib/adafruit_hid</code> folder into <code>CIRCUITPY/lib/</code>.</li>
-      <li>Copy <code>booth/pico/code.py</code> from the project (GitHub: lizzieoh/hello-world, branch <code>claude/landline-demo-booth-setup-05lxch</code>) onto CIRCUITPY.</li>
+      <li>Copy everything in the project's <code>booth/pico/</code> folder onto CIRCUITPY: <code>code.py</code>, <code>keymonitor.py</code>, <code>keyfinder.py</code> and the <code>lib</code> folder (it already holds the keyboard library). The project is on GitHub: lizzieoh/hello-world, branch <code>claude/landline-demo-booth-setup-05lxch</code>.</li>
+      <li>Using a <b>Pico W</b>? Download the "Pico W" file in step 2 instead. Everything else is the same.</li>
     </ol>
     <div class="note why"><b>Why CircuitPython</b><p>The program is a plain text file you can open and edit on the drive itself. Change a setting, save, and the Pico restarts with it. No special software to install.</p></div>
 
@@ -565,7 +555,7 @@
           <path class="wire keys" d="M178 214 H110"/><text x="20" y="218">Ribbon wire 6</text>
           <path class="wire keys" d="M178 262 H110"/><text x="20" y="266">Ribbon wire 7</text>
           <path class="wire" d="M178 478 H120 V500"/><path class="wire" d="M178 526 H120 V510"/>
-          <text x="20" y="500">Hook switch</text><text x="20" y="518" class="small">(the 2 pads you found)</text>
+          <text x="20" y="500">Hook switch</text><text x="20" y="518" class="small">(the 2 wires you found)</text>
         </g>
         <g font-size="13">
           <text x="420" y="74">Keypad: 7 wires</text>
@@ -578,110 +568,105 @@
       </svg>
     </div>
     <p>Hold the Pico with the <b>USB plug pointing up</b> and the components facing you. The pins are numbered from 1 at the top-left, down the left side to 20.</p>
+    <p><b>But wire it from the other side.</b> On a Pico with pins already fitted, the pins stick out on the underside (the side with the plastic strips), and the pin names are printed there. Turn it over, keep the USB at the top, and pins 1–20 run down the <b>right</b> edge:</p>
+    <figure>
+      <img src="img/pico-solder-map.png" alt="Solder map for a Pico W seen from its underside with the USB at the top: pins 1 to 20 down the right edge. Keypad R1 to GP0 pin 1, R2 to GP1 pin 2, R3 to GP2 pin 4, R4 to GP3 pin 5, C3 to GP4 pin 6, C2 to GP5 pin 7, C1 to GP6 pin 9; hook wires to GND pin 18 and GP15 pin 20." loading="lazy">
+      <figcaption>The MS-303 wiring, drawn the way up you'll actually solder it: underside up, USB at the top.</figcaption>
+    </figure>
+    <div class="note check"><b>Recommended for the prototype: plug-on jumpers</b><p>Cut female-to-female jumper wires in half, solder each phone wire to a cut jumper end with heat-shrink over the joint, and push the female ends onto the Pico's pins. If a key types the wrong digit you move a plug instead of desoldering, and the Pico swaps out in seconds. Once everything tests right, run a line of hot glue along each row of plugs so none can wiggle off. Soldering straight to the pins is the stronger option for the final builds.</p></div>
     <ol class="steps">
-      <li><b>Keypad:</b> the ribbon usually reaches the Pico by itself, since the Pico sits where the main board was. If it does, <b>solder each ribbon wire straight onto its Pico pin</b>: cut the white plug off, peel the wires apart about 3 cm (1¼ in), strip 3 mm (⅛ in) of each, tin it, wrap it once round the pin and solder (iron at about 350°C / 660°F, because the pins soak up heat). Only if a wire falls short, extend it with 26 AWG wire about 10–15 cm (4–6 in) long, with heat-shrink over the joint. Either way, connect them <b>in ribbon order</b>, starting from the red stripe: <b>wire 1 → GP0 (pin 1), 2 → GP1 (pin 2), 3 → GP2 (pin 4), 4 → GP3 (pin 5), 5 → GP4 (pin 6), 6 → GP5 (pin 7), 7 → GP6 (pin 9)</b>. If the ribbon has more wires, keep going: 8 → GP7 (pin 10), 9 → GP8 (pin 11), 10 → GP9 (pin 12). You don't need to know which wire is a row and which is a column. The key finder in 10c works that out.</li>
-      <li><b>Hook:</b> leave the hot glue on the tan board alone. It's there to protect those joints. Use the grey ribbon instead: it already carries the two pads' signals to the PX2 plug. Cut the ribbon about 2 cm (¾ in) before the PX2 plug, peel off the <b>first two wires on the same edge as the pads you measured</b>, and strip them. Check them with the meter: they should beep only when the plunger is <b>released</b>, exactly like the pads did. Solder (or extend) them to <b>GP15 (pin 20)</b> and <b>GND (pin 18)</b>. Either wire can go to either pin, and the other ribbon wires stay unused. (Or push male jumper pins into the PX2 plug's first two slots, like the keypad tip below.)</li>
-      <li>Use a different colour for each wire and write the colour list on tape inside the phone.</li>
+      <li><b>Keypad (MS-303):</b> solder each wire by its board label. The columns go in reverse on purpose, so the Pico's existing <code>code.py</code> works without changes:
+        <div class="tablewrap"><table>
+          <tr><th>Board label</th><td>R1</td><td>R2</td><td>R3</td><td>R4</td><td>C1</td><td>C2</td><td>C3</td></tr>
+          <tr><th>Pico</th><td>GP0 (pin 1)</td><td>GP1 (pin 2)</td><td>GP2 (pin 4)</td><td>GP3 (pin 5)</td><td><b>GP6 (pin 9)</b></td><td>GP5 (pin 7)</td><td><b>GP4 (pin 6)</b></td></tr>
+          <tr><th>Wire colour</th><td>red</td><td>orange</td><td>yellow</td><td>green</td><td>blue</td><td>purple</td><td>grey</td></tr>
+        </table></div> On a Pico without pins, push each wire through its hole from the top and solder underneath. On one with pins, wrap the wire once around the pin, down near the plastic, and solder at 350 °C (660 °F), because the pins soak up heat. If a wire falls short, extend it with 26 AWG wire about 10–15 cm (4–6 in) long, with heat-shrink over the joint.</li>
+      <li><b>Hook:</b> the two white hook wires (yellow heat-shrink at the Pico end) go to <b>GP15 (pin 20)</b> and <b>GND (pin 18)</b>. Either wire can go to either pin.</li>
+      <li><b>Colour code:</b> extend the keypad wires in rainbow order from R1: <b>red, orange, yellow, green</b> for R1–R4, then <b>blue, purple, grey</b> for C1–C3. Same colours in every phone, so any booth can be fixed without the manual.</li>
+      <li>After each joint, put the meter on beep and touch the two neighbouring pins: they must stay silent. A beep means solder is bridging them. Pins are only 2.54 mm (0.1 in) apart.</li>
+      <li>If you've cut pins short, use flush cutters and trim just above the joint, never flush with the board. Cover the pin with a finger as you cut; clipped pins fly.</li>
     </ol>
-    <div class="note check"><b>Faster: wiring with no soldering</b>
-      <ul>
-        <li><b>Plug jumpers straight into the keypad's own plug (try this first, 2 minutes).</b> Push the metal pin of a <i>male</i>-to-female jumper wire into one slot of the keypad ribbon's white plug. If it goes in snugly and stays put, do all of them: the male end goes in the plug, the female end on the Pico pin. That's the whole keypad wired in about 5 minutes, with no cutting or soldering. A dab of hot glue over the plug keeps the pins in for the show.</li>
-        <li><b>If the pins are loose:</b> use a <b>Pico screw-terminal breakout board</b> (search Amazon for "Raspberry Pi Pico screw terminal breakout"). The Pico plugs into it; you cut the ribbon's plug off, strip each wire about 5 mm (³⁄₁₆ in), push it into a terminal and tighten the screw. No soldering, and wires can be moved in seconds.</li>
-        <li><b>Hook switch:</b> the same two options work on its PX2 plug. Otherwise it's only 2 solder joints.</li>
-        <li><b>Assembly line for the 4 phones:</b> do the same step on all four before moving on. Use the same wire colours in the same order on every phone, and run the key finder (10c) on phone 1 only. If the other phones are the same model, its two lines work for all of them: copy the same code.py and just press every key to check.</li>
-      </ul>
-    </div>
-    <h3>10c · Let the Pico map the keypad (the key monitor)</h3>
+    <h3>10c · Only for a phone without printed labels: let the Pico map the keypad</h3>
+    <p>The MS-303 doesn't need this step. On a keypad without labels, wire the ribbon in order (wire 1 → GP0, 2 → GP1 …) and use the key monitor:</p>
     <ol class="steps">
       <li>Only the keypad needs to be wired for this; the hook switch can wait. Make sure <code>keymonitor.py</code> is on CIRCUITPY next to code.py.</li>
       <li>Open <code>code.py</code> on CIRCUITPY. Change <code>FIND_KEYS = False</code> to <code>FIND_KEYS = True</code> and save. The Pico restarts as a <b>key monitor</b>. It reports over USB every time two ribbon wires touch.</li>
       <li>With Claude running on the Mac (Part 10a's teleported session), say <b>"map the keypad"</b>. Claude reads the Pico's reports and asks you to press each key in turn. It then writes the right <code>ROW_PINS</code> and <code>COL_PINS</code> into code.py and sets <code>FIND_KEYS</code> back to <code>False</code>.</li>
     </ol>
-    <div class="note why"><b>Why this works when the meter didn't</b><p>The Pico tests every pair of wires itself, hundreds of times a second, and notices a connection even through a carbon pad's few thousand ohms. It reports any number of wires, up to 15, so it works for keypads that aren't a neat 7-wire grid.</p></div>
-    <div class="note check"><b>A different phone model (8 keypad wires, hook switch on the main board)</b>
-      <ul>
-        <li><b>8 or more keypad wires is normal.</b> The extra ones serve extra keys such as <b>F</b> (flash), <b>RD</b> (redial) or mute, usually as a fourth column. Wire all of them in ribbon order (8 wires → GP0–GP7, pins 1, 2, 4, 5, 6, 7, 9, 10) and run the key monitor. The booth uses only 0–9, * and #, so the extra keys are simply ignored.</li>
-        <li><b>Hook switch soldered onto the main board</b> (a blue block printed HOOK, S1): keep that board in the phone. On its underside, use the meter's beep to find two of the switch's pins that beep in one position only, and solder the GP15 and GND wires there. If no pair is clean, because the rest of the circuit is in the way, cut the two traces leading away from those pins with a hobby knife and test again.</li>
-        <li><b>Handset wired onto the board</b> (pads printed <b>M+ M− R+ R−</b>): M is the mic, R the receiver (earpiece). Cut the four handset wires off the pads. Then R+ → earpiece pigtail tip, R− → its sleeve, M+ → mic pigtail tip, M− → its sleeve.</li>
-      </ul>
-    </div>
-    <div class="note check"><b>Checkpoint · Pico</b><p>Plug the Pico into your laptop and open any text editor. Lift the handset: the Pico's small LED lights. Hang up: it goes out. With the handset lifted, press every key; each one types its own character. Keys are ignored while the phone is hung up, so if the hook isn't wired yet, join <b>pin 20 and pin 18</b> with a jumper wire: the Pico then thinks the handset is lifted (the hook itself types F8 and F9, which you won't see in a text editor). If the LED is lit with the handset <i>down</i>, open <code>code.py</code> and flip <code>OFF_HOOK_READS_HIGH</code> (it's set to <code>False</code> for this phone). If a digit comes out wrong, fix the <code>LAYOUT</code> list in <code>code.py</code> rather than re-soldering.</p></div>
-    <div class="note why"><b>Why the Pico types keys</b><p>Every computer understands a keyboard. The Pi doesn't need any driver or setup; the web page just listens for <kbd>F8</kbd>, <kbd>F9</kbd> and digits. If anything goes wrong you can test the whole booth with a normal keyboard.</p></div>
-    <div class="note whynot"><b>Why not wire the switches straight to the Pi's pins</b><p>It's possible, but then you need custom software on the Pi to read the pins and pass them to the browser, and the Pi's pins are easy to damage. The Pico costs a few dollars, plugs in by USB, and keeps the phone and the computer independent: you can swap either one in seconds.</p></div>
+    <div class="note why"><b>Why this works when the meter didn't</b><p>The Pico tests every pair of wires itself, hundreds of times a second, and notices a connection even through a carbon pad's few thousand ohms. It handles up to 15 wires, so extra keypad wires are no problem.</p></div>
+    <div class="note check"><b>Map it once for all four phones</b><p>Every booth uses the MS-303, so its keypad is wired the same way in every phone. Map phone 1, then copy that same <code>code.py</code> to the other three Picos and just press every key to check.</p></div>
+
+    <h3>10d · Close up the phone</h3>
+    <ol class="steps">
+      <li><b>Insulate the Pico:</b> slide it into a 7 cm (2¾ in) piece of 1" (25 mm) clear heat-shrink with the USB end open, and shrink it with the heat gun on low. The phone's back plate is metal, and a bare Pico touching it can short out.</li>
+      <li><b>Fix it in place:</b> stick a ¾" adhesive zip-tie mount on the plastic or on Kapton tape over the metal, and zip-tie the sleeved Pico to it. Add a screw through the mount where you can. Mount the audio adapter the same way. Wipe each spot with isopropyl alcohol first and press each mount for 30 seconds.</li>
+      <li><b>Strain relief:</b> zip-tie the wire bundles right next to the Pico, so a tug pulls on the ties and never on a solder joint.</li>
+      <li><b>Cables out:</b> point the Pico's USB port toward the back plate's old phone-line opening. Run both USB cables out through it and anchor them inside with a zip tie.</li>
+      <li>Remove the old main board and bag it. Close the phone.</li>
+    </ol>
+    <div class="note why"><b>Why the phone never needs opening again</b><p>New Pico settings go on over its USB cable: its drive appears on the Pi or a laptop like a USB stick. Once it's closed, it stays closed.</p></div>
+    <div class="note check"><b>Checkpoint · Pico</b><p>Plug the Pico into your laptop and open any text editor. Lift the handset: the Pico's small LED lights. Hang up: it goes out. With the handset lifted, press every key; each one types its own character. Keys are ignored while the phone is hung up, so if the hook isn't wired yet, join <b>pin 20 and pin 18</b> with a jumper wire: the Pico then thinks the handset is lifted (the hook itself types F8 and F9, which you won't see in a text editor). If the LED is lit with the handset <i>down</i>, open <code>code.py</code> and flip <code>OFF_HOOK_READS_HIGH</code> (see Part 7). If a digit comes out wrong, fix the <code>LAYOUT</code> list in <code>code.py</code> rather than re-soldering.</p></div>
+    <div class="note why"><b>Why the Pico types keys</b><p>Every computer understands a keyboard. The Pi doesn't need any driver or setup; the booth app just listens for <kbd>F8</kbd>, <kbd>F9</kbd> and digits. If anything goes wrong you can test the whole booth with a normal keyboard.</p></div>
+    <div class="note whynot"><b>Why not wire the switches straight to the Pi's pins</b><p>It's possible, but then the Pi's fragile pins sit at the end of wires that visitors tug on. The Pico costs a few dollars, plugs in by USB, and keeps the phone and the computer independent: you can swap either one in seconds.</p></div>
   </section>
 
   <!-- 11 -->
   <section class="part" id="pi">
     <span class="partno">Part 11</span>
     <h2>Set up the Raspberry Pi</h2>
-    <p class="time">About 45 minutes, mostly waiting.</p>
+    <p class="time">About 40 minutes, mostly waiting.</p>
     <figure>
-      <img src="img/pi.webp" alt="Illustration: a Raspberry Pi in a red and white case with power, micro-HDMI, Ethernet and USB cables plugged in." loading="lazy">
-      <figcaption>The Pi in its official case, with power, monitor, network and USB connected.</figcaption>
+      <img src="img/pi.webp" alt="Illustration: a Raspberry Pi in a case with power, micro-HDMI, Ethernet and USB cables plugged in." loading="lazy">
+      <figcaption>The Pi in its case, with power, screen, network and USB connected.</figcaption>
     </figure>
-    <h3>11a · Case first</h3>
+    <h3>11a · Assemble the CanaKit</h3>
     <ol class="steps">
-      <li>Push the case fan's small connector onto the 4-pin <b>FAN</b> header on the Pi (labelled on the board), seat the Pi in the case and snap the lid on.</li>
+      <li>Press the heatsink onto the Pi's main chip. Plug the fan's small connector into the socket labelled <b>FAN</b> on the Pi.</li>
+      <li>Seat the Pi in the case and close it.</li>
     </ol>
-    <div class="note why"><b>Why</b><p>The fan keeps the Pi from slowing down when it's playing video all day, and the case protects it from shorts against metal.</p></div>
+    <div class="note why"><b>Why cooling matters</b><p>Behind a screen in a warm booth, a Pi without a fan slows itself down to cool off. The booth software sets a stronger fan curve and writes the temperature to its log every minute, so heat problems show up before visitors notice.</p></div>
 
-    <h3>11b · Write the SD card (on your laptop)</h3>
+    <h3>11b · Write the memory card (on your laptop)</h3>
     <ol class="steps">
-      <li>Install <b>Raspberry Pi Imager</b> from raspberrypi.com/software and put a microSD card in the card reader.</li>
+      <li>Install <b>Raspberry Pi Imager</b> from raspberrypi.com/software and put the kit's memory card in its card reader.</li>
       <li>Choose <b>Device:</b> Raspberry Pi 5 · <b>OS:</b> Raspberry Pi OS (64-bit), the one <i>with desktop</i> · <b>Storage:</b> your card.</li>
       <li>Click <b>Edit settings</b>: hostname <code>fal-booth-1</code>, username <code>booth</code> with a password you'll remember, your Wi-Fi for now, and on the Services tab <b>enable SSH</b>.</li>
       <li>Click <b>Write</b> and wait about 10 minutes.</li>
     </ol>
-    <div class="note whynot"><b>Why not "Lite" (no desktop)</b><p>The booth needs a screen with a browser. The desktop version includes everything for that; Lite would mean installing it all by hand.</p></div>
+    <div class="note why"><b>Why rewrite a card that came pre-loaded</b><p>Imager adds the booth's name, the login and remote access in one go, so you can manage the Pi from a laptop at the venue without plugging in a keyboard.</p></div>
 
     <h3>11c · First boot and booth setup</h3>
     <ol class="steps">
-      <li>Put the card in the Pi. Connect the monitor to <b>HDMI 0</b>, the micro-HDMI port right next to the USB-C power port. Connect a keyboard, Ethernet, the USB audio adapter and the Pico. Plug in power last.</li>
-      <li>When the desktop appears, open <b>Terminal</b> (the black icon at the top) and type these lines one at a time, pressing Enter after each:</li>
+      <li>Put the card in the Pi. Connect the screen to the micro-HDMI port right next to the USB-C power port, using the micro-HDMI to mini-HDMI cable. Connect a keyboard, Ethernet, the USB audio adapter and the Pico. Plug the screen into its own charger. Plug in the Pi's power last.</li>
+      <li>When the desktop appears, open <b>Terminal</b> and type these lines one at a time, pressing Enter after each:</li>
     </ol>
 <pre><code>git clone -b claude/landline-demo-booth-setup-05lxch https://github.com/lizzieoh/hello-world.git
-cd hello-world/booth/pi
-chmod +x setup.sh
-./setup.sh 1
-sudo reboot</code></pre>
-    <p>The <code>1</code> is the booth number. Use 2, 3 or 4 on the other Pis.</p>
-    <div class="note why"><b>What setup.sh does, and why</b>
-      <ul>
-        <li><b>Starts the booth page full-screen at power-on</b>, so nobody has to touch a mouse at the venue.</li>
-        <li><b>Allows the microphone without asking</b> and lets sound play without a click. A permission pop-up would block the whole booth.</li>
-        <li><b>Prints silently</b> to the receipt printer, with no print dialog.</li>
-        <li><b>Turns off screen blanking</b> so the monitor never goes to sleep.</li>
-        <li><b>Sends all sound to the handset</b> every time it starts, so a replugged adapter still works.</li>
-        <li><b>Restarts the browser if it ever closes</b>, and shows a quiet "connecting…" screen until the internet is up.</li>
-      </ul>
-    </div>
-    <div class="note check"><b>Checkpoint · Pi</b><p>After the reboot, the Pi goes straight to a black "connecting…" screen, then the booth page: "Pick up the phone." Lift the handset: you hear "Please leave your prompt after the beep." Speak, wait, and the video appears.</p></div>
-    <h3>11d · If something's off</h3>
-    <div class="tablewrap"><table>
-      <tr><th>Symptom</th><th>Fix</th></tr>
-      <tr><td>Earpiece too quiet</td><td>Edit <code>~/booth/booth.conf</code>, raise <code>SPEAKER_VOLUME</code>, reboot.</td></tr>
-      <tr><td>Agent hears an echo or the mic is too loud</td><td>Lower <code>MIC_VOLUME</code> in the same file.</td></tr>
-      <tr><td>No sound at all</td><td>Run <code>cat ~/booth/audio.log</code>. It should name a USB device. If not, reseat the adapter.</td></tr>
-      <tr><td>Portrait monitor</td><td>Set <code>ROTATE="left"</code> or <code>"right"</code> in booth.conf.</td></tr>
-      <tr><td>Need the desktop for maintenance</td><td>From a laptop: <code>ssh booth@fal-booth-1.local</code>, then <code>pkill -f kiosk.sh; pkill chromium</code>.</td></tr>
-    </table></div>
-    <h3>11e · Recommended: the native app (no browser)</h3>
-    <p>Instead of the booth web page, the Pi can run the call as its own program. The call is the same: greeting, hold music, muted video, 2 · 3 · 0. Only what runs it changes. To switch, run this in Terminal instead of <code>setup.sh</code> (or after it; the last one you run wins):</p>
-<pre><code>cd ~/hello-world/booth/native
+cd hello-world/booth/native
 ./setup-native.sh 1
 sudo reboot</code></pre>
-    <p>It asks for the <b>fal API key</b> once (the letters don't show while you paste; that's normal), then runs a one-minute self-test. It should end with <b>13/13 passed</b>.</p>
-    <div class="note why"><b>Why native is more robust</b>
+    <p>The <code>1</code> is the booth number: use 2, 3 or 4 on the other Pis. It asks for the <b>fal API key</b> once (the letters don't show while you paste; that's normal), then runs a self-test that should end with every test passed.</p>
+    <div class="note why"><b>What setup-native.sh does, and why</b>
       <ul>
-        <li><b>The phone can't lose focus.</b> The app reads the Pico directly. In a browser, keys only arrive while its window is in front, and one stray pop-up stops the booth.</li>
-        <li><b>The printer needs no driver.</b> It sends the receipt straight to the printer, so Part 12's driver install isn't needed.</li>
-        <li><b>The screen between calls works with no Wi-Fi.</b> The last 12 videos are saved on the Pi and keep looping even if the network drops.</li>
-        <li><b>It heals itself.</b> If the app ever stops, it's back in 2 seconds. If the video player crashes mid-call, the app reopens it and puts the video back.</li>
-        <li><b>A staff light.</b> A small dot at the top left is green when fal is reachable and red when the network is down, so you know whether to check the router.</li>
+        <li><b>Starts the booth at power-on</b>, full-screen, so nobody touches a mouse at the venue.</li>
+        <li><b>Reads the phone directly.</b> No window can steal the keypad's focus.</li>
+        <li><b>Prints without a driver.</b> The receipt goes straight to the printer.</li>
+        <li><b>Keeps the last 12 videos on the Pi,</b> so the screen between calls works even with no Wi-Fi.</li>
+        <li><b>Heals itself.</b> If the app ever stops, it's back in 2 seconds; if the video player crashes mid-call, the app reopens it and puts the video back.</li>
+        <li><b>Sends all sound to the handset</b> every time it starts, so a replugged adapter still works.</li>
       </ul>
     </div>
-    <div class="note whynot"><b>Why keep the browser version</b><p>It's the same call, already tested, and anyone with the link can open it on a laptop. If the native app ever misbehaves at the show, <code>cd ~/hello-world/booth/pi &amp;&amp; ./setup.sh 1 &amp;&amp; sudo reboot</code> switches back in two minutes.</p></div>
-    <div class="note check"><b>Checkpoint · native</b><p>After the reboot: a dark screen that says "Pick up the phone." with a green dot at the top left. Lift the handset and you hear a ring, a click, then "Please leave your prompt after the beep." Settings live in <code>~/hello-world/booth/native/native.conf</code> (clip length, H3 Max or FLUX first, line number). After a change, hold <kbd>*</kbd> for 3 seconds to restart the app.</p></div>
+    <div class="note check"><b>Checkpoint · Pi</b><p>After the reboot: a dark screen that says "Pick up the phone." with a green dot at the top left. Lift the handset and you hear a ring, a click, then "Please leave your prompt after the beep." Speak, wait on hold, and the video appears, muted.</p></div>
+    <h3>11d · Settings and fixes</h3>
+    <p>Settings live in <code>~/hello-world/booth/native/native.conf</code>. After a change, hold <kbd>*</kbd> on the phone for 3 seconds to restart the app.</p>
+    <div class="tablewrap"><table>
+      <tr><th>Symptom</th><th>Fix</th></tr>
+      <tr><td>Earpiece too quiet</td><td>Raise <code>SPEAKER_VOLUME</code> in native.conf.</td></tr>
+      <tr><td>The agent mishears, or there's an echo</td><td>Lower <code>MIC_VOLUME</code>.</td></tr>
+      <tr><td>No sound at all</td><td>Run <code>grep sink= ~/hello-world/booth/native/booth.log</code>. It should name a USB device. If not, reseat the adapter.</td></tr>
+      <tr><td>Lifting the handset does nothing</td><td><code>grep "phone keys" booth.log</code> should name the Pico. If not, replug it.</td></tr>
+      <tr><td>Need to see what happened</td><td><code>tail -50 ~/hello-world/booth/native/booth.log</code></td></tr>
+    </table></div>
+    <div class="note whynot"><b>Why not the browser version</b><p>The booth also exists as a web page (<code>booth/pi/setup.sh</code>), and it's kept as a fallback. In a browser, the keypad only works while its window is in front, the printer needs a driver, and the screen between calls needs Wi-Fi. The native app has none of those weak spots.</p></div>
     <div class="note whynot"><b>Why not a Mac mini</b><p>A Mac mini would also work, but costs about ten times as much per booth, is harder to lock into a single full-screen app, and loses its settings when updates run. The Pi does this one job reliably.</p></div>
   </section>
 
@@ -689,46 +674,22 @@ sudo reboot</code></pre>
   <section class="part" id="printer">
     <span class="partno">Part 12</span>
     <h2>Connect the receipt printer</h2>
-    <p class="time">About 30 minutes. Test this early: it's the step most likely to need help.</p>
-    <p>Pressing <kbd>0</kbd> prints a receipt: the prompt, three black-and-white stills from the video and the time. The receipt is laid out for <b>80 mm</b> paper.</p>
-    <div class="note check"><b>Using the native app (Part 11e)? Skip the driver.</b><p>Load the paper, plug the printer into the Pi, make a call and press <kbd>0</kbd>. The receipt prints straight away. If the screen says "Printer offline", replug the printer's USB cable and press <kbd>0</kbd> again. Steps 2 to 4 below are only for the browser version.</p></div>
-    <h3>12a · Rongta 80 mm (the one we bought): test it on its own</h3>
+    <p class="time">About 15 minutes.</p>
+    <p>Pressing <kbd>0</kbd> prints a receipt: the prompt, black-and-white stills from the video, the time and a QR code to the video. It's laid out for <b>80 mm</b> paper, and the booth sends it to the printer directly, with no driver to install.</p>
     <ol class="steps">
       <li><b>Paper:</b> open the lid and drop the roll in so the paper comes off the <b>bottom</b> of the roll toward you. Pull out about 5 cm (2 in) and close the lid firmly until it clicks. The auto-cutter trims the end.</li>
       <li><b>The printer's own self-test:</b> with the printer off, hold the <b>FEED</b> button, switch it on, and let go once it starts printing. It prints its settings page. That proves the printer, paper and cutter work before the Pi is involved.</li>
       <li><b>Plug it into the Pi by USB</b> (the square USB-B port on the back). <b>Don't use the port that looks like a phone jack:</b> that's for a cash drawer. With phone cords all over the bench, it's an easy mix-up.</li>
       <li><b>Test print from the Pi.</b> In Terminal:</li>
     </ol>
-<pre><code>cd ~/hello-world &amp;&amp; git pull
-ls /dev/usb/
-cd booth/native
-sudo apt install -y python3-numpy python3-pil ffmpeg
-sudo python3 booth.py --test-print</code></pre>
-    <p><code>ls /dev/usb/</code> should show <b>lp0</b>, which is the printer. The last line prints a receipt with a striped test pattern and cuts it. <code>sudo</code> is only for this test: the native app's setup gives the booth permission to print without it.</p>
-    <div class="note check"><b>No Pi yet? Test it from the Mac</b><p>Plug the printer into the Mac. In Terminal, <code>lpinfo -v | grep usb</code> lists it as a line starting <code>usb://</code>. Copy that address, then run <code>sudo lpadmin -p rongta -E -v 'usb://…paste…' -m raw</code>. Then, from <code>hello-world/booth/native</code>: <code>BOOTH_PRINTER=rongta python3 booth.py --test-print</code>. The same <code>BOOTH_PRINTER=rongta</code> in front of the laptop test (<code>laptop.py</code>) makes <kbd>0</kbd> print for real.</p></div>
-    <div class="note warn"><b>If <code>ls /dev/usb/</code> shows nothing</b><p>Check the printer is switched on, then replug its USB cable and run it again. If it's still empty, run <code>lsusb</code> and send Claude what it lists. Some Rongta units show up as a different kind of USB device, and that's a one-line setting change.</p></div>
-    <ol class="steps">
-      <li>Load an 80 mm paper roll (thermal side facing out, the side that scratches dark with a fingernail) and connect the printer to the Pi by USB.</li>
-      <li>On the Pi, open Terminal and install the print system and a free driver for 80 mm receipt printers:</li>
-    </ol>
-<pre><code>sudo apt install -y cups libcups2-dev libcupsimage2-dev cmake git
-sudo usermod -aG lpadmin booth
-git clone https://github.com/klirichek/zj-58.git
-cd zj-58 &amp;&amp; mkdir build &amp;&amp; cd build &amp;&amp; cmake .. &amp;&amp; make &amp;&amp; sudo make install</code></pre>
-    <ol class="steps" start="3">
-      <li>Open the browser at <code>http://localhost:631</code>, go to <b>Administration → Add Printer</b>, pick your USB printer, and for the model choose the <b>80 mm</b> option the driver offers.</li>
-      <li>On the printer's page, choose <b>Set As Server Default</b>.</li>
-      <li>Make a call, press <kbd>0</kbd>. A receipt should print without any dialog.</li>
-    </ol>
-    <div class="note warn"><b>If this doesn't work</b><p>Switch the Pi to the native app (Part 11e). It prints straight to the printer without any driver. Nothing else in the booth changes.</p></div>
-    <div class="note why"><b>Why an 80 mm receipt printer</b><p>The receipt design is exactly 576 dots wide, the printing width of standard 80 mm receipt paper. Receipt printers are built to run all day in shops, cut automatically, and the paper is sold everywhere.</p></div>
-    <div class="note whynot"><b>Why not</b>
-      <ul>
-        <li><b>Epson's official driver:</b> it only exists for regular PCs, not the Pi's ARM processor.</li>
-        <li><b>A Star TSP143:</b> it speaks Star's own language, which the free driver and the fallback can't use.</li>
-        <li><b>A 4×6 label printer or a colour photo printer:</b> a different paper size from the receipt design. A colour printer like the Canon Selphy also takes about 41 seconds per print.</li>
-      </ul>
-    </div>
+<pre><code>ls /dev/usb/
+cd ~/hello-world/booth/native
+venv/bin/python booth.py --test-print</code></pre>
+    <p><code>ls /dev/usb/</code> should show <b>lp0</b>, which is the printer. The last line prints a receipt with a striped test pattern and cuts it. Then make a real call and press <kbd>0</kbd>.</p>
+    <div class="note warn"><b>If <code>ls /dev/usb/</code> shows nothing</b><p>Check the printer is switched on, then replug its USB cable and run it again. If it's still empty, run <code>lsusb</code> and send Claude what it lists.</p></div>
+    <div class="note check"><b>No Pi yet? Test it from the Mac</b><p>Plug the printer into the Mac. In Terminal, <code>lpinfo -v | grep usb</code> lists it as a line starting <code>usb://</code>. Copy that address, then run <code>sudo lpadmin -p rongta -E -v 'usb://…paste…' -m raw</code>. Then, from <code>hello-world/booth/native</code>: <code>BOOTH_PRINTER=rongta python3 booth.py --test-print</code>.</p></div>
+    <div class="note why"><b>Why an 80 mm receipt printer</b><p>The receipt is exactly 576 dots wide, the printing width of standard 80 mm paper. Receipt printers are built to run all day in shops, cut automatically, and the paper is sold everywhere.</p></div>
+    <div class="note whynot"><b>Why not a photo printer</b><p>A different paper size from the receipt design, and slow: a colour printer like the Canon Selphy takes about 41 seconds per print.</p></div>
   </section>
 
   <!-- 13 -->
@@ -769,19 +730,20 @@ cd zj-58 &amp;&amp; mkdir build &amp;&amp; cd build &amp;&amp; cmake .. &amp;&am
   <!-- 14 -->
   <section class="part" id="mount">
     <span class="partno">Part 14</span>
-    <h2>Mount it in the booth wall</h2>
-    <p class="time">About an hour per booth, once the wall is built.</p>
+    <h2>Mount it in the booth</h2>
+    <p class="time">About an hour per booth, once the booth shell is built.</p>
     <figure>
-      <img src="img/cutaway.webp" alt="Cutaway illustration of a plywood booth wall: phone and monitor on the front, the computer on the back of the monitor, cables through a hole in the wall, a cable tray and power strip behind." loading="lazy">
-      <figcaption>Visitors see only the phone, the screen and the receipt slot. The Pi, Pico, cables and power live behind the wall.</figcaption>
+      <img src="img/cutaway.webp" alt="Cutaway illustration of a booth wall: phone and screen on the front, the computer behind, cables through a hole in the wall, a cable tray and power strip behind." loading="lazy">
+      <figcaption>Visitors see only the phone, the screen and the receipt slot. The Pi, cables and power live behind the panel.</figcaption>
     </figure>
     <ol class="steps">
-      <li><b>Wall:</b> use plywood or MDF at least 12 mm (½") thick. Mark the phone at chest height (about 120 cm / 47" to the top of the phone) and the monitor's bottom edge about 15 cm above it.</li>
-      <li><b>Cable hole:</b> drill a 25 mm (1") hole behind where the phone's LINE jack opening will sit. Both USB cables pass through it.</li>
-      <li><b>Phone:</b> screw the phone's metal back plate to the wall through its keyhole slots with wood screws. Tuck the Pico and audio adapter inside the phone body, held with hot glue, and zip-tie the cables inside so a pull on the outside doesn't reach the solder joints.</li>
-      <li><b>Monitor:</b> hang it on the VESA wall mount. Screw the Pi's VESA plate to the back of the monitor.</li>
-      <li><b>Printer:</b> mount it behind the wall with only its paper slot showing through a cut-out below the phone.</li>
-      <li><b>Power:</b> monitors and printers to the power strip; the Pis and the network gear to the battery backups. Plug the battery backups straight into the wall.</li>
+      <li><b>Panel:</b> plywood or MDF at least 12 mm (½ in) thick, or the back wall of a payphone-style booth.</li>
+      <li><b>Phone:</b> keep the handset and keypad <b>no higher than 122 cm (48 in)</b> from the floor, the US accessibility (ADA) limit for public phones. Screw the phone's metal back plate to the panel through its keyhole slots with wood screws.</li>
+      <li><b>Cable hole:</b> drill a 25 mm (1 in) hole behind the phone's old phone-line opening. Both USB cables pass through it.</li>
+      <li><b>Screen:</b> mount the 16" screen directly above the phone, at eye level, tilted slightly down so booth lights don't reflect in it. It has no wall-mount holes, so hold it with a clamp bracket or set it into a cut-out in the panel. Zip-tie its cable at both ends.</li>
+      <li><b>Pi:</b> screw its case behind the panel, near the screen. Leave the fan room to breathe.</li>
+      <li><b>Printer:</b> behind the panel, with only its paper slot showing through a cut-out below the phone, like a payphone's coin return.</li>
+      <li><b>Power:</b> the Pi, screen and printer chargers to a power strip; the Pis and the network gear on the battery backups. Plug the battery backups straight into the wall.</li>
     </ol>
     <div class="note why"><b>Why hide everything</b><p>Anything a visitor can reach, a visitor will touch, unplug or lean on. Hidden cables can't be tripped over, and a wall-mounted phone can't be knocked off a table or walked away with.</p></div>
     <div class="note whynot"><b>Why not adhesive strips or a fabric wall</b><p>A handset gets lifted and slammed thousands of times a day. Adhesive creeps and fabric walls flex. Screws into wood hold.</p></div>
@@ -793,10 +755,10 @@ cd zj-58 &amp;&amp; mkdir build &amp;&amp; cd build &amp;&amp; cmake .. &amp;&am
     <h2>Make units 2, 3 and the spare</h2>
     <p class="time">Phones: about an hour each. Pis: 20 minutes each.</p>
     <ol class="steps">
-      <li><b>Phones:</b> repeat Parts 5–10 for each phone. Because they're the same model, the wire colours and pins should match. Still run every checkpoint.</li>
-      <li><b>Pis:</b> shut down Pi #1, then copy its SD card onto three more cards (Raspberry Pi Imager, or "SD Card Copier" on another Pi). On each copy, change the name and line number: run <code>sudo raspi-config nonint do_hostname fal-booth-2</code>, edit <code>~/booth/booth.conf</code> so the address ends in <code>line=2</code>, and reboot.</li>
+      <li><b>Phones:</b> repeat Parts 5–10 for each phone. They're all the MS-303, so the wire colours, hook wires and keypad map match phone 1: copy phone 1's <code>code.py</code> to each Pico. Still run every checkpoint.</li>
+      <li><b>Pis:</b> shut down Pi #1, then copy its SD card onto three more cards (Raspberry Pi Imager, or "SD Card Copier" on another Pi). On each copy, change the name and line number: run <code>sudo raspi-config nonint do_hostname fal-booth-2</code>, set <code>LINE=2</code> in <code>~/hello-world/booth/native/native.conf</code>, and reboot. (Or run Part 11's setup on each Pi with its own number; it takes about 10 minutes.)</li>
       <li><b>Spare cards:</b> make a second copy for each Pi and tape it inside that Pi's case.</li>
-      <li><b>Label everything</b> 1, 2, 3 or S: phone, Pi, SD cards, power supplies and both ends of every cable.</li>
+      <li><b>Label everything</b> 1, 2, 3 or S: phone, Pico, Pi, memory cards, chargers and both ends of every cable.</li>
     </ol>
     <div class="note why"><b>Why copy instead of setting up each Pi</b><p>Copies are identical, so if Line 1 works, Lines 2 and 3 work the same way. It's also how you recover on show day: swap in the spare card and you're back in two minutes.</p></div>
   </section>
@@ -817,10 +779,11 @@ sudo reboot</code></pre>
       <li>Slam the handset down. Leave it off the hook for 10 minutes (you should hear the busy signal).</li>
       <li>Mash the keypad while the phone is hung up: nothing should happen.</li>
       <li>Press 2 or 3 while a video is still rendering: nothing should break.</li>
-      <li>Pull a Pi's power mid-call: it comes back to the booth page by itself within a minute.</li>
-      <li>Unplug the router's internet: the screen shows "connecting…" and recovers by itself.</li>
+      <li>Pull a Pi's power mid-call: it comes back to the booth by itself within a minute.</li>
+      <li>Unplug the router's internet: the dot at the top left turns red, calls get a busy signal, and everything recovers by itself when it's back.</li>
       <li>Turn off the home Wi-Fi: calls keep working over the hotspot.</li>
       <li>Play loud crowd noise nearby: the system still understands you.</li>
+      <li>Unplug a screen's power and plug it back in: it switches itself back on.</li>
       <li>Wipe the handsets with alcohol wipes: nothing breaks.</li>
     </ul>
     <div class="note why"><b>Why 24 hours</b><p>Most failures (a loose joint, a memory leak, an overheating board) only show up after hours of use. You want to find them at home, not in front of visitors.</p></div>
@@ -832,27 +795,28 @@ sudo reboot</code></pre>
     <h2>Show day</h2>
     <h3>Setup (30 minutes)</h3>
     <ol class="steps">
-      <li>Power order: battery backups → router → switch → monitors and printers → Pis.</li>
+      <li>Power order: battery backups → router → switch → screens and printers → Pis.</li>
       <li>On the router, switch Repeater to the show's Wi-Fi and accept any sign-in page.</li>
       <li>Make a test call on every line, including printing a receipt.</li>
     </ol>
     <h3>When something goes wrong</h3>
     <div class="tablewrap"><table>
       <tr><th>What you see</th><th>Do this</th></tr>
-      <tr><td>Screen stuck or strange</td><td>Lift the handset and hold <kbd>*</kbd> for 3 seconds (reloads the page). Still stuck: unplug the Pi for 5 seconds.</td></tr>
-      <tr><td>"Our lines are busy" on every call</td><td>The internet or fal is down. Check the router from your phone; force it onto the hotspot.</td></tr>
-      <tr><td>"connecting…" forever</td><td>The router has no internet. Same as above.</td></tr>
-      <tr><td>Earpiece silent</td><td>Reseat the audio adapter's USB, then restart the Pi.</td></tr>
+      <tr><td>Screen stuck or strange</td><td>Lift the handset and hold <kbd>*</kbd> for 3 seconds: the app restarts in a few seconds. Still stuck: hold <kbd>#</kbd> for 5 seconds to shut down, wait for the Pi's green light to stop blinking, unplug it for 5 seconds, plug it back in.</td></tr>
+      <tr><td>Red dot at the top left, or "lines are busy" on every call</td><td>The internet or fal is down. Check the router from your phone; force it onto the hotspot.</td></tr>
+      <tr><td>Earpiece silent</td><td>Reseat the audio adapter's USB, then restart the app (hold <kbd>*</kbd>).</td></tr>
       <tr><td>Lifting the handset does nothing</td><td>Reseat the Pico's USB. Its LED should follow the hook.</td></tr>
-      <tr><td>Receipt doesn't print</td><td>Check the paper (thermal side out) and the printer's USB.</td></tr>
+      <tr><td>"Printer offline"</td><td>Check the paper and replug the printer's USB, then press <kbd>0</kbd> again.</td></tr>
+      <tr><td>Screen black after a power blip</td><td>Press the screen's power button.</td></tr>
+      <tr><td>The feed of earlier videos needs clearing</td><td>Dial <kbd>*</kbd><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>#</kbd>. They're archived, not deleted.</td></tr>
       <tr><td>Anything else</td><td>Swap in the spare unit. Debug after the show.</td></tr>
     </table></div>
     <div class="note why"><b>Why "swap first, debug later"</b><p>A visitor-facing booth has to be back up in minutes. Every spare part is identical, so swapping always works; debugging on the floor rarely does.</p></div>
     <h3>Go-bag</h3>
     <ul class="checklist">
       <li>Spare complete unit and spare router</li>
-      <li>Spare SD cards (labelled), power supplies and handset cords</li>
-      <li>Extra Ethernet, HDMI and USB cables</li>
+      <li>Spare memory cards (labelled), chargers and handset cords</li>
+      <li>Extra Ethernet, micro-to-mini HDMI and USB cables</li>
       <li>USB keyboard, multimeter, small screwdrivers, gaffer tape, zip ties</li>
       <li>Receipt paper, alcohol wipes, foam mic covers</li>
       <li>This manual, printed</li>
@@ -863,24 +827,31 @@ sudo reboot</code></pre>
   <section class="part" id="reference">
     <span class="partno">Part 18</span>
     <h2>Reference</h2>
-    <h3>The booth page address</h3>
-    <p><code>https://fal-call-center.vercel.app/booth?line=1</code>. The project's <code>booth</code> branch has to be merged before this address is live; until then, use the Vercel preview link for that branch. Options you can add to the end of the address:</p>
+    <h3>Booth settings (native.conf)</h3>
     <div class="tablewrap"><table>
-      <tr><th>Add</th><th>Effect</th></tr>
-      <tr><td><code>&amp;model=flux</code></td><td>FLUX 3 Max makes the videos; H3 Max becomes the backup.</td></tr>
-      <tr><td><code>&amp;secs=8</code></td><td>8-second clips: about 3 seconds faster than the default 10.</td></tr>
-      <tr><td><code>&amp;lang=auto</code></td><td>Detects the visitor's language (a little slower than English-only).</td></tr>
+      <tr><th>Setting</th><th>Default</th><th>Effect</th></tr>
+      <tr><td><code>LINE</code></td><td>1</td><td>The line number on the screen and the receipt</td></tr>
+      <tr><td><code>SECS</code></td><td>10</td><td>Clip length, 5 to 15 seconds. 8 is about 3 seconds faster.</td></tr>
+      <tr><td><code>MODEL</code></td><td>h3</td><td><code>h3</code>: H3 Max first, FLUX 3 Max as backup. <code>flux</code>: the other way round.</td></tr>
+      <tr><td><code>LANGUAGE</code></td><td>en</td><td><code>auto</code> detects the visitor's language (a little slower).</td></tr>
+      <tr><td><code>SPEAKER_VOLUME</code>, <code>MIC_VOLUME</code></td><td>85, 90</td><td>Handset levels in percent at start-up</td></tr>
+      <tr><td><code>LOW_VOLUME</code></td><td>40</td><td>VOLUME slider on low: the earpiece and the video's sound at this percent of loud</td></tr>
+      <tr><td><code>RING_EVERY</code></td><td>120</td><td>RINGER slider on: while nobody's on the phone, it rings this often (seconds)</td></tr>
     </table></div>
     <h3>What the phone types</h3>
     <div class="tablewrap"><table>
       <tr><th>Phone action</th><th>Key</th><th>What the booth does</th></tr>
-      <tr><td>Lift handset</td><td><kbd>F8</kbd></td><td>Greeting, beep, listens</td></tr>
+      <tr><td>Lift handset</td><td><kbd>F8</kbd></td><td>Ring, greeting, beep, listens</td></tr>
       <tr><td>Press # while speaking</td><td><kbd>#</kbd></td><td>Stops listening early</td></tr>
-      <tr><td>Press 2</td><td><kbd>2</kbd></td><td>Turns the video's sound on</td></tr>
-      <tr><td>Press 3</td><td><kbd>3</kbd></td><td>Makes a new video from the same prompt</td></tr>
+      <tr><td>Press 2</td><td><kbd>2</kbd></td><td>Sound on or off; turning it on restarts the clip</td></tr>
+      <tr><td>Press 3</td><td><kbd>3</kbd></td><td>A new take of the same prompt</td></tr>
       <tr><td>Press 0</td><td><kbd>0</kbd></td><td>Prints the receipt (once per video)</td></tr>
-      <tr><td>Hang up</td><td><kbd>F9</kbd></td><td>Goes quiet; screen returns to recent videos</td></tr>
-      <tr><td>Hold * for 3 s</td><td><kbd>Ctrl</kbd>+<kbd>R</kbd></td><td>Reloads the page (staff reset)</td></tr>
+      <tr><td>Hang up</td><td><kbd>F9</kbd></td><td>Goes quiet; the screen returns to recent videos</td></tr>
+      <tr><td>Hold * for 3 s</td><td><kbd>Ctrl</kbd>+<kbd>R</kbd></td><td>Restarts the app (staff)</td></tr>
+      <tr><td>Hold # for 5 s</td><td><kbd>F10</kbd></td><td>Shuts the Pi down safely (staff)</td></tr>
+      <tr><td>VOLUME slider (sent on every move, lift, hang-up and every 30 s)</td><td><kbd>F17</kbd> / <kbd>F18</kbd></td><td>Earpiece loud / low</td></tr>
+      <tr><td>RINGER slider (sent the same way)</td><td><kbd>F19</kbd> / <kbd>F20</kbd></td><td>On: rings while idle. Off: quiet.</td></tr>
+      <tr><td>Dial *123#</td><td>digits</td><td>Clears the feed of earlier videos (staff)</td></tr>
     </table></div>
     <h3>Glossary</h3>
     <ul>
@@ -889,6 +860,7 @@ sudo reboot</code></pre>
       <li><b>GND (ground):</b> the shared "zero" wire every circuit returns to.</li>
       <li><b>Heat-shrink:</b> plastic tube that shrinks with heat to insulate a joint.</li>
       <li><b>Matrix (keypad):</b> a grid of row and column wires; each key connects one row to one column.</li>
+      <li><b>MS-303:</b> the wall phone model used in every booth; its boards are printed MS-303 MB (main) and MS-303 HK (hook switch).</li>
       <li><b>Pico:</b> a small programmable board that acts as a USB keyboard in this build.</li>
       <li><b>Short (short circuit):</b> two things touching that shouldn't; the cause of most dead boards.</li>
       <li><b>Tip / ring / sleeve:</b> the three metal contacts of a headphone plug.</li>

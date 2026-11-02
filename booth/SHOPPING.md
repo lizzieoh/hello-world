@@ -2,24 +2,47 @@
 
 Quantities cover 4 complete units. Check that each listing is the exact model before buying, since Amazon has many look-alikes.
 
-## Per unit (×4)
+## Order now (decided Oct 30)
 
-| Item | Pick | Qty | Why |
+4 complete units = 3 booths + 1 spare. "Have" counts what's already in hand.
+
+| Item | Pick | Need | Have | **Order** | Why |
+|---|---|---|---|---|---|
+| Pi kit | **CanaKit Raspberry Pi 5 Starter Kit PRO, Turbine Black, 128GB, 4GB RAM** (Amazon, $209.99) | 4 | 1 (the 8GB PRO) | **3** | Pi 5 + 45W power supply + case with fan + heatsink + 128GB card + card reader + 2 micro-HDMI cables. All four units match the one you already have, so the spare is a true drop-in. 4GB is plenty for the booth; the 8GB becomes the studio Pi for heavier pieces later. |
+| Screen | **ARZOPA Z1FC 16.1" 1080p IPS** (Amazon, $109.99; size 16.1", style Z1FC/144Hz) | 4 | 0 | **4** | Best verified picture under $150: 337 nits measured by PCWorld, 16:9 like the videos, no burn-in. Not the 2.5K Z1RC/Z3FC styles. Upgrade path: ViewSonic VP16-OLED (~$230–250, OLED). |
+| Screen cable | **Micro-HDMI to mini-HDMI cable**, 3–6 ft | 4 | 0 | **6** | The Pi has micro-HDMI, the ARZOPA has mini-HDMI: one direct cable, no adapters. 2 spares. Zip-tie both ends. |
+| Screen power | USB-C power supply for the screen (if not in its box) | 4 | 0 | **4** | Its own supply, so it never dims or drops when the Pi is busy. |
+| Spare microSD | SanDisk, Samsung or official Raspberry Pi, 32GB+ A2 | 4 | 0 | **4** | One pre-imaged backup per Pi: a dead card is a 2-minute swap. |
+| Receipt printer | **Rongta 80 mm thermal, USB, auto-cutter** | 4 | 1 | **3** | Same model as the one that works, so the code and paper are identical. (3 if you're fine sharing the spare's printer.) |
+| Receipt paper | 80 mm × 80 mm thermal rolls | 1 case | sample roll | **1 case (50 rolls)** | About 1 roll per booth per few hours of heavy use. |
+| Wall phone | **MS-303 beige wall phone** (clear cradle, ringer/volume sliders) | 5 | ? | **to 5 total** | 4 units + 1 practice/teardown. Same model everywhere means one keypad map; the MS-303 prints its keypad map on the board. |
+| Pico | **Same model as the one in hand: Raspberry Pi Pico W, pre-soldered headers** | 5 | 1 | **4** | One CircuitPython file ("Pico W") for all of them. |
+| Jumper wires | Female-to-female Dupont jumpers, 20 cm | 1 pack | 0 | **1 pack** | Cut in half and solder to the phone wires, so the Pico plugs on and off. |
+| USB audio adapter | [Sabrent AU-MMSA](https://www.amazon.com/dp/B00IRVQ0F8) | 5 | 1 | **4** | |
+| 3.5 mm pigtails | [Fancasee TRS to bare wire, 2-pack](https://www.amazon.com/Fancasee-Replacement-Connector-Headphone-Earphone/dp/B07Y8KGJKL) | 5 packs | 1 pack | **4 packs** | |
+| Spare handset cords | [Power Gear coiled cord](https://www.amazon.com/Power-Gear-Telephone-White-76122/dp/B003YKG8HW) | 4 | 0 | **4** | The most-yanked part becomes a 10-second swap. |
+| USB extensions (phone → Pi) | [Cable Matters USB 2.0 6 ft, 2-pack](https://www.amazon.com/Cable-Matters-2-Pack-Extension-Extender/dp/B00N9HRUJU) | 4 packs | 0 | **4 packs** | Audio adapter + Pico per phone. |
+| Small stuff | Zip ties, adhesive tie mounts, gaffer tape, label maker tape | — | — | **1 set** | Every plug strain-relieved; every cable labelled by line. |
+
+Not needed any more (covered by the CanaKit kit): separate Pi boards, official 27W power supplies, cases, Active Coolers, micro-HDMI to HDMI cables, SD card reader.
+
+**Alternatives considered:** CanaKit Essentials 4GB ($189.99, official Active Cooler, 32GB, 1 cable) is fine too but wouldn't match your PRO. RasTech 8GB kit: skip (third-party parts, unnamed card). Bigger screens if the screen goes on the wall instead of inside the booth: Dell P2725H 27" (matte) or Samsung QB43C 43" (commercial, 24/7). Zero-burn-in small screen: Waveshare 15.6" FHD (B), 100% sRGB IPS.
+
+## Cables, per booth (decided Oct 30: CanaKit PRO + ARZOPA Z1FC + Rongta)
+
+| Connection | Cable | In a box already? | Order (4 units) |
 |---|---|---|---|
-| Landline phone | [Cortelco ITT-2500 single-line desk phone](https://www.amazon.com/Cortelco-ITT-2500-MD-BK-Single-Line-Telephone/dp/B002LLH3Q0) | **5** | The real 2500 design: heavy, simple and repairable, with a standard modular handset. The 5th is a teardown/practice unit. |
-| Phone, budget / color alt | [HTMengt 2500-style retro phone](https://www.amazon.com/Desk-Telephone-2500-Analog-Phone/dp/B0BKZHJNMC) · [red](https://www.amazon.com/Desk-Telephone-2500-Analog-Phone/dp/B0BKZDZ63C) | (5) | Lighter, cheaper, more colors. Less sturdy. |
-| Phone, wall-mount option | [Sangyn retro wall phone, beige](https://www.amazon.com/Mechanical-Sangyn-Adjustable-Fashioned-Telephone/dp/B0BRC8TM4W) · [red](https://www.amazon.com/Landline-Telehone-Waterproof-Moisture-Bathroom/dp/B07RBMP5V4) | (5) | Screws to the booth wall, so it can't be knocked over or carried off, and cables hide behind the wall. Monitor mounts directly above. Buy 1 first and open it to check the keypad and hook switch. |
-| Raspberry Pi 5 (4GB) | [Raspberry Pi 5 4GB](https://www.amazon.com/Raspberry-4GB-Single-Board-Computer/dp/B0CPM3SM72) | 4 | Amazon Pi listings are third-party. PiShop.us, Adafruit and CanaKit are official resellers and often cheaper. |
-| Official 27W PSU | [Raspberry Pi 27W USB-C Power Supply](https://www.amazon.com/Raspberry-Pi-USB-C-Power-Supply/dp/B0D3MFLNC1) | 5 | Official only. Cheap PSUs cause random reboots. |
-| Official case with fan | [Raspberry Pi 5 Official Case](https://www.amazon.com/Official-Raspberry-Pi-5-Case/dp/B0CLY2974P) | 4 | |
-| microSD | [SanDisk Extreme 64GB A2](https://www.amazon.com/SanDisk-Extreme-microSDXC-Memory-Adapter/dp/B09X7C7LL1) | 8 | 2 per unit; the second is a pre-imaged spare. |
-| Pico (hook + keypad) | [Waveshare Pico, pre-soldered headers + USB cable](https://www.amazon.com/waveshare-Pre-Soldered-Raspberry-Beginner-Friendly-Microcontroller/dp/B0CNXF4PV9) | 5 | Pre-soldered headers let you use plug-on jumper wires. |
-| USB audio adapter | [Sabrent AU-MMSA](https://www.amazon.com/dp/B00IRVQ0F8) | 5 | Separate mic and headphone jacks, driverless on Linux. |
-| 3.5mm pigtails | [Fancasee 3.5mm TRS to bare wire, 2-pack](https://www.amazon.com/Fancasee-Replacement-Connector-Headphone-Earphone/dp/B07Y8KGJKL) | 5 packs | |
-| Micro-HDMI → HDMI | [Cable Matters 6ft, 2-pack](https://www.amazon.com/Cable-Matters-2-Pack-Speed-Resolution/dp/B00B9H6VT2) | 3 packs | |
-| Monitor | [Dell S2721NX 27" IPS, VESA](https://us.amazon.com/Dell-27-Inch-Monitor-S2721NX-1920x1080/dp/B08VNTQDKS) | 3 | VESA mount for the booth build. It's glossy, so under bright booth lights choose a matte model instead (e.g. Dell SE2725HM). |
-| Spare handset cords | [Power Gear coiled handset cord](https://www.amazon.com/Power-Gear-Telephone-White-76122/dp/B003YKG8HW) or [NAC 25ft black](https://www.amazon.com/Telephone-Handset-Coiled-COnducter-Hand-Set/dp/B00ULSEDHM) | 4 | 4P4C ends. The booth's most-yanked part becomes a 10-second swap. |
-| Electret mic capsules | [uxcell 9.7mm electret, 10-pack](https://www.amazon.com/uxcell-Capsule-Electret-Condenser-Microphone/dp/B00OK65LKY) | 1 pack | Only needed if the handset turns out to have an old carbon mic. Cheap insurance. |
+| Pi → screen | **Micro-HDMI to mini-HDMI**, 3–6 ft | No (kit has micro→HDMI, screen has mini→HDMI) | **6** (2 spare) |
+| Screen power | **USB-C wall charger, 30W PD** + USB-C to USB-C cable | Cable usually yes; charger check the box | **4 chargers** |
+| Pi power | CanaKit 45W USB-C | ✅ kit | — |
+| Printer → Pi | USB-B to USB-A | ✅ printer box (plus its own power brick) | 2 spare |
+| Audio adapter → Pi | plugs straight in | — | USB-A extension 3 ft only if the phone is >1 ft from the Pi |
+| Pico → Pi | micro-USB to USB-A | ✅ Waveshare Pico box | 2 spare |
+| Pi → network | Cat6, 10 ft | No (office test can use Wi-Fi) | in the network section |
+| Wall power | Power strip, 4+ outlets | No | **1 per booth** (Pi, screen, printer) |
+| Strain relief | Zip ties, adhesive tie mounts, Velcro straps | No | 1 set |
+
+Tonight, before the micro-to-mini cable arrives: the kit's micro-HDMI→HDMI cable + the screen's mini-HDMI→HDMI cable + an **HDMI female-to-female coupler** works as a stopgap.
 
 ## Shared network (×1)
 
@@ -34,8 +57,8 @@ Quantities cover 4 complete units. Check that each listing is the exact model be
 
 | Item | Pick | Qty | Why |
 |---|---|---|---|
-| Pi on back of monitor | [ASG VESA mount for Pi 5](https://www.amazon.com/VESA-Mount-Raspberry-PI-Basic/dp/B079J5SFYS) | 4 | Hides the Pi; nothing on the floor for people to kick. |
-| Monitor wall mount | [Fixed VESA slim wall mount](https://www.amazon.com/Fixed-VESA-Slim-Wall-Mount/dp/B011LODZJG) | 3 | Check the monitor's VESA pattern (100×100 for the Dell S2721NX). |
+| Pi mount | Screw the CanaKit case to the inside of the enclosure (or an [ASG VESA plate](https://www.amazon.com/VESA-Mount-Raspberry-PI-Basic/dp/B079J5SFYS)) | 4 | Hides the Pi; nothing on the floor for people to kick. Leave the case fan room to breathe. |
+| Screen mount | Built into the booth enclosure (the ASUS OLED has no VESA holes): a clamp bracket or a cut-out in the back panel | 4 | Angle it slightly down under booth lights to cut reflections. |
 | USB extensions (phone → Pi) | [Cable Matters USB 2.0 extension 6ft, 2-pack](https://www.amazon.com/Cable-Matters-2-Pack-Extension-Extender/dp/B00N9HRUJU) | 5 packs | 2 per phone, for the audio adapter and the Pico. |
 | Battery backup | [APC BE600M1 600VA UPS](https://www.amazon.com/APC-respaldo-protector-sobretensiones-alimentaci%C3%B3n/dp/B01FWAZEIU) | 2 | One for the router/switch/hotspot, one for the Pis. Venue power blips won't reboot anything. |
 | Power strip | [Tripp Lite SS3612, 12-outlet metal, 15ft](https://www.amazon.com/Tripp-Lite-Outlet-Protector-SS3612/dp/B00UK4BP1O) | 2 | For the monitors. Plug the UPS units straight into the wall, not into a strip. |
