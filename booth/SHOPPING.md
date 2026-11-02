@@ -15,8 +15,9 @@ Quantities cover 4 complete units. Check that each listing is the exact model be
 | Spare microSD | SanDisk, Samsung or official Raspberry Pi, 32GB+ A2 | 4 | 0 | **4** | One pre-imaged backup per Pi: a dead card is a 2-minute swap. |
 | Receipt printer | **Rongta 80 mm thermal, USB, auto-cutter** | 4 | 1 | **3** | Same model as the one that works, so the code and paper are identical. (3 if you're fine sharing the spare's printer.) |
 | Receipt paper | 80 mm × 80 mm thermal rolls | 1 case | sample roll | **1 case (50 rolls)** | About 1 roll per booth per few hours of heavy use. |
-| Wall phone | Same model as your working one (HA9888 beige, or the pink XY-1980) | 5 | ? | **to 5 total** | 4 units + 1 practice/teardown. Same model everywhere means one keypad map. |
-| Pico | [Waveshare Pico, pre-soldered headers](https://www.amazon.com/waveshare-Pre-Soldered-Raspberry-Beginner-Friendly-Microcontroller/dp/B0CNXF4PV9) | 5 | 1 | **4** | |
+| Wall phone | **MS-303 beige wall phone** (clear cradle, ringer/volume sliders) | 5 | ? | **to 5 total** | 4 units + 1 practice/teardown. Same model everywhere means one keypad map; the MS-303 prints its keypad map on the board. |
+| Pico | **Same model as the one in hand: Raspberry Pi Pico W, pre-soldered headers** | 5 | 1 | **4** | One CircuitPython file ("Pico W") for all of them. |
+| Jumper wires | Female-to-female Dupont jumpers, 20 cm | 1 pack | 0 | **1 pack** | Cut in half and solder to the phone wires, so the Pico plugs on and off. |
 | USB audio adapter | [Sabrent AU-MMSA](https://www.amazon.com/dp/B00IRVQ0F8) | 5 | 1 | **4** | |
 | 3.5 mm pigtails | [Fancasee TRS to bare wire, 2-pack](https://www.amazon.com/Fancasee-Replacement-Connector-Headphone-Earphone/dp/B07Y8KGJKL) | 5 packs | 1 pack | **4 packs** | |
 | Spare handset cords | [Power Gear coiled cord](https://www.amazon.com/Power-Gear-Telephone-White-76122/dp/B003YKG8HW) | 4 | 0 | **4** | The most-yanked part becomes a 10-second swap. |

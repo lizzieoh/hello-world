@@ -19,7 +19,7 @@ Priorities, in order: **speed and reliability** (heavy foot traffic, a weak 20 M
 |---|---|
 | Booth software (native Python app) | **Built.** 17-scenario self-test. Running on a laptop in test mode. Not yet run end to end on a Pi with the real phone, screen and printer. |
 | Browser version (`/booth` page) | Built, on branch `booth` of `lizzieoh/fal-call-center`. **Not merged.** Kept as the fallback. |
-| Phone #1 (beige HA9888 wall phone) | Handset wired to the USB audio adapter. Hook switch measured. Keypad mapped. Pico code set for this phone. |
+| Phone model | **MS-303 beige wall phone** is the model for all booths (the manuals now describe it). Handset colours measured, keypad map printed on its board, hook = 2 wires (direction not yet measured). An earlier HA9888 phone was wired and mapped first; its notes stay below for reference. |
 | Phone #2 (pink XY-1980 wall phone) | Opened and photographed; different board (see §7). Not wired. |
 | Receipt printer | Rongta 80 mm in hand. Test-print command exists. Real print not yet confirmed. |
 | Pi | 1 × CanaKit Pi 5 Starter Kit PRO **8GB** bought. 3 more to order (§5). |
@@ -66,8 +66,8 @@ Priorities, in order: **speed and reliability** (heavy foot traffic, a weak 20 M
 | Screen cable | **Micro-HDMI (Pi) to mini-HDMI (ARZOPA)**, 3–6 ft ×6 | One direct cable, no adapters |
 | Screen power | USB-C wall charger, 30W, ×4 (if not in the ARZOPA box) | Never power the screen from the Pi: it dims |
 | Printer | **Rongta 80 mm thermal, USB, auto-cutter** (have 1; order 3) | ESC/POS; the app prints raw raster to `/dev/usb/lp0`, no driver |
-| Phone | Wall phone, same model in every booth (beige HA9888 is the mapped one) | One keypad map for all |
-| Pico | Same model as the working one on the bench (plain Pico $11.99, or Waveshare pre-soldered Pico W) | One firmware build for all. The Pico W needs the "Pico W" CircuitPython file. |
+| Phone | **MS-303** wall phone, same model in every booth | One keypad map for all; the board prints R1–R4 / C1–C3 |
+| Pico | **Pico W**, pre-soldered headers (the one in hand), wired from its underside with plug-on jumpers | One firmware build ("Pico W") for all |
 | Audio | Sabrent AU-MMSA + Fancasee 3.5 mm pigtails | Have 1; order 4 more of each |
 
 Full quantities, cables and small parts are in `booth/SHOPPING.md`.
@@ -112,6 +112,8 @@ Full quantities, cables and small parts are in `booth/SHOPPING.md`.
 - **Front panel:** ringer on/off and volume sliders on a small board with a white plug: unplug, ignore. The label window under the keypad is for an instruction card.
 - **Ignore:** BZ (buzzer, red/black), TIP/RING (phone line, red/green twisted).
 
+**Volume slider (MS-303 front panel):** wanted. Not built yet; waiting on meter readings of the front panel's 5 wires (potentiometer or switch). It will use spare Pico pins on the other edge.
+
 **Pink XY-1980 wall phone (board XY-1980C(M)CE, keypad XY-2550-KB)**
 - **Keypad:** 8-wire white ribbon on JK1. The extra wire serves the F/RD keys, probably a 4th column. Wire all 8 to GP0–GP7 and map with the key monitor.
 - **Hook switch:** soldered onto the main board (blue S1 "HOOK"), so the board stays in the phone. Find a clean pin pair underneath with the meter; cut the traces leading away if the circuit interferes.
@@ -119,7 +121,7 @@ Full quantities, cables and small parts are in `booth/SHOPPING.md`.
 - **Each phone model needs its own `ROW_PINS` / `COL_PINS`** in its Pico's `code.py`. Don't swap Picos between models.
 
 **Mounting inside the phone**
-- **Insulate:** the HA9888 back plate is metal. Sleeve the Pico in clear heat-shrink, or use M2 nylon standoffs plus Kapton tape on nearby metal.
+- **Insulate:** the phone's back plate is metal. Sleeve the Pico in clear heat-shrink, or use M2 nylon standoffs plus Kapton tape on nearby metal.
 - **Strain relief:** zip-tie the wire bundles to a mount next to the Pico. Route the USB cables out through the old LINE jack hole and anchor them inside.
 - **USB port:** point the Pico's USB port toward the cable exit. Code updates go over USB, so the phone never needs reopening.
 

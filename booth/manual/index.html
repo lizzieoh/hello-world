@@ -412,20 +412,18 @@
     <span class="partno">Part 7</span>
     <h2>Find the hook switch</h2>
     <p class="time">About 15 minutes.</p>
-    <p>The hook switch is on the small tan board printed <b>MS-303 HK</b>, at the top left under the clear cradle: a blue block with a plunger that the handset presses down when it hangs up. Its white wires run to the spot marked <b>HK</b> on the main board, where they're soldered and covered in glue.</p>
+    <p>The hook switch is on the small tan board printed <b>MS-303 HK</b>, at the top left under the clear cradle: a blue block with a plunger that the handset presses down when it hangs up. <b>Two white wires</b> run from it to the spot marked <b>HK</b> on the main board, where they're soldered and covered in glue. Those two wires are the switch.</p>
     <ol class="steps">
-      <li>Leave the glue alone. Cut the white HK wires <b>close to the main board</b>, so the full length stays attached to the hook board.</li>
+      <li>Leave the glue alone. Cut both white HK wires <b>close to the main board</b>, so the full length stays attached to the hook board.</li>
       <li>Strip about 3 mm (⅛ in) from each cut end.</li>
-      <li>Meter on <b>continuity</b>. Touch the probes to two of the wire ends.</li>
-      <li>Press the plunger in with a finger (that's "hung up"), then let go (that's "lifted").</li>
-      <li>Try each pair until you find one that <b>beeps in one position only</b>. Write down the two wire colours and whether it beeps <b>pressed</b> or <b>released</b>.</li>
+      <li>Meter on <b>continuity</b>, probes on the two wires. Press the plunger in with a finger (that's "hung up"), then let go (that's "lifted").</li>
+      <li>Write down whether it beeps <b>pressed</b> or <b>released</b>.</li>
     </ol>
     <div class="tablewrap"><table>
       <tr><th>Record for each phone</th><th>Your answer</th></tr>
-      <tr><td>The two hook wires</td><td class="blank">______ and ______</td></tr>
       <tr><td>Beeps when the plunger is…</td><td class="blank">pressed / released</td></tr>
     </table></div>
-    <div class="note check"><b>What the answer means for the Pico</b><p>If it beeps when <b>released</b> (handset lifted), the switch closes on lift: keep <code>OFF_HOOK_READS_HIGH = False</code> in the Pico's <code>code.py</code>. If it beeps when <b>pressed</b> (hung up), change it to <code>True</code>. Every MS-303 should give the same answer, but check each one.</p></div>
+    <div class="note check"><b>What the answer means for the Pico</b><p>If it beeps when <b>released</b> (handset lifted), the switch closes on lift: keep <code>OFF_HOOK_READS_HIGH = False</code> in the Pico's <code>code.py</code>. If it beeps when <b>pressed</b> (hung up), change it to <code>True</code>. Either way, the two wires go to <b>GP15 (pin 20)</b> and <b>GND (pin 18)</b>, either way round. Every MS-303 should give the same answer, but check each one.</p></div>
     <div class="note why"><b>Why only two wires</b><p>A switch is just two metal contacts that touch or don't. The Pico only needs to know which, so it needs only the two contacts that change. Any extra wire was for the old phone circuit.</p></div>
   </section>
 
@@ -559,6 +557,12 @@
       </svg>
     </div>
     <p>Hold the Pico with the <b>USB plug pointing up</b> and the components facing you. The pins are numbered from 1 at the top-left, down the left side to 20.</p>
+    <p><b>But wire it from the other side.</b> On a Pico with pins already fitted, the pins stick out on the underside (the side with the plastic strips), and the pin names are printed there. Turn it over, keep the USB at the top, and pins 1–20 run down the <b>right</b> edge:</p>
+    <figure>
+      <img src="img/pico-solder-map.png" alt="Solder map for a Pico W seen from its underside with the USB at the top: pins 1 to 20 down the right edge. Keypad R1 to GP0 pin 1, R2 to GP1 pin 2, R3 to GP2 pin 4, R4 to GP3 pin 5, C3 to GP4 pin 6, C2 to GP5 pin 7, C1 to GP6 pin 9; hook wires to GND pin 18 and GP15 pin 20." loading="lazy">
+      <figcaption>The MS-303 wiring, drawn the way up you'll actually solder it: underside up, USB at the top.</figcaption>
+    </figure>
+    <div class="note check"><b>Recommended for the prototype: plug-on jumpers</b><p>Cut female-to-female jumper wires in half, solder each phone wire to a cut jumper end with heat-shrink over the joint, and push the female ends onto the Pico's pins. If a key types the wrong digit you move a plug instead of desoldering, and the Pico swaps out in seconds. Once everything tests right, run a line of hot glue along each row of plugs so none can wiggle off. Soldering straight to the pins is the stronger option for the final builds.</p></div>
     <ol class="steps">
       <li><b>Keypad (MS-303):</b> solder each wire by its board label. The columns go in reverse on purpose, so the Pico's existing <code>code.py</code> works without changes:
         <div class="tablewrap"><table>

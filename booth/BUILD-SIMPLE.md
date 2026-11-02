@@ -8,11 +8,11 @@ One booth, start to finish, in 9 steps. Repeat for each booth. For the full deta
 
 ## What you need (per booth)
 
-- [ ] Wall phone (HA9888 beige)
+- [ ] Wall phone (MS-303 beige)
 - [ ] CanaKit Pi 5 Starter Kit PRO (Pi, power supply, case, memory card, cables)
 - [ ] ARZOPA Z1FC 16.1" screen + a USB-C charger for it
 - [ ] Micro-HDMI to mini-HDMI cable
-- [ ] Raspberry Pi Pico
+- [ ] Raspberry Pi Pico W + female-to-female jumper wires
 - [ ] Sabrent USB audio adapter + 2 × 3.5 mm pigtail cables
 - [ ] Rongta 80 mm receipt printer + paper
 - [ ] Wire (26 AWG, several colours), heat-shrink, zip ties + adhesive mounts, 1" clear heat-shrink for the Pico
@@ -23,51 +23,51 @@ One booth, start to finish, in 9 steps. Repeat for each booth. For the full deta
 ---
 
 ## 1. Open the phone (15 min)
-1. Unscrew the metal back plate and lift off the front shell gently.
-2. Tape a label on every cable: **HANDSET, KEYPAD, HOOK, LIGHT, BELL, LINE**.
-3. Take a photo. Then unplug everything from the green main board, and remove the board.
+1. Unscrew the metal back plate and lift the front shell off gently.
+2. Unplug the white plug from the front panel (ringer and volume sliders). It's the only plug; everything else gets cut.
+3. Take a photo before cutting. Always cut wires **close to the main board** to keep the most length.
 
 ## 2. Handset → audio adapter (20 min)
-Cut the plug off the 4 handset wires (green, red, black, yellow).
+Cut the 4 handset wires at the M−, M+, R+, R− pads. On the MS-303, **black + yellow = earpiece**, **red + green = mic**.
 
-| Wire | Goes to |
-|---|---|
-| Green | Headphone pigtail **tip** |
-| Red | Headphone pigtail **sleeve** |
-| Black | Mic pigtail **tip** |
-| Yellow | Mic pigtail **sleeve** |
+| Handset wire | Pad | Pigtail wire | Plug part |
+|---|---|---|---|
+| Black | R+ | Red | earpiece **tip** |
+| Yellow | R− | Black | earpiece **sleeve** |
+| Red | M+ | Red | mic **tip** |
+| Green | M− | Black | mic **sleeve** |
 
-The third wire on each pigtail (ring) is taped off and not used.
-Solder each joint and cover it with heat-shrink, then plug the pigtails into the Sabrent: 🎧 for the earpiece, 🎤 for the mic.
-✅ **Check:** green to red reads about 230 Ω on the meter.
+Each pigtail's white wire (ring) isn't used: snip it short and heat-shrink the end. Heat-shrink each joint, then ½" (13 mm) heat-shrink over each finished splice.
+Plug the pigtails into the Sabrent: 🎧 earpiece, 🎤 mic.
+✅ **Check:** black to yellow reads 100–300 Ω. Record and play back; if the mic is very quiet, swap red and green.
 
-## 3. Hook switch → Pico (15 min)
-1. Find the hook switch's grey ribbon. Leave the glued pads alone.
-2. Cut the ribbon about 2 cm (¾ in) before its plug, and peel off the **first two wires** on the side nearest the phone's left edge.
-3. Solder one to **pin 20 (GP15)** and the other to **pin 18 (GND)**. Either way round works.
+## 3. Hook switch (10 min)
+1. The hook board (MS-303 HK) has **two white wires** to **HK** on the main board. Cut both close to the main board and strip 3 mm (⅛ in).
+2. Meter on beep, probes on the two wires; press the plunger, then let go.
 
-✅ **Check:** those two wires beep on the meter only when the handset is **lifted**.
+✅ Beeps when **released** (lifted): nothing to change. Beeps when **pressed**: set `OFF_HOOK_READS_HIGH = True` in the Pico's `code.py`.
 
-## 4. Keypad → Pico (20 min)
-1. Unplug the keypad ribbon and number its wires from the **red stripe** (wire 1).
-2. Solder them in order:
+## 4. Keypad + hook → Pico (30 min)
+1. The board prints the keypad map: **C3, C2, C1, R4, R3, R2, R1**. Mark the **R1** wire with a dot, then cut the ribbon close to the board.
+2. Turn the Pico **underside up** (pins sticking out, names printed), USB at the top: pins 1–20 run down the right edge.
+3. For the prototype: solder each wire to half a female-to-female jumper, heat-shrink it, and push it onto the pin. Hot-glue the rows once everything works.
 
-| Wire | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
-|---|---|---|---|---|---|---|---|
-| Pico pin | 1 | 2 | 4 | 5 | 6 | 7 | 9 |
-| GP | GP0 | GP1 | GP2 | GP3 | GP4 | GP5 | GP6 |
+| Wire | R1 | R2 | R3 | R4 | C1 | C2 | C3 | Hook | Hook |
+|---|---|---|---|---|---|---|---|---|---|
+| Pico | GP0 | GP1 | GP2 | GP3 | **GP6** | GP5 | **GP4** | GND | GP15 |
+| Pin | 1 | 2 | 4 | 5 | **9** | 7 | **6** | 18 | 20 |
 
-Hold the Pico with its USB port at the top; pin 1 is top left. After each joint, check the neighbouring pins don't beep together.
+The columns go in reverse on purpose, so the Pico's code works unchanged. After each joint, check the neighbouring pins don't beep together.
 
 ## 5. Load the Pico (10 min)
-1. Hold **BOOTSEL**, plug the Pico into a laptop, and drag the CircuitPython `.uf2` onto the **RPI-RP2** drive. Use the "Pico W" build if it's a Pico W.
+1. Hold **BOOTSEL**, plug the Pico into a laptop, and drag the CircuitPython `.uf2` onto the **RPI-RP2** drive. Use the **"Pico W"** build (the board says Pico W).
 2. Copy everything in `booth/pico/` (`code.py`, `keymonitor.py`, `keyfinder.py`, `lib/`) onto the **CIRCUITPY** drive.
 
 ✅ **Check:** lift the handset and the Pico's LED lights. In a text editor, every key types its digit.
-*Same HA9888 phone = same settings, so nothing to change. A different phone model? Map it first (manual Part 10c).*
+*Wired as in step 4, the code works as-is. A wrong digit? Tell Claude what each key typed: it's a one-line fix.*
 
 ## 6. Close up the phone (15 min)
-1. Slide the Pico into **clear heat-shrink** with the USB end open, and shrink it.
+1. Once everything works, slide the Pico into **clear heat-shrink** with the USB end open, and shrink it.
 2. Stick the Pico and the Sabrent inside with **adhesive mounts**, away from the metal back plate.
 3. Zip-tie all the wires so a tug pulls on the ties, not the solder joints.
 4. Run both USB cables out through the old **LINE** jack hole, anchor them inside with a zip tie, and close the phone.
