@@ -103,6 +103,15 @@ Full quantities, cables and small parts are in `booth/SHOPPING.md`.
   - `code.py` uses a scanner with a settle delay, because carbon pads are too slow for `keypad.KeyMatrix`
 - **Ignore:** BELL (red/black wires), LINE (red/white striped cords to the back jack), MWLI (red light; optional, untested).
 
+**Beige MS-303 wall phone (boards MS-303 MB and MS-303 HK): the model the manual now uses**
+- **Handset:** soldered to pads, measured: **green = M−, red = M+, black = R+, yellow = R−**. So the earpiece is black + yellow and the mic is red (+) + green (−). This is different from the HA9888.
+  - Earpiece pigtail: black → tip (pigtail red), yellow → sleeve (pigtail black), white taped off.
+  - Mic pigtail: red → tip (pigtail red), green → sleeve (pigtail black), white taped off.
+- **Hook switch:** small MS-303 HK board; white wires to the main board's HK spot (glued). Cut at the main board; find the pair that changes with the plunger. Hook direction not yet measured.
+- **Keypad:** grey ribbon soldered straight to the main board (no plug). Cut at the board, wire in order to GP0…, map with the key monitor. Not yet mapped.
+- **Front panel:** ringer on/off and volume sliders on a small board with a white plug: unplug, ignore. The label window under the keypad is for an instruction card.
+- **Ignore:** BZ (buzzer, red/black), TIP/RING (phone line, red/green twisted).
+
 **Pink XY-1980 wall phone (board XY-1980C(M)CE, keypad XY-2550-KB)**
 - **Keypad:** 8-wire white ribbon on JK1. The extra wire serves the F/RD keys, probably a 4th column. Wire all 8 to GP0–GP7 and map with the key monitor.
 - **Hook switch:** soldered onto the main board (blue S1 "HOOK"), so the board stays in the phone. Find a clean pin pair underneath with the meter; cut the traces leading away if the circuit interferes.

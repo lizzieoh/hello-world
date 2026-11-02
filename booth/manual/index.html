@@ -359,21 +359,22 @@
     <p class="time">About 45 minutes the first time.</p>
 
     <h3>6a · Identify the four handset wires</h3>
-    <p>On this phone the handset's four wires run from the grey handset jack straight onto four pads printed <b>M−, M+, R+, R−</b>. <b>R</b> is the receiver (the earpiece) and <b>M</b> is the microphone. The wires are soldered from underneath, so you can't see which colour lands on which pad. This phone uses the same colours as other wall phones of this kind, so the expected map is:</p>
+    <p>On this phone the handset's four wires run from the grey handset jack straight onto four pads printed <b>M−, M+, R+, R−</b>. <b>R</b> is the receiver (the earpiece) and <b>M</b> is the microphone. The wires are soldered from underneath. Measured on the MS-303:</p>
     <div class="tablewrap"><table>
       <tr><th>Wire</th><th>Pad</th><th>What it is</th></tr>
-      <tr><td>Green</td><td>R+</td><td>earpiece +</td></tr>
-      <tr><td>Red</td><td>R−</td><td>earpiece −</td></tr>
-      <tr><td>Black</td><td>M+</td><td>microphone +</td></tr>
-      <tr><td>Yellow</td><td>M−</td><td>microphone −</td></tr>
+      <tr><td>Black</td><td>R+</td><td>earpiece +</td></tr>
+      <tr><td>Yellow</td><td>R−</td><td>earpiece −</td></tr>
+      <tr><td>Red</td><td>M+</td><td>microphone +</td></tr>
+      <tr><td>Green</td><td>M−</td><td>microphone −</td></tr>
     </table></div>
+    <div class="note warn"><b>Different from other phones</b><p>On the HA9888, green and red were the earpiece. On the MS-303, <b>black and yellow are the earpiece</b> and <b>red and green are the mic</b>. Go by this table, not by colour habits.</p></div>
     <ol class="steps">
       <li>Cut the four wires <b>close to the board</b>, so you keep as much length as possible.</li>
       <li>Plug the handset into its jack so the coiled cord is connected.</li>
-      <li>Meter on <b>Ω, 2k</b>. Touch the probes to the bare ends of <b>green</b> and <b>red</b>. Expect <b>100–300 Ω</b>. That's the earpiece.</li>
-      <li>Now <b>black</b> and <b>yellow</b>. Read the number, swap the probes, read again. The two numbers should be <b>different</b>. That means it's an electret microphone, the kind the adapter can power.</li>
+      <li>Meter on <b>Ω, 2k</b>. Touch the probes to the bare ends of <b>black</b> and <b>yellow</b>. Expect <b>100–300 Ω</b>. That's the earpiece.</li>
+      <li>Now <b>red</b> and <b>green</b>. Read the number, swap the probes, read again. The two numbers should be <b>different</b>. That means it's an electret microphone, the kind the adapter can power.</li>
     </ol>
-    <div class="note check"><b>Checkpoint · handset</b><p>Green–red reads 100–300 Ω, and black–yellow reads differently each way round. If green–red reads nothing but another pair reads 100–300 Ω, that other pair is the earpiece: use it instead, and the remaining two are the mic.</p></div>
+    <div class="note check"><b>Checkpoint · handset</b><p>Black–yellow reads 100–300 Ω, and red–green reads differently each way round. If black–yellow reads nothing but another pair reads 100–300 Ω, that other pair is the earpiece: use it instead, and the remaining two are the mic.</p></div>
     <div class="note why"><b>Why test after cutting here</b><p>On a phone with a plug you test before cutting. On this phone the wires are soldered underneath the board, so cutting first is simpler, and the meter still tells you which pair is which before anything gets soldered.</p></div>
 
     <h3>6b · Know your 3.5 mm plug</h3>
@@ -387,25 +388,21 @@
     <div class="tablewrap"><table>
       <tr><th>Handset wire</th><th>Pigtail wire</th><th>Plug part</th></tr>
       <tr><td colspan="3"><b>Earpiece pigtail</b> (plugs into the 🎧 jack)</td></tr>
-      <tr><td>Green</td><td>Red</td><td>tip</td></tr>
-      <tr><td>Red</td><td>Black</td><td>sleeve</td></tr>
+      <tr><td>Black (R+)</td><td>Red</td><td>tip</td></tr>
+      <tr><td>Yellow (R−)</td><td>Black</td><td>sleeve</td></tr>
       <tr><td>(none)</td><td>White</td><td>ring: tape it off</td></tr>
       <tr><td colspan="3"><b>Mic pigtail</b> (plugs into the 🎤 jack)</td></tr>
-      <tr><td>Black</td><td>Red</td><td>tip</td></tr>
-      <tr><td>Yellow</td><td>Black</td><td>sleeve</td></tr>
+      <tr><td>Red (M+)</td><td>Red</td><td>tip</td></tr>
+      <tr><td>Green (M−)</td><td>Black</td><td>sleeve</td></tr>
       <tr><td>(none)</td><td>White</td><td>ring: tape it off</td></tr>
     </table></div>
-    <figure>
-      <img src="img/step3-solder-handset.webp" alt="Diagram: earpiece green wire to tip and red wire to sleeve of pigtail 1 going to the headphone jack; mic black (+) to tip and yellow (−) to sleeve of pigtail 2 going to the mic jack; ring wires taped off." loading="lazy">
-      <figcaption>The whole handset in one picture. Ring wires are taped off, not connected.</figcaption>
-    </figure>
     <ol class="steps">
       <li>Strip 5 mm (³⁄₁₆ in) from each of the four handset wires and each pigtail wire.</li>
       <li>Slide heat-shrink onto each wire before you solder.</li>
       <li>Solder the pairs in the table, then shrink the tubing. Label the plugs <b>EAR</b> and <b>MIC</b>.</li>
       <li>Plug EAR into the adapter's headphone jack and MIC into its mic jack.</li>
     </ol>
-    <div class="note check"><b>Checkpoint · audio</b><p>Plug the adapter into a laptop. Open a voice recorder, talk into the handset, then play it back with the handset at your ear. You should hear yourself clearly. Mic very quiet or silent? Swap black and yellow on the mic pigtail; getting it backwards does no harm. Earpiece silent? Recheck green and red.</p></div>
+    <div class="note check"><b>Checkpoint · audio</b><p>Plug the adapter into a laptop. Open a voice recorder, talk into the handset, then play it back with the handset at your ear. You should hear yourself clearly. Mic very quiet or silent? Swap red and green on the mic pigtail; getting it backwards does no harm. Earpiece silent? Recheck black and yellow.</p></div>
     <div class="note why"><b>Why tip for the earpiece and not tip + ring</b><p>Tip is the left channel, ring the right. Joining them ties the adapter's two outputs together, which can distort the sound or stress the adapter. One channel is plenty for a single earpiece.</p></div>
     <div class="note whynot"><b>Why not cut the coiled cord instead</b><p>We keep the phone's own handset jack and the cord's plug. When a visitor yanks the cord out of shape, you swap in a spare cord in 10 seconds instead of re-soldering on the show floor.</p></div>
   </section>
