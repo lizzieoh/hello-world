@@ -45,7 +45,7 @@ log = logging.getLogger("booth")
 def load_config(path=HERE / "native.conf"):
     cfg = {"LINE": "1", "SECS": "10", "MODEL": "h3", "LANGUAGE": "en", "PRINTER": "/dev/usb/lp0", "GRAB": "1",
            "PLAYS_BEFORE_SLIDES": "4", "SLIDES": "6", "SLIDE_SECS": "2.5", "PRINT_LIGHTEN": "35",
-           "OUT_DEVICE": "", "IN_DEVICE": "", "LOW_VOLUME": "40", "RING_EVERY": "120"}
+           "OUT_DEVICE": "", "IN_DEVICE": "", "LOW_VOLUME": "40", "RING_EVERY": "120", "LOCATION": "MIAMI"}
     if path.exists():
         for raw in path.read_text().splitlines():
             line = raw.split("#", 1)[0].strip()
@@ -59,6 +59,7 @@ def load_config(path=HERE / "native.conf"):
         "flux_first": cfg["MODEL"].lower() == "flux",
         "language": cfg["LANGUAGE"],
         "printer": cfg["PRINTER"],
+        "location": cfg["LOCATION"],  # printed on the receipt, next to the line number
         # How much lighter the receipt's pictures print, 0-100 (0 = as filmed). Thermal paper prints dark.
         "print_lighten": min(100, max(0, int(cfg["PRINT_LIGHTEN"]))),
         "grab": cfg["GRAB"] != "0",
@@ -926,44 +927,37 @@ def brand_font(kind, size, weight=None):
             except Exception:
                 pass
         return font
+    if kind == "mono":
+        bold = (weight or 400) >= 600
+        for p, i in ((f"/usr/share/fonts/truetype/dejavu/DejaVuSansMono{'-Bold' if bold else ''}.ttf", 0),
+                     ("/System/Library/Fonts/Menlo.ttc", 1 if bold else 0)):
+            if os.path.exists(p):
+                return ImageFont.truetype(p, size, index=i)
     return ImageFont.truetype(find_font(bold=(weight or 400) >= 600 or kind == "display"), size)
 
 
-def glitch_row(width, seed, height=28):
-    """A strip of the brand's pixel 'glitch dust', in black, for dividers."""
-    from PIL import Image, ImageDraw
-    rnd = random.Random(seed)
-    img = Image.new("L", (width, height), 255)
-    d = ImageDraw.Draw(img)
-    cell = 7
-    x = 0
-    while x < width:
-        x += rnd.choice([cell, cell * 2, cell * 3, cell * 5])
-        if rnd.random() < 0.55:
-            w = cell * rnd.choice([1, 1, 2, 3])
-            y = cell * rnd.randrange(height // cell)
-            d.rectangle([x, y, x + w - 1, y + cell - 1], fill=0)
-    return img
-
-
 def receipt_image(take, cfg, src):
-    from PIL import Image, ImageDraw
-    W, M = DOTS, 24  # width and side margin, in printer dots
+    """The receipt: lots of white, the logo, small square stills that step from side to side, a few big lines in
+    mono, and the itemized bill."""
+    from PIL import Image, ImageDraw, ImageOps
+    W, M = DOTS, 40  # width and side margin, in printer dots
+    S = 250          # each still, square
     frames = []
     for frac in (0.2, 0.5, 0.8):
         try:
             png = subprocess.run(["ffmpeg", "-v", "error", "-ss", f"{cfg['secs'] * frac:.2f}", "-i", src, "-frames:v",
-                                  "1", "-vf", f"scale={W}:-2", "-f", "image2pipe", "-vcodec", "png", "-"],
+                                  "1", "-vf", f"scale=-2:{S},crop={S}:{S}", "-f", "image2pipe", "-vcodec", "png", "-"],
                                  capture_output=True, timeout=30).stdout
         except FileNotFoundError:  # no ffmpeg (a laptop test): a receipt without stills
             break
         if png:
             frames.append(Image.open(io.BytesIO(png)).convert("L"))
 
-    title = brand_font("display", 34, 800)
-    said_font = brand_font("display", 30, 500)
-    mono = brand_font("mono", 21)
-    small = brand_font("mono", 17)
+    # Thermal paper drops strokes one dot thin, so everything below the big lines is bold.
+    big = brand_font("mono", 50, 700)
+    said_font = brand_font("mono", 27, 700)
+    mono = brand_font("mono", 24, 700)
+    small = brand_font("mono", 20, 700)
     probe = ImageDraw.Draw(Image.new("L", (1, 1)))
 
     def wrap(text, font, width=W - 2 * M):
@@ -979,80 +973,89 @@ def receipt_image(take, cfg, src):
 
     img = Image.new("L", (W, 4000), 255)  # cropped to what was drawn
     d = ImageDraw.Draw(img)
-    y = 18
+    y = 50
 
-    def row(left, right, font=mono, gap=30):
+    def text(lines, font, gap, x=M):
+        nonlocal y
+        for line in lines:
+            d.text((x, y), line, font=font, fill=0)
+            y += gap
+
+    def row(left, right, font=mono, gap=32):
         nonlocal y
         d.text((M, y), left, font=font, fill=0)
         d.text((W - M, y), right, font=font, fill=0, anchor="ra")
         y += gap
 
-    def rule(dashed=False):
+    gamma = 1 + cfg.get("print_lighten", 0) / 50  # 35 -> 1.7: lifts the darks and mids, keeps the whites
+    stills = iter(frames)
+
+    def still(right):
         nonlocal y
-        if dashed:
-            for x in range(M, W - M, 12):
-                d.line([(x, y), (x + 6, y)], fill=0, width=2)
-        else:
-            d.line([(M, y), (W - M, y)], fill=0, width=2)
-        y += 18
+        f = next(stills, None)
+        if f is None:
+            return
+        f = ImageOps.autocontrast(f, cutoff=1).point(lambda v: round(255 * (v / 255) ** (1 / gamma)))
+        # every printer dot used (error diffusion), so the still keeps the video's full detail
+        img.paste(f.convert("1", dither=Image.Dither.FLOYDSTEINBERG).convert("L"), (W - M - S if right else M, y))
+        y += S + 64
 
     # the logo (the fal mark, "fal" and CALL-A-FAL in one line)
     if LOGO.exists():
-        mark = logo_image(W - 2 * M)
+        mark = logo_image(400)
         img.paste(0, ((W - mark.width) // 2, y), mark)
-        y += mark.height + 24
+        y += mark.height + 100
     else:
         d.text((W // 2, y), "CALL-A-FAL", font=brand_font("display", 60, 900), fill=0, anchor="mt")
-        y += 84
-    img.paste(glitch_row(W, take.get("call", 0)), (0, y)); y += 40
+        y += 140
 
-    # who called, when
-    row(f"LINE {int(cfg['line'] or 0):02d}", f"CALL #{take.get('call', 0):04d}")
-    row(time.strftime("%b %d %Y").upper(), time.strftime("%I:%M %p"))
-    rule(dashed=True)
+    still(right=True)
+
+    # which booth, when, where
+    at = time.localtime(take.get("at"))
+    text([f"LINE {int(cfg['line'] or 0):02d}"], big, 64)
+    row(time.strftime("%b %d %Y", at).upper(), time.strftime("%I:%M %p", at), gap=34)
+    row((cfg.get("location") or "").upper(), "")
+    y += 40
 
     # what they asked for
-    d.text((M, y), "YOU SAID", font=small, fill=0); y += 28
-    for line in wrap(f"“{take['prompt']}”", said_font):
-        d.text((M, y), line, font=said_font, fill=0); y += 38
-    y += 14
+    text(["YOU SAID"], small, 30)
+    text(wrap(f"“{take['prompt']}”", said_font), said_font, 36)
+    y += 56
 
-    # three stills, dithered like a thermal print
-    gamma = 1 + cfg.get("print_lighten", 0) / 50  # 35 -> 1.7: lifts the darks and mids, keeps the whites
-    for f in frames:
-        f = f.point(lambda v: round(255 * (v / 255) ** (1 / gamma)))
-        img.paste(f.convert("1", dither=Image.Dither.FLOYDSTEINBERG).convert("L"), (0, y))
-        y += f.height + 10
-    y += 8
+    still(right=False)
+    text(["RESOLVED", f"IN {take['secs']:.1f} s"], big, 60)
+    y += 50
 
-    # the bill
-    d.text((M, y), "ITEMIZED CALL", font=small, fill=0); y += 30
+    # the bill: every model the call used, and what it cost
+    text(["ITEMIZED CALL"], small, 34)
     for label, detail, cost in take.get("costs") or []:
         row(label, f"${cost:.3f}")
-        d.text((M + 16, y - 6), detail, font=small, fill=0); y += 22
+        text([detail], small, 30, x=M + 16)
     total = sum(c for _, _, c in take.get("costs") or [])
-    rule()
-    row("TOTAL", f"${total:.2f}", font=brand_font("display", 30, 800), gap=40)
-    row("READY IN", f"{take['secs']:.1f} s")
-    rule(dashed=True)
+    d.line([(M, y), (W - M, y)], fill=0, width=2); y += 16
+    row("TOTAL", f"${total:.2f}", font=brand_font("mono", 40, 700), gap=50)
+    y += 50
 
-    # a QR code to keep the video
+    still(right=True)
+
+    # a QR code to keep the video, with its caption beside it
     try:
         import qrcode
         qr = qrcode.QRCode(border=0, box_size=6, error_correction=qrcode.constants.ERROR_CORRECT_M)
         qr.add_data(take["url"])
         q = qr.make_image(fill_color="black", back_color="white").convert("L")
-        q = q.resize((220, 220), Image.NEAREST)
-        img.paste(q, ((W - q.width) // 2, y)); y += q.height + 12
-        d.text((W // 2, y), "SCAN TO KEEP YOUR VIDEO", font=small, fill=0, anchor="mt"); y += 36
+        q = q.resize((180, 180), Image.NEAREST)
+        img.paste(q, (M, y))
+        for i, line in enumerate(("SCAN TO KEEP", "YOUR VIDEO")):
+            d.text((M + q.width + 28, y + 60 + i * 30), line, font=small, fill=0)
+        y += q.height + 70
     except Exception:  # no qrcode package, or no URL: the receipt still prints
         pass
 
-    img.paste(glitch_row(W, take.get("call", 0) + 1), (0, y)); y += 40
-    d.text((W // 2, y), "Thank you for calling.", font=said_font, fill=0, anchor="mt"); y += 44
-    d.text((W // 2, y), "fal.ai", font=title, fill=0, anchor="mt"); y += 46
-    d.text((W // 2, y), "generative media platform for developers", font=small, fill=0, anchor="mt"); y += 40
-    return img.crop((0, 0, W, y)).point(lambda v: 255 if v > 127 else 0).convert("1")
+    row("Thank you for calling.", "fal.ai", font=small, gap=30)
+    y += 30
+    return img.crop((0, 0, W, y)).point(lambda v: 255 if v > 200 else 0).convert("1")
 
 
 def escpos(img):
@@ -1401,7 +1404,7 @@ class Booth:
         except Exception:
             return self.post(("failed", cid, rid, "Our lines are busy. Hang up and try again."))
         self.post(("rendered", cid, rid, {"prompt": prompt, "take": take, "url": url, "model": model, "secs": time.monotonic() - t0,
-                                          "printed": False, "answered": False, "sound": False}))
+                                          "at": time.time(), "printed": False, "answered": False, "sound": False}))
 
     def on_rendered(self, cid, rid, take):
         log.info("video: %s, %.1f s after they stopped talking", take["model"], take["secs"])

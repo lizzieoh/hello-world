@@ -50,6 +50,7 @@ To go back to the browser version, run `cd ~/hello-world/booth/pi && ./setup.sh 
 | `MODEL` | `h3` | `h3`: H3 Max first, FLUX 3 Max as backup. `flux`: the other way round. |
 | `LANGUAGE` | `en` | `auto` lets Wizper guess the language (a little slower) |
 | `PRINTER` | `/dev/usb/lp0` | The receipt printer |
+| `LOCATION` | `MIAMI` | Printed on the receipt under the line number |
 | `ROTATE`, `SPEAKER_VOLUME`, `MIC_VOLUME` | | Same as the browser version |
 | `LOW_VOLUME` | `40` | The phone's volume switch on low: the handset and the video sound play at this percent of loud |
 | `RING_EVERY` | `120` | The phone's ringer switch on: while nobody's on the phone, it rings this often (seconds) |
