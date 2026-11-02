@@ -107,8 +107,8 @@ Full quantities, cables and small parts are in `booth/SHOPPING.md`.
 - **Handset:** soldered to pads, measured: **green = M−, red = M+, black = R+, yellow = R−**. So the earpiece is black + yellow and the mic is red (+) + green (−). This is different from the HA9888.
   - Earpiece pigtail: black → tip (pigtail red), yellow → sleeve (pigtail black), white taped off.
   - Mic pigtail: red → tip (pigtail red), green → sleeve (pigtail black), white taped off.
-- **Hook switch:** small MS-303 HK board; white wires to the main board's HK spot (glued). Cut at the main board; find the pair that changes with the plunger. Hook direction not yet measured.
-- **Keypad:** grey ribbon soldered straight to the main board (no plug). Cut at the board, wire in order to GP0…, map with the key monitor. Not yet mapped.
+- **Hook switch:** small MS-303 HK board with **2 white wires** to the main board's HK spot (glued). Cut at the main board, solder to GP15 (pin 20) and GND (pin 18). Direction (closes on lift or on hang-up) not yet measured.
+- **Keypad:** grey ribbon soldered to the main board, which **prints the map**: C3, C2, C1, R4, R3, R2, R1 (top to bottom). Wire R1–R4 → GP0–GP3, **C1 → GP6, C2 → GP5, C3 → GP4**, so the existing `code.py` (ROW_PINS GP0–GP3, COL_PINS GP6, GP5, GP4) works unchanged. Verify by pressing every key.
 - **Front panel:** ringer on/off and volume sliders on a small board with a white plug: unplug, ignore. The label window under the keypad is for an instruction card.
 - **Ignore:** BZ (buzzer, red/black), TIP/RING (phone line, red/green twisted).
 

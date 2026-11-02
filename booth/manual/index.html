@@ -466,12 +466,12 @@
       </svg>
     </div>
     <ol class="steps">
-      <li>On this phone the grey keypad ribbon is <b>soldered straight to the main board</b>, with no plug. Leave the keypad screwed in place.</li>
+      <li>On this phone the grey keypad ribbon is <b>soldered straight to the main board</b>, with no plug, and the board <b>prints the map</b> beside it: from top to bottom <b>C3, C2, C1, R4, R3, R2, R1</b> (3 columns, 4 rows, 7 wires).</li>
+      <li><b>Before cutting,</b> put a marker dot on the wire at the <b>R1</b> end. Once it's cut, the grey wires all look the same.</li>
       <li>Cut the ribbon <b>close to the main board</b>, so its full length stays attached to the keypad.</li>
-      <li>Count the wires and number them <b>1, 2, 3…</b> from one edge. If one edge has a coloured stripe, that's wire 1. If not, call the edge nearest the phone's left side wire 1, and mark it with a dot of marker.</li>
-      <li>Peel the wires apart about 3 cm (1¼ in) and strip 3 mm (⅛ in) from each.</li>
+      <li>Number the wires from the dot: 1 = R1, 2 = R2, 3 = R3, 4 = R4, 5 = C1, 6 = C2, 7 = C3. Peel them apart about 3 cm (1¼ in) and strip 3 mm (⅛ in) from each.</li>
     </ol>
-    <div class="note check"><b>You don't need to map it with the meter</b><p>Keypads like this press a carbon pad onto the board. A pressed key reads a few hundred to a few thousand ohms, which is too much for the meter's beeper, so the beep test usually finds nothing. Instead, wire the ribbon to the Pico <b>in order</b> (Part 10), and the Pico works out which wire is which row and column by itself.</p></div>
+    <div class="note check"><b>No meter mapping needed on the MS-303</b><p>The board's labels already say which wire is which row and column. (On a phone without labels, wire the ribbon in order and let the Pico's key monitor work it out; see Part 10c.)</p></div>
     <div class="note why"><b>Why a grid</b><p>Twelve separate switches would need 13 wires. A grid needs 7. The Pico scans the grid many times a second ("is row 1 touching column 1? column 2?…") and works out which key is down.</p></div>
   </section>
 
@@ -560,12 +560,17 @@
     </div>
     <p>Hold the Pico with the <b>USB plug pointing up</b> and the components facing you. The pins are numbered from 1 at the top-left, down the left side to 20.</p>
     <ol class="steps">
-      <li><b>Keypad:</b> solder the ribbon wires to the Pico <b>in order</b>: <b>wire 1 → GP0 (pin 1), 2 → GP1 (pin 2), 3 → GP2 (pin 4), 4 → GP3 (pin 5), 5 → GP4 (pin 6), 6 → GP5 (pin 7), 7 → GP6 (pin 9)</b>. More wires continue on GP7 (pin 10), GP8 (pin 11) and GP9 (pin 12). You don't need to know which wire is a row or a column; the key monitor in 10c works that out. On a Pico without pins, push each wire through its hole from the top and solder underneath. On one with pins, wrap the wire once around the pin, down near the plastic, and solder at 350 °C (660 °F), because the pins soak up heat. If a wire falls short, extend it with 26 AWG wire about 10–15 cm (4–6 in) long, with heat-shrink over the joint.</li>
+      <li><b>Keypad (MS-303):</b> solder each wire by its board label. The columns go in reverse on purpose, so the Pico's existing <code>code.py</code> works without changes:
+        <div class="tablewrap"><table>
+          <tr><th>Board label</th><td>R1</td><td>R2</td><td>R3</td><td>R4</td><td>C1</td><td>C2</td><td>C3</td></tr>
+          <tr><th>Pico</th><td>GP0 (pin 1)</td><td>GP1 (pin 2)</td><td>GP2 (pin 4)</td><td>GP3 (pin 5)</td><td><b>GP6 (pin 9)</b></td><td>GP5 (pin 7)</td><td><b>GP4 (pin 6)</b></td></tr>
+        </table></div> On a Pico without pins, push each wire through its hole from the top and solder underneath. On one with pins, wrap the wire once around the pin, down near the plastic, and solder at 350 °C (660 °F), because the pins soak up heat. If a wire falls short, extend it with 26 AWG wire about 10–15 cm (4–6 in) long, with heat-shrink over the joint.</li>
       <li><b>Hook:</b> solder the two hook wires you found in Part 7 to <b>GP15 (pin 20)</b> and <b>GND (pin 18)</b>. Either wire can go to either pin.</li>
       <li>After each joint, put the meter on beep and touch the two neighbouring pins: they must stay silent. A beep means solder is bridging them. Pins are only 2.54 mm (0.1 in) apart.</li>
       <li>If you've cut pins short, use flush cutters and trim just above the joint, never flush with the board. Cover the pin with a finger as you cut; clipped pins fly.</li>
     </ol>
-    <h3>10c · Let the Pico map the keypad (the key monitor)</h3>
+    <h3>10c · Only for a phone without printed labels: let the Pico map the keypad</h3>
+    <p>The MS-303 doesn't need this step. On a keypad without labels, wire the ribbon in order (wire 1 → GP0, 2 → GP1 …) and use the key monitor:</p>
     <ol class="steps">
       <li>Only the keypad needs to be wired for this; the hook switch can wait. Make sure <code>keymonitor.py</code> is on CIRCUITPY next to code.py.</li>
       <li>Open <code>code.py</code> on CIRCUITPY. Change <code>FIND_KEYS = False</code> to <code>FIND_KEYS = True</code> and save. The Pico restarts as a <b>key monitor</b>. It reports over USB every time two ribbon wires touch.</li>
