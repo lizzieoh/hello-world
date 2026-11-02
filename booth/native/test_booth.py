@@ -197,8 +197,8 @@ def test_full_call():
     assert client.calls.count("minimax/h3-max/text-to-video") == 2
     booth.post(("hook", False))
     wait(lambda: booth.state == "idle", 3, "idle")
-    wait(lambda: booth.screen.calls("slides"), 5, "slideshow of recent videos")
-    assert len(booth.screen.calls("slides")[-1][1]) >= 2
+    wait(lambda: booth.screen.calls("playlist"), 5, "earlier videos on the idle screen")
+    assert len(booth.screen.calls("playlist")[-1][1]) >= 1
     stop.set()
 
 
@@ -439,7 +439,7 @@ def test_slideshow_after_four_plays():
     stop.set()
 
 
-def test_slides_span_all_videos():
+def test_idle_screen_shuffles_earlier_videos():
     booth, client, stop = make()
     for n in range(2):
         lift_and_say(booth, talk())
@@ -447,9 +447,11 @@ def test_slides_span_all_videos():
         wait(lambda: booth.take.get("done") and booth.take["done"].is_set(), 20, "saved with stills")
         booth.post(("hook", False))
         wait(lambda: booth.state == "idle", 3)
-    wait(lambda: booth.screen.calls("slides"), 5, "attract slideshow")
-    images = booth.screen.calls("slides")[-1][1]
-    assert len(images) == 6 and len({Path(i).parent for i in images}) == 2, images
+    wait(lambda: booth.screen.calls("playlist"), 5, "idle shuffle")
+    files = booth.screen.calls("playlist")[-1][1]
+    assert set(files) == {f for f, _ in booth.cache.recent()} and len(set(files)) == 2, files
+    assert all(a != b for a, b in zip(files, files[1:] + files[:1])), "the same video twice in a row"
+    assert [p for _, p in booth.attract] == [dict(booth.cache.recent())[f] for f in files], "prompts match"
     stop.set()
 
 

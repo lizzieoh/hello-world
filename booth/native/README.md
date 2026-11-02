@@ -95,7 +95,7 @@ A USB keyboard works as the phone, which is handy for testing before the phone i
 - **Top left:** the line number and a dot. Green means fal is reachable. Red means **offline**, so check the router.
 - **On hold:** "Connecting you to our fastest agent", then the prompt, with a clock counting from the moment the caller stopped talking.
 - **Ready:** the video, the time it took, and the key hints. Pressed keys turn green.
-- **Between calls:** the last 12 videos loop, each with its prompt.
+- **Between calls:** the last 12 videos play in a shuffled order, never the same one twice in a row, each with its prompt.
 
 ## Files
 

@@ -981,6 +981,20 @@ class Cache:
                     if (self.root / st).exists()]
 
 
+def shuffled(items, rounds=6):
+    """Several shuffled passes through items, one after another, never the same one twice in a row. mpv loops the
+    whole list, so the order doesn't repeat for a while and the prompt on screen still matches by position."""
+    out = []
+    for _ in range(rounds if len(items) > 1 else 1):
+        r = random.sample(items, len(items))
+        if out and len(r) > 1 and r[0] == out[-1]:
+            r[0], r[-1] = r[-1], r[0]
+        out += r
+    if len(out) > 2 and out[0] == out[-1]:  # and none twice in a row where the loop wraps round
+        out[-1], out[-2] = out[-2], out[-1]
+    return out
+
+
 # ---------- the receipt ----------
 DOTS = 576  # across an 80 mm receipt at 203 dpi
 
@@ -1839,13 +1853,9 @@ class Booth:
     def on_attract(self, cid):
         if cid != self.cid or self.state != "idle":
             return
-        self.take = None  # their clip (or its slideshow) makes way for the loop of recent ones
-        slides = self.cache.slides()
-        self.attract = slides if len(slides) >= 2 else self.cache.recent()
-        if len(slides) >= 2:
-            self.screen.slides([img for img, _ in slides], self.cfg["slide_secs"])
-            self.set_view(said=f"“{self.attract[0][1]}”", status="Pick up the phone to make your own.")
-        elif self.attract:
+        self.take = None  # their clip (or its slideshow) makes way for a shuffle of earlier videos
+        self.attract = shuffled(self.cache.recent())
+        if self.attract:
             self.screen.playlist([f for f, _ in self.attract])
             self.set_view(said=f"“{self.attract[0][1]}”", status="Pick up the phone to make your own.")
         else:
@@ -1853,7 +1863,7 @@ class Booth:
             self.set_view(center="Pick up the phone.")
 
     def on_playlist_pos(self, pos):
-        # their own slideshow still lingering after a hang-up, or the loop of recent ones
+        # their own slideshow still lingering after a hang-up, or the shuffle of earlier videos
         shown = self.slideshow if self.take and self.take.get("slides") else self.attract
         if self.state == "idle" and isinstance(pos, int) and 0 <= pos < len(shown):
             self.set_view(said=f"“{shown[pos][1]}”", status="Pick up the phone to make your own.")
