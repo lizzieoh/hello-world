@@ -138,12 +138,17 @@ REMIX_PROMPT = (
     "yellow and square, so not yellow and not square). Keep everything else "
     "exactly as they said it: the places, the action, the time of day and the mood. Make it fun. Reply with the "
     "new prompt only: one sentence, under 30 words.")
+CANCELLED = "Cancelled, nothing made. Try another idea after the beep, or hang up."
 REMIXING = "That one's someone else's character, so our agent is making you an original."
 ASK_AGAIN = "That one belongs to someone else. Try your own idea after the beep."
 ORIGINAL_ONLY = " Original characters and designs only: no logos, brand names or famous people."
 
 
 # ---------- fal ----------
+class Cancelled(Exception):
+    """The caller pressed * to cancel: the fal job is called off and nothing is made."""
+
+
 class Refused(Exception):
     """fal said no to the request itself (bad input, safety checker): the backup model would say no too."""
 
@@ -284,20 +289,21 @@ class Fal:
                 last = e
         raise last
 
-    def render(self, prompt):
-        """Each model gets one go, in order. Returns (url, model name)."""
+    def render(self, prompt, stop=None):
+        """Each model gets one go, in order. Returns (url, model name). `stop()` true (the caller pressed *) calls the
+        job off."""
         last = None
         for name, endpoint, build in self.models:
             try:
-                return self._one(endpoint, build(prompt + ORIGINAL_ONLY)), name
-            except Refused:
+                return self._one(endpoint, build(prompt + ORIGINAL_ONLY), stop), name
+            except (Refused, Cancelled):
                 raise
             except Exception as e:
                 log.warning("%s failed: %s", name, e)
                 last = e
         raise last or RuntimeError("no models")
 
-    def _one(self, endpoint, args):
+    def _one(self, endpoint, args, stop=None):
         try:
             handle = self.client.submit(endpoint, args)
             deadline = time.monotonic() + self.cfg["render_timeout"]
@@ -305,6 +311,12 @@ class Fal:
                 s = handle.status()
                 if type(s).__name__ == "Completed":
                     break
+                if stop and stop():
+                    try:
+                        handle.cancel()
+                    except Exception:
+                        pass
+                    raise Cancelled()
                 if time.monotonic() > deadline:
                     try:
                         handle.cancel()
@@ -313,6 +325,8 @@ class Fal:
                     raise TimeoutError(f"{endpoint} took over {self.cfg['render_timeout']:.0f} s")
                 time.sleep(0.25)
             data = handle.get()
+        except Cancelled:
+            raise
         except Exception as e:
             code = getattr(e, "status_code", None)
             if code and 400 <= code < 500 and code not in (408, 429):
@@ -566,10 +580,12 @@ class Line:
                 self._finish()
 
     def finish_if_heard(self):
-        """Hung up while talking: what was said is the prompt, if they said anything."""
+        """Hung up while talking: what was said is the prompt. A quiet caller the speech detector missed gets the
+        benefit of the doubt after 1.5 s (the speech model then decides if there were words)."""
         with self.lock:
             r = self.rec
-            if r and r["heard"]:
+            if r and (r["heard"] or r["n"] > 1.5 * MIC_SR):
+                r["heard"] = True
                 self._finish()
             else:
                 self.rec = None
@@ -1032,6 +1048,23 @@ def brand_font(kind, size, weight=None):
     return ImageFont.truetype(find_font(bold=(weight or 400) >= 600 or kind == "display"), size)
 
 
+def glitch_row(width, seed, height=28):
+    """A strip of the brand's pixel 'glitch dust', in black, for dividers."""
+    from PIL import Image, ImageDraw
+    rnd = random.Random(seed)
+    img = Image.new("L", (width, height), 255)
+    d = ImageDraw.Draw(img)
+    cell = 7
+    x = 0
+    while x < width:
+        x += rnd.choice([cell, cell * 2, cell * 3, cell * 5])
+        if rnd.random() < 0.55:
+            w = cell * rnd.choice([1, 1, 2, 3])
+            y = cell * rnd.randrange(height // cell)
+            d.rectangle([x, y, x + w - 1, y + cell - 1], fill=0)
+    return img
+
+
 def sharpest_frame(src, at, vf, spread=0.3):
     """The frame at `at` seconds, or one either side of it if that's sharper (less motion blur): three tries,
     scored by how much fine detail they have (the variance of the Laplacian)."""
@@ -1063,15 +1096,14 @@ def thermal_photo(f, gamma):
 
 
 def receipt_image(take, cfg, src):
-    """The receipt: lots of white, the logo, small square stills that step from side to side, a few big lines in
+    """The receipt: lots of white, the logo, a full-width still and a small square one, a few big lines in
     mono, and the itemized bill."""
     from PIL import Image, ImageDraw, ImageOps
     W, M = DOTS, 40  # width and side margin, in printer dots
     S = 230          # each still, square
     frames = []
-    # the first and last stills are squares; the middle one is the whole frame, across the receipt
-    for frac, vf in ((0.2, f"scale=-2:{S}:flags=lanczos,crop={S}:{S}"), (0.5, f"scale={W}:-2:flags=lanczos"),
-                     (0.8, f"scale=-2:{S}:flags=lanczos,crop={S}:{S}")):
+    # two stills: the whole frame across the receipt, then a square near the end of the clip
+    for frac, vf in ((0.5, f"scale={W}:-2:flags=lanczos"), (0.8, f"scale=-2:{S}:flags=lanczos,crop={S}:{S}")):
         try:
             f = sharpest_frame(src, cfg["secs"] * frac, vf)
         except FileNotFoundError:  # no ffmpeg (a laptop test): a receipt without stills
@@ -1132,16 +1164,14 @@ def receipt_image(take, cfg, src):
     if LOGO.exists():
         mark = logo_image(400)
         img.paste(0, ((W - mark.width) // 2, y), mark)
-        y += mark.height + 64
+        y += mark.height + 56
     else:
         d.text((W // 2, y), "CALL-A-FAL", font=brand_font("display", 60, 900), fill=0, anchor="mt")
-        y += 104
+        y += 96
 
-    still(right=True)
-
-    # which booth, when, where
+    # the brand's glitch dust (a different pattern each call), then when and where
+    img.paste(glitch_row(W, take.get("call", 0)), (0, y)); y += 50
     at = time.localtime(take.get("at"))
-    text([f"LINE {int(cfg['line'] or 0):02d}"], big, 64)
     row(time.strftime("%b %d %Y", at).upper(), time.strftime("%I:%M %p", at), gap=34)
     row((cfg.get("location") or "").upper(), "")
     y += 28
@@ -1156,17 +1186,17 @@ def receipt_image(take, cfg, src):
     y += 40
 
     still(right=False, darker=True)  # full width
-    text(["RESOLVED", f"IN {take['secs']:.1f} s"], big, 60)
+    text(["GENERATED", f"IN {take['secs']:.1f} s"], big, 60)
     y += 36
 
     # the bill: every model the call used, and what it cost
     text(["ITEMIZED CALL"], small, 34)
     for label, detail, cost in take.get("costs") or []:
-        row(label, f"${cost:.3f}" if cost >= 0.001 or not cost else f"${cost:.4f}")
+        row(label, f"${cost:.4f}")  # four decimals throughout, so the lines add up to the total
         text([detail], small, 30, x=M + 16)
-    total = sum(c for _, _, c in take.get("costs") or [])
+    total = sum(round(c, 4) for _, _, c in take.get("costs") or [])  # what's printed above, so it adds up
     d.line([(M, y), (W - M, y)], fill=0, width=2); y += 16
-    row("TOTAL", f"${total:.2f}", font=brand_font("mono", 40, 700), gap=50)
+    row("TOTAL", f"${total:.4f}", font=brand_font("mono", 40, 700), gap=50)
     y += 36
 
     still(right=True)
@@ -1188,7 +1218,7 @@ def receipt_image(take, cfg, src):
     except Exception:  # no qrcode package, or no URL: the receipt still prints
         pass
 
-    row("Thank you for calling.", "fal.ai", font=small, gap=30)
+    row("Your creative direct line", "fal.ai", font=small, gap=30)
     y += 20
     return img.crop((0, 0, W, y)).point(lambda v: 255 if v > 200 else 0).convert("1")
 
@@ -1324,6 +1354,7 @@ class Booth:
         self.hung_up_cid = None  # a call hung up mid-sentence: what they'd said is still made
         self.orphans = set()     # renders whose caller hung up: shown on the screen when they arrive
         self.llm_bill = {}       # render id -> [(item, model, USD)] for the IP check and remix, for the receipt
+        self.cancelled = set()   # render ids called off with *: never made, shown or kept
         self.call_no = 0
         self.online = True
         self.loud = True       # the phone's volume switch
@@ -1468,6 +1499,8 @@ class Booth:
             return self.reset_feed()
         if k == "#" and self.state == "listening":
             return self.line.stop_recording()
+        if k == "*" and self.off_hook and self.state in ("listening", "hold"):
+            return self.cancel()
         if not self.off_hook:
             return
         self.bump_idle()
@@ -1483,7 +1516,7 @@ class Booth:
         if what == "greeted" and self.state == "greeting":
             log.info("greeting done, listening (call %d, try %d)", self.cid, self.attempt + 1)
             self.state = "listening"
-            self.set_view(center="Listening…  press # when you're done.")
+            self.set_view(center="Listening…  press # when you're done, * to cancel.")
             self.line.record(self.cid)
         elif what == "menu":
             self.bump_idle()
@@ -1520,13 +1553,15 @@ class Booth:
         except Exception:
             return self.post(("failed", cid, rid, "Our lines are busy. Hang up and try again."))
         self.post(("prompt", cid, rid, prompt))
-        if heard_nothing(prompt) or BLOCKED.search(prompt):
+        if heard_nothing(prompt) or BLOCKED.search(prompt) or rid in self.cancelled:
             return
         self.llm_bill[rid] = bill = []
         try:
             borrowed = self.fal.check_ip(prompt, bill)
         except Exception:
             return self.post(("failed", cid, rid, "Our lines are busy. Hang up and try again."))
+        if rid in self.cancelled:
+            return
         if not borrowed:
             return self._render(cid, rid, prompt, t0)
         # Someone else's IP: never made. The agent makes them an original with the same energy instead.
@@ -1537,11 +1572,27 @@ class Booth:
         except Exception:
             return self.post(("ask_again", cid, rid))
         log.info("made an original instead: %r", original)
-        self._render(cid, rid, original, t0, you_said=prompt)
+        if rid not in self.cancelled:
+            self._render(cid, rid, original, t0, you_said=prompt)
 
     def on_remixing(self, cid, rid):
         if cid == self.cid and rid == self.pending:
             self.view["said"] = REMIXING
+
+    def cancel(self):
+        """* while listening or on hold: nothing is made (a render already running is called off at fal), and the
+        caller can try another idea after the beep, or hang up."""
+        log.info("cancelled with * (%s)", self.state)
+        self.line.cancel_recording()
+        if self.pending is not None:
+            self.cancelled.add(self.pending)
+        self.pending = None
+        self.hold_from = None
+        self.line.stop()
+        self.screen.background()
+        self.state = "greeting"
+        self.set_view(center=CANCELLED)
+        self.play("beep", "greeted")
 
     def on_ask_again(self, cid, rid):
         """Couldn't make it original: no busy tone, just another go after the beep."""
@@ -1581,8 +1632,10 @@ class Booth:
             asked = f"{prompt.rstrip(' .')}. {TAKES[(take - 1 + self.take_offset) % len(TAKES)]}"
             log.info("take %d: %s", take + 1, asked)
         try:
-            url, model = self.fal.render(asked)
+            url, model = self.fal.render(asked, stop=lambda: rid in self.cancelled)
             log.info("rendered in %.1f s", time.monotonic() - t)
+        except Cancelled:
+            return log.info("render called off at fal")
         except Refused:
             return self.post(("failed", cid, rid, "That one didn't go through. Hang up and try another."))
         except Exception:
@@ -1592,6 +1645,8 @@ class Booth:
                                           "answered": False, "sound": False}))
 
     def on_rendered(self, cid, rid, take):
+        if rid in self.cancelled:  # finished just as * was pressed: dropped
+            return
         log.info("video: %s, %.1f s after they stopped talking", take["model"], take["secs"])
         self.cache.add(take)  # kept for the screen between calls, even if they hung up while it rendered
         if rid in self.orphans:
@@ -1829,7 +1884,7 @@ class Booth:
         if self.state != "hold" or self.hold_from is None:
             return
         label = "On hold" if self.view["said"] else "Connecting you to our fastest agent"
-        self.view["status"] = f"{label} · {time.monotonic() - self.hold_from:.1f} s"
+        self.view["status"] = f"{label} · {time.monotonic() - self.hold_from:.1f} s  ·  * to cancel"
         self.draw()
         self.after(0.1, "tick")
 

@@ -52,7 +52,7 @@ Only original ideas, and nobody walks away without a video. Before anything is g
 
 Every video prompt also asks for original characters and designs only. Rude words get the busy tone (`BLOCKED`).
 
-Hanging up doesn't lose the video. Hang up after **#**, or mid-sentence without pressing it, and the video is still made and goes up on the screen when it's ready.
+Hanging up doesn't lose the video. Hang up after **#**, or mid-sentence without pressing it, and the video is still made and goes up on the screen when it's ready. Only **\*** cancels.
 
 ## Settings: `native.conf`
 
@@ -77,6 +77,7 @@ Changes take effect when the app restarts. Hold **\*** for 3 seconds on the phon
 |---|---|
 | Lift / hang up (F8 / F9) | Starts and ends the call |
 | **#** while talking | "I'm done", without waiting for the pause |
+| **\*** while talking or on hold | Cancel: nothing is made (a render already running is called off at fal). They get the beep and can try another idea, or hang up. |
 | **2** | Sound on/off; turning it on restarts the clip from the beginning |
 | **3** | The same prompt again; the last video keeps playing under the hold clock |
 | **0** | Prints the receipt (once per video; if the printer is offline, 0 tries again) |

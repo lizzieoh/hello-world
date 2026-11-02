@@ -320,6 +320,43 @@ def test_hang_up_before_speaking_makes_nothing():
     stop.set()
 
 
+def test_star_cancels_while_listening():
+    booth, client, stop = make()
+    lift_and_say(booth, lambda t: 0.2)
+    time.sleep(0.2)
+    booth.line.mic = lambda t: 0.0
+    booth.post(("key", "*"))
+    wait(lambda: booth.view["center"] == B.CANCELLED, 3, "cancelled")
+    wait(lambda: booth.state == "listening", 5, "listening again after the beep")
+    booth.post(("hook", False))  # hanging up straight away makes nothing: they said nothing new
+    time.sleep(0.5)
+    assert not client.calls, client.calls
+    stop.set()
+
+
+def test_star_cancels_the_render_at_fal():
+    booth, client, stop = make()
+    client.plan["minimax/h3-max/text-to-video"] = "hang"
+    lift_and_say(booth, talk())
+    wait(lambda: "minimax/h3-max/text-to-video" in client.calls, 8, "rendering")
+    booth.post(("key", "*"))
+    wait(lambda: "cancel" in client.calls, 3, "job called off at fal")
+    wait(lambda: booth.state == "listening", 5, "listening again after the beep")
+    time.sleep(0.5)
+    assert booth.state != "ready" and not booth.cache.recent()
+    assert "blackforestlabs/flux-3-max/text-to-video" not in client.calls  # not passed on to the backup model
+    stop.set()
+
+
+def test_quiet_caller_who_hangs_up_is_still_tried():
+    booth, client, stop = make()
+    lift_and_say(booth, lambda t: 0.004)  # under the speech detector
+    wait(lambda: (r := booth.line.rec) is not None and r["n"] > 2 * B.MIC_SR, 3, "2 s in")
+    booth.post(("hook", False))
+    wait(lambda: "fal-ai/wizper" in client.calls, 3, "sent to speech to text")
+    stop.set()
+
+
 def test_ip_is_remixed_into_an_original():
     booth, client, stop = make()
     client.text, client.ip = "a man in a red and blue spider suit swinging between skyscrapers", "spider"
