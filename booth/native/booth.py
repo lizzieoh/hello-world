@@ -45,7 +45,8 @@ log = logging.getLogger("booth")
 def load_config(path=HERE / "native.conf"):
     cfg = {"LINE": "1", "SECS": "10", "MODEL": "h3", "LANGUAGE": "en", "PRINTER": "/dev/usb/lp0", "GRAB": "1",
            "PLAYS_BEFORE_SLIDES": "4", "SLIDES": "6", "SLIDE_SECS": "2.5", "PRINT_LIGHTEN": "35",
-           "OUT_DEVICE": "", "IN_DEVICE": "", "LOW_VOLUME": "40", "RING_EVERY": "120", "LOCATION": "MIAMI"}
+           "OUT_DEVICE": "", "IN_DEVICE": "", "LOW_VOLUME": "40", "RING_EVERY": "120", "LOCATION": "MIAMI",
+           "END_PAUSE": "5", "LISTEN_MAX": "30"}
     if path.exists():
         for raw in path.read_text().splitlines():
             line = raw.split("#", 1)[0].strip()
@@ -66,7 +67,10 @@ def load_config(path=HERE / "native.conf"):
         # Sound devices by (part of) their name; empty = the system default (on the Pi, run.sh points that at the
         # USB adapter). E.g. on a laptop: OUT_DEVICE="External Headphones", IN_DEVICE="USB Audio".
         "out_device": cfg["OUT_DEVICE"] or None, "in_device": cfg["IN_DEVICE"] or None,
-        "listen_max": 8.0, "no_speech": 6.0, "silence": 0.9,   # seconds: longest prompt, give up, end of speech
+        # Listening ends when they press #. For callers who never do: a pause this long after speaking, or this
+        # long in all (seconds). No speech at all for no_speech seconds counts as a silent caller.
+        "silence": max(0.5, float(cfg["END_PAUSE"])), "listen_max": max(5.0, float(cfg["LISTEN_MAX"])),
+        "no_speech": 6.0,
         "render_timeout": 45.0,                                  # per model, then the next model
         "menu_after": 3.0,                                       # seconds into the clip before the menu is read
         "off_hook_idle": 60.0,                                   # handset left off after the menu -> busy signal
@@ -941,7 +945,7 @@ def receipt_image(take, cfg, src):
     mono, and the itemized bill."""
     from PIL import Image, ImageDraw, ImageOps
     W, M = DOTS, 40  # width and side margin, in printer dots
-    S = 250          # each still, square
+    S = 230          # each still, square
     frames = []
     for frac in (0.2, 0.5, 0.8):
         try:
@@ -973,7 +977,7 @@ def receipt_image(take, cfg, src):
 
     img = Image.new("L", (W, 4000), 255)  # cropped to what was drawn
     d = ImageDraw.Draw(img)
-    y = 50
+    y = 36
 
     def text(lines, font, gap, x=M):
         nonlocal y
@@ -998,16 +1002,16 @@ def receipt_image(take, cfg, src):
         f = ImageOps.autocontrast(f, cutoff=1).point(lambda v: round(255 * (v / 255) ** (1 / gamma)))
         # every printer dot used (error diffusion), so the still keeps the video's full detail
         img.paste(f.convert("1", dither=Image.Dither.FLOYDSTEINBERG).convert("L"), (W - M - S if right else M, y))
-        y += S + 64
+        y += S + 44
 
     # the logo (the fal mark, "fal" and CALL-A-FAL in one line)
     if LOGO.exists():
         mark = logo_image(400)
         img.paste(0, ((W - mark.width) // 2, y), mark)
-        y += mark.height + 100
+        y += mark.height + 64
     else:
         d.text((W // 2, y), "CALL-A-FAL", font=brand_font("display", 60, 900), fill=0, anchor="mt")
-        y += 140
+        y += 104
 
     still(right=True)
 
@@ -1016,16 +1020,16 @@ def receipt_image(take, cfg, src):
     text([f"LINE {int(cfg['line'] or 0):02d}"], big, 64)
     row(time.strftime("%b %d %Y", at).upper(), time.strftime("%I:%M %p", at), gap=34)
     row((cfg.get("location") or "").upper(), "")
-    y += 40
+    y += 28
 
     # what they asked for
     text(["YOU SAID"], small, 30)
     text(wrap(f"“{take['prompt']}”", said_font), said_font, 36)
-    y += 56
+    y += 40
 
     still(right=False)
     text(["RESOLVED", f"IN {take['secs']:.1f} s"], big, 60)
-    y += 50
+    y += 36
 
     # the bill: every model the call used, and what it cost
     text(["ITEMIZED CALL"], small, 34)
@@ -1035,7 +1039,7 @@ def receipt_image(take, cfg, src):
     total = sum(c for _, _, c in take.get("costs") or [])
     d.line([(M, y), (W - M, y)], fill=0, width=2); y += 16
     row("TOTAL", f"${total:.2f}", font=brand_font("mono", 40, 700), gap=50)
-    y += 50
+    y += 36
 
     still(right=True)
 
@@ -1045,16 +1049,16 @@ def receipt_image(take, cfg, src):
         qr = qrcode.QRCode(border=0, box_size=6, error_correction=qrcode.constants.ERROR_CORRECT_M)
         qr.add_data(take["url"])
         q = qr.make_image(fill_color="black", back_color="white").convert("L")
-        q = q.resize((180, 180), Image.NEAREST)
+        q = q.resize((170, 170), Image.NEAREST)
         img.paste(q, (M, y))
         for i, line in enumerate(("SCAN TO KEEP", "YOUR VIDEO")):
-            d.text((M + q.width + 28, y + 60 + i * 30), line, font=small, fill=0)
-        y += q.height + 70
+            d.text((M + q.width + 28, y + 55 + i * 30), line, font=small, fill=0)
+        y += q.height + 48
     except Exception:  # no qrcode package, or no URL: the receipt still prints
         pass
 
     row("Thank you for calling.", "fal.ai", font=small, gap=30)
-    y += 30
+    y += 20
     return img.crop((0, 0, W, y)).point(lambda v: 255 if v > 200 else 0).convert("1")
 
 

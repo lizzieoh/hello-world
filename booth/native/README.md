@@ -49,6 +49,7 @@ To go back to the browser version, run `cd ~/hello-world/booth/pi && ./setup.sh 
 | `SECS` | `10` | Clip length, 5 to 15 |
 | `MODEL` | `h3` | `h3`: H3 Max first, FLUX 3 Max as backup. `flux`: the other way round. |
 | `LANGUAGE` | `en` | `auto` lets Wizper guess the language (a little slower) |
+| `END_PAUSE`, `LISTEN_MAX` | `5`, `30` | Listening ends when the caller presses **\#**; for callers who never do, after this many seconds of quiet once they've spoken, or this long in all |
 | `PRINTER` | `/dev/usb/lp0` | The receipt printer |
 | `LOCATION` | `MIAMI` | Printed on the receipt under the line number |
 | `ROTATE`, `SPEAKER_VOLUME`, `MIC_VOLUME` | | Same as the browser version |

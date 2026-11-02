@@ -206,6 +206,16 @@ def test_hash_ends_listening():
     stop.set()
 
 
+def test_pause_does_not_end_listening():
+    booth, client, stop = make()
+    lift_and_say(booth, lambda t: 0.2 if t < 1 or 3 <= t < 4 else 0.0)  # stops to think for 2 s mid-sentence
+    wait(lambda: (r := booth.line.rec) is not None and r["n"] > 4.5 * B.MIC_SR, 5, "past the pause")
+    assert booth.state == "listening", booth.state
+    booth.post(("key", "#"))
+    wait(lambda: booth.state == "hold", 3, "hold after #")
+    stop.set()
+
+
 def test_stalled_speech_to_text_falls_back():
     client = Client()
     client.plan["fal-ai/wizper"] = "hang"
