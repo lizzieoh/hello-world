@@ -667,8 +667,8 @@ class Screen:
 
 
 def make_background(path):
-    """A quiet near-black card with the wordmark, for the moments there's no video."""
-    if path.exists():
+    """A quiet near-black card with the logo, for the moments there's no video. Redrawn when the logo changes."""
+    if path.exists() and (not LOGO.exists() or path.stat().st_mtime > LOGO.stat().st_mtime):
         return
     from PIL import Image, ImageDraw, ImageFont
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -677,8 +677,12 @@ def make_background(path):
     for y in range(1080):  # a faint glow from the bottom
         a = max(0, (y - 540) / 540) ** 2
         d.line([(0, y), (1920, y)], fill=(int(11 + 14 * a), int(11 + 10 * a), int(15 + 22 * a)))
-    font = ImageFont.truetype(find_font(bold=True), 44)
-    d.text((960, 120), "fal call center", font=font, fill=(90, 90, 104), anchor="mm")
+    if LOGO.exists():
+        mark = logo_image(560)
+        img.paste((90, 90, 104), (960 - mark.width // 2, 120 - mark.height // 2), mark)
+    else:
+        font = ImageFont.truetype(find_font(bold=True), 44)
+        d.text((960, 120), "CALL-A-FAL", font=font, fill=(90, 90, 104), anchor="mm")
     img.save(path)
 
 
@@ -882,6 +886,15 @@ def video_stills(src, secs, count, out_dir):
 
 
 BRAND = HERE / "brand"
+LOGO = BRAND / "call-a-fal.png"  # black on transparent; its shape is all that's used, so any colour works
+
+
+def logo_image(width):
+    """The logo's shape at this width, as a mask (255 = ink) for pasting in any colour."""
+    from PIL import Image
+    a = Image.open(LOGO).convert("RGBA").getchannel("A")
+    return a.resize((width, round(width * a.height / a.width)), Image.LANCZOS)
+
 # fal's list prices (USD), used if the live price lookup at start-up can't be reached.
 RESET_CODE = "*123#"  # staff: clears the screen's feed of earlier videos
 
@@ -983,20 +996,14 @@ def receipt_image(take, cfg, src):
             d.line([(M, y), (W - M, y)], fill=0, width=2)
         y += 18
 
-    # the logo, then the name of the line
-    logo = BRAND / "fal-wordmark.png"
-    if logo.exists():
-        rgba = Image.open(logo).convert("RGBA")
-        mark = Image.new("RGBA", rgba.size, "white")
-        mark.alpha_composite(rgba)  # transparent corners stay white, not black
-        mark = mark.convert("L")
-        mark = mark.resize((300, round(300 * mark.height / mark.width)), Image.LANCZOS)
-        img.paste(mark, ((W - mark.width) // 2, y))
-        y += mark.height + 6
+    # the logo (the fal mark, "fal" and CALL-A-FAL in one line)
+    if LOGO.exists():
+        mark = logo_image(W - 2 * M)
+        img.paste(0, ((W - mark.width) // 2, y), mark)
+        y += mark.height + 24
     else:
-        d.text((W // 2, y), "fal", font=brand_font("display", 90, 900), fill=0, anchor="mt")
-        y += 100
-    d.text((W // 2, y), "C A L L   C E N T E R", font=title, fill=0, anchor="mt"); y += 52
+        d.text((W // 2, y), "CALL-A-FAL", font=brand_font("display", 60, 900), fill=0, anchor="mt")
+        y += 84
     img.paste(glitch_row(W, take.get("call", 0)), (0, y)); y += 40
 
     # who called, when
