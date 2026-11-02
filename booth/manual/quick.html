@@ -184,6 +184,14 @@
       <li>The board prints the keypad map beside its ribbon: <b>C3, C2, C1, R4, R3, R2, R1</b>. Put a marker dot on the <b>R1</b> wire, then cut the ribbon close to the board.</li>
       <li>Turn the Pico <b>underside up</b> (the side where the pins stick out and the pin names are printed), USB at the top. Pins 1–20 run down the right edge.</li>
       <li>Connect each wire as in the map. For the prototype, solder each wire to half a female-to-female jumper and push it onto the pin; hot-glue the rows once it all works.</li>
+    </ol>
+    <div class="tablewrap"><table>
+      <tr><th>Wire</th><td>R1</td><td>R2</td><td>R3</td><td>R4</td><td>C1</td><td>C2</td><td>C3</td><td>Hook</td><td>Hook</td></tr>
+      <tr><th>Colour</th><td>red</td><td>orange</td><td>yellow</td><td>green</td><td>blue</td><td>purple</td><td>grey</td><td>white</td><td>white</td></tr>
+      <tr><th>Pico</th><td>GP0</td><td>GP1</td><td>GP2</td><td>GP3</td><td><b>GP6</b></td><td>GP5</td><td><b>GP4</b></td><td>GND</td><td>GP15</td></tr>
+      <tr><th>Pin</th><td>1</td><td>2</td><td>4</td><td>5</td><td><b>9</b></td><td>7</td><td><b>6</b></td><td>18</td><td>20</td></tr>
+    </table></div>
+    <ol class="steps" style="counter-reset: step 3">
       <li><b>Volume:</b> the front panel's 4 wires (ringer + volume sliders) go to GP16, GP17, GP18, GP19 (pins 21, 22, 24, 25), in any order. Then move the VOLUME slider with the Pico on the laptop and tell Claude what it reports; it fills in the setting (full manual, Part 9).</li>
     </ol>
     <figure>

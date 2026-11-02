@@ -467,7 +467,7 @@
       <li>On this phone the grey keypad ribbon is <b>soldered straight to the main board</b>, with no plug, and the board <b>prints the map</b> beside it: from top to bottom <b>C3, C2, C1, R4, R3, R2, R1</b> (3 columns, 4 rows, 7 wires).</li>
       <li><b>Before cutting,</b> put a marker dot on the wire at the <b>R1</b> end. Once it's cut, the grey wires all look the same.</li>
       <li>Cut the ribbon <b>close to the main board</b>, so its full length stays attached to the keypad.</li>
-      <li>Number the wires from the dot: 1 = R1, 2 = R2, 3 = R3, 4 = R4, 5 = C1, 6 = C2, 7 = C3. Peel them apart about 3 cm (1¼ in) and strip 3 mm (⅛ in) from each.</li>
+      <li>Number the wires from the dot: 1 = R1, 2 = R2, 3 = R3, 4 = R4, 5 = C1, 6 = C2, 7 = C3. Peel them apart about 3 cm (1¼ in) and strip 3 mm (⅛ in) from each. Extend them in rainbow order: R1 red, R2 orange, R3 yellow, R4 green, C1 blue, C2 purple, C3 grey.</li>
     </ol>
     <div class="note check"><b>No meter mapping needed on the MS-303</b><p>The board's labels already say which wire is which row and column. (On a phone without labels, wire the ribbon in order and let the Pico's key monitor work it out; see Part 10c.)</p></div>
     <div class="note why"><b>Why a grid</b><p>Twelve separate switches would need 13 wires. A grid needs 7. The Pico scans the grid many times a second ("is row 1 touching column 1? column 2?…") and works out which key is down.</p></div>
@@ -579,8 +579,10 @@
         <div class="tablewrap"><table>
           <tr><th>Board label</th><td>R1</td><td>R2</td><td>R3</td><td>R4</td><td>C1</td><td>C2</td><td>C3</td></tr>
           <tr><th>Pico</th><td>GP0 (pin 1)</td><td>GP1 (pin 2)</td><td>GP2 (pin 4)</td><td>GP3 (pin 5)</td><td><b>GP6 (pin 9)</b></td><td>GP5 (pin 7)</td><td><b>GP4 (pin 6)</b></td></tr>
+          <tr><th>Wire colour</th><td>red</td><td>orange</td><td>yellow</td><td>green</td><td>blue</td><td>purple</td><td>grey</td></tr>
         </table></div> On a Pico without pins, push each wire through its hole from the top and solder underneath. On one with pins, wrap the wire once around the pin, down near the plastic, and solder at 350 °C (660 °F), because the pins soak up heat. If a wire falls short, extend it with 26 AWG wire about 10–15 cm (4–6 in) long, with heat-shrink over the joint.</li>
-      <li><b>Hook:</b> solder the two hook wires you found in Part 7 to <b>GP15 (pin 20)</b> and <b>GND (pin 18)</b>. Either wire can go to either pin.</li>
+      <li><b>Hook:</b> the two white hook wires (yellow heat-shrink at the Pico end) go to <b>GP15 (pin 20)</b> and <b>GND (pin 18)</b>. Either wire can go to either pin.</li>
+      <li><b>Colour code:</b> extend the keypad wires in rainbow order from R1: <b>red, orange, yellow, green</b> for R1–R4, then <b>blue, purple, grey</b> for C1–C3. Same colours in every phone, so any booth can be fixed without the manual.</li>
       <li>After each joint, put the meter on beep and touch the two neighbouring pins: they must stay silent. A beep means solder is bridging them. Pins are only 2.54 mm (0.1 in) apart.</li>
       <li>If you've cut pins short, use flush cutters and trim just above the joint, never flush with the board. Cover the pin with a finger as you cut; clipped pins fly.</li>
     </ol>

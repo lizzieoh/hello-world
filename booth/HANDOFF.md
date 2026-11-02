@@ -108,7 +108,7 @@ Full quantities, cables and small parts are in `booth/SHOPPING.md`.
   - Earpiece pigtail: black → tip (pigtail red), yellow → sleeve (pigtail black), white taped off.
   - Mic pigtail: red → tip (pigtail red), green → sleeve (pigtail black), white taped off.
 - **Hook switch:** small MS-303 HK board with **2 white wires** to the main board's HK spot (glued). Cut at the main board, solder to GP15 (pin 20) and GND (pin 18). Direction (closes on lift or on hang-up) not yet measured.
-- **Keypad:** grey ribbon soldered to the main board, which **prints the map**: C3, C2, C1, R4, R3, R2, R1 (top to bottom). Wire R1–R4 → GP0–GP3, **C1 → GP6, C2 → GP5, C3 → GP4**, so the existing `code.py` (ROW_PINS GP0–GP3, COL_PINS GP6, GP5, GP4) works unchanged. Verify by pressing every key.
+- **Keypad:** grey ribbon soldered to the main board, which **prints the map**: C3, C2, C1, R4, R3, R2, R1 (top to bottom). Wire R1–R4 → GP0–GP3, **C1 → GP6, C2 → GP5, C3 → GP4**, so the existing `code.py` (ROW_PINS GP0–GP3, COL_PINS GP6, GP5, GP4) works unchanged. Verify by pressing every key. **Colour code (rainbow from R1):** R1 red, R2 orange, R3 yellow, R4 green, C1 blue, C2 purple, C3 grey; hook = the two white wires (yellow sleeve) to pins 18 and 20.
 - **Front panel:** ringer on/off and volume sliders on a small board with a white plug: unplug, ignore. The label window under the keypad is for an instruction card.
 - **Ignore:** BZ (buzzer, red/black), TIP/RING (phone line, red/green twisted).
 

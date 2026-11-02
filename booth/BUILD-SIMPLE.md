@@ -54,6 +54,7 @@ Plug the pigtails into the Sabrent: 🎧 earpiece, 🎤 mic.
 
 | Wire | R1 | R2 | R3 | R4 | C1 | C2 | C3 | Hook | Hook |
 |---|---|---|---|---|---|---|---|---|---|
+| Colour | red | orange | yellow | green | blue | purple | grey | white | white |
 | Pico | GP0 | GP1 | GP2 | GP3 | **GP6** | GP5 | **GP4** | GND | GP15 |
 | Pin | 1 | 2 | 4 | 5 | **9** | 7 | **6** | 18 | 20 |
 
