@@ -5,6 +5,7 @@ The real mixer, voice-activity detection, fal fallback logic, video cache and re
 card, mpv and fal's servers are stand-ins. Run it on any machine with numpy, Pillow and ffmpeg:
     python3 test_booth.py
 """
+import json
 import shutil
 import subprocess
 import tempfile
@@ -55,9 +56,16 @@ class Client:
 
     def __init__(self):
         self.plan, self.text, self.calls = {}, "a red phone ringing on the moon", []
+        self.ip = None  # what the IP check says the prompt borrows; None = an original idea
 
     def run(self, endpoint, args, timeout=None):
         self.calls.append(endpoint)
+        if endpoint == B.Fal.IP_CHECK:
+            if isinstance(self.plan.get(endpoint), int):
+                raise HTTPError(self.plan[endpoint])
+            time.sleep(0.05)
+            verdict = {"ok": False, "what": self.ip} if self.ip else {"ok": True}
+            return {"output": f"```json\n{json.dumps(verdict)}\n```"}  # with the fences some models add
         assert args["audio_url"].startswith("data:audio/x-wav;base64,")
         assert args.get("language", "en") == "en"
         if self.plan.get(endpoint) == "hang":
@@ -162,7 +170,7 @@ def test_full_call():
     wait(lambda: "music" in booth.line.playing(), 3, "hold music")
     wait(lambda: booth.view["said"] == "“a red phone ringing on the moon”", 5, "prompt on screen")
     wait(lambda: booth.state == "ready", 8, "video ready")
-    assert client.calls[:2] == ["fal-ai/wizper", "minimax/h3-max/text-to-video"], client.calls
+    assert client.calls[:3] == ["fal-ai/wizper", B.Fal.IP_CHECK, "minimax/h3-max/text-to-video"], client.calls
     url = booth.screen.calls("video")[-1][1]
     assert url == URL and booth.screen.calls("video")[-1][2] is True  # muted
     assert "Ready in" in booth.view["status"] and "[2]" in booth.screen.last_text
@@ -281,8 +289,56 @@ def test_hang_up_mid_render_keeps_the_video():
     booth.post(("hook", False))
     wait(lambda: booth.state == "idle", 3, "idle")
     wait(lambda: booth.cache.recent(), 10, "video kept for the loop")
-    time.sleep(0.5)
-    assert booth.state == "idle" and not booth.screen.calls("video")
+    wait(lambda: booth.screen.calls("video"), 3, "their video up on the screen")
+    assert booth.state == "idle" and booth.screen.calls("video")[-1][1] == URL
+    stop.set()
+
+
+def test_hang_up_while_talking_still_makes_it():
+    booth, client, stop = make()
+    lift_and_say(booth, lambda t: 0.2)  # still talking when they hang up, # never pressed
+    wait(lambda: (r := booth.line.rec) is not None and r["heard"], 3, "speech heard")
+    booth.post(("hook", False))
+    wait(lambda: booth.screen.calls("video"), 10, "their video up on the screen")
+    assert booth.state == "idle" and "minimax/h3-max/text-to-video" in client.calls
+    stop.set()
+
+
+def test_hang_up_before_speaking_makes_nothing():
+    booth, client, stop = make()
+    lift_and_say(booth, lambda t: 0.0)
+    booth.post(("hook", False))
+    time.sleep(1.0)
+    assert not client.calls, client.calls
+    stop.set()
+
+
+def test_ip_is_never_made():
+    booth, client, stop = make()
+    client.ip = "Spider-Man"  # a described character the name list misses
+    lift_and_say(booth, talk())
+    wait(lambda: booth.state == "busy", 10, "busy")
+    assert "original ideas" in booth.view["center"]
+    assert not any("text-to-video" in c for c in client.calls), client.calls
+    stop.set()
+
+
+def test_ip_name_refused_without_asking():
+    booth, client, stop = make()
+    client.text = "SpongeBob dancing on the beach"
+    lift_and_say(booth, talk())
+    wait(lambda: booth.state == "busy", 10, "busy")
+    assert "original ideas" in booth.view["center"]
+    assert client.calls == ["fal-ai/wizper"], client.calls  # refused on the name alone
+    stop.set()
+
+
+def test_ip_check_down_makes_nothing():
+    booth, client, stop = make()
+    client.plan[B.Fal.IP_CHECK] = 500
+    lift_and_say(booth, talk())
+    wait(lambda: booth.state == "busy", 10, "busy")
+    assert not any("text-to-video" in c for c in client.calls), client.calls
     stop.set()
 
 

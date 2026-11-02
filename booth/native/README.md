@@ -41,6 +41,12 @@ The setup script:
 
 To go back to the browser version, run `cd ~/hello-world/booth/pi && ./setup.sh 1`.
 
+## What it won't make
+
+Only original ideas. Before anything is generated, each prompt is checked for anyone else's intellectual property: characters, franchises, brands, logos, real people and named styles, named or just described (a yellow sponge in brown shorts who lives in a pineapple counts). Well-known names are refused at once (`IP_NAMES` in `booth.py`). Everything else goes to Claude Haiku 4.5 on fal, with GPT-6 Luna if Haiku doesn't answer, which takes about a second. A refused prompt hears the busy tone, and the screen says "We only make original ideas". If neither checker answers, nothing is made. Every video prompt also asks for original characters and designs only. Rude words are refused the same way (`BLOCKED`).
+
+Hanging up doesn't lose the video. Hang up after **#**, or mid-sentence without pressing it, and the video is still made and goes up on the screen when it's ready.
+
 ## Settings: `native.conf`
 
 | Setting | Default | |

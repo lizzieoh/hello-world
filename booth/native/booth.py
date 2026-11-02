@@ -111,6 +111,26 @@ BLOCKED = re.compile(r"\b(nude|naked|nudity|porn\w*|sex\w*|nsfw|genital\w*|gore|
                      r"|rape\w*|terroris\w*)\b", re.I)
 
 
+# Nobody else's intellectual property, ever: the booth only makes original ideas. These names are refused at once;
+# everything else is read by a language model first (Fal.check_ip), which also catches characters that are
+# described rather than named.
+IP_NAMES = re.compile(r"\b(sponge ?bob|spider[- ]?man|mickey|minnie|disney|pixar|marvel|avengers|batman|superman|"
+                      r"pok[eé]mon|pikachu|mario|luigi|zelda|sonic|star ?wars|darth|yoda|harry potter|hogwarts|barbie|"
+                      r"elsa|frozen|shrek|simpsons|minecraft|fortnite|hello kitty|ghibli|totoro|adobe|photoshop|nike|"
+                      r"coca[- ]?cola|pepsi|mcdonald'?s|starbucks|apple logo|iphone|google|tesla|lego)\b", re.I)
+IP_CHECK_PROMPT = (
+    "You screen prompts for a public video booth. The booth must NEVER make anyone else's intellectual property. "
+    'Reply with JSON only: {"ok": true} or {"ok": false, "what": "<short name of the IP>"}.\n'
+    "Not ok: any copyrighted or trademarked character, franchise, film, show, game, comic, book, song or mascot, "
+    "named OR clearly described (e.g. a yellow square sponge in brown shorts who lives in a pineapple); any brand, "
+    "company, logo, product or app (Adobe, Nike, Coca-Cola, iPhone, fal included); any real person, celebrity, "
+    "politician or public figure; any named artist's or studio's style (Pixar, Ghibli, Disney, Wes Anderson).\n"
+    "Ok: original ideas, generic animals, objects, places, cities, landmarks, jobs, genres and moods "
+    "(a sponge, a spider, a superhero I made up, a cartoon, anime style, Miami at night).")
+NO_IP = "We only make original ideas: no characters, brands or famous people. Hang up and try another one."
+ORIGINAL_ONLY = " Original characters and designs only: no logos, brand names or famous people."
+
+
 # ---------- fal ----------
 class Refused(Exception):
     """fal said no to the request itself (bad input, safety checker): the backup model would say no too."""
@@ -121,6 +141,8 @@ class Fal:
     STT_BACKUP = "fal-ai/elevenlabs/speech-to-text/scribe-v2"
     STT_BACKUP_AFTER = 1.5  # s
     STT_DEADLINE = 12       # s, then the caller hears "lines are busy"
+    IP_CHECK = "openrouter/router"
+    IP_CHECK_MODELS = ("anthropic/claude-haiku-4.5", "openai/gpt-6-luna")  # about 1 s; the second if the first fails
 
     def __init__(self, cfg, client=None):
         self.cfg = cfg
@@ -202,12 +224,30 @@ class Fal:
             if failed == len(tries):
                 raise err
 
+    def check_ip(self, prompt):
+        """None if the prompt is an original idea, else what it borrows (a character, brand, real person...).
+        Raises if no checker answered: then the booth makes nothing, rather than risk it."""
+        m = IP_NAMES.search(prompt)
+        if m:
+            return m.group(0)
+        last = None
+        for model in self.IP_CHECK_MODELS:
+            try:
+                out = self.client.run(self.IP_CHECK, {"model": model, "system_prompt": IP_CHECK_PROMPT, "prompt": prompt,
+                                                      "temperature": 0, "max_tokens": 60}, timeout=6).get("output") or ""
+                verdict = json.loads(re.search(r"\{.*?\}", out, re.S).group(0))
+                return None if verdict.get("ok") is True else str(verdict.get("what") or "someone else's IP")
+            except Exception as e:
+                log.warning("IP check failed (%s): %s", model, e)
+                last = e
+        raise last
+
     def render(self, prompt):
         """Each model gets one go, in order. Returns (url, model name)."""
         last = None
         for name, endpoint, build in self.models:
             try:
-                return self._one(endpoint, build(prompt)), name
+                return self._one(endpoint, build(prompt + ORIGINAL_ONLY)), name
             except Refused:
                 raise
             except Exception as e:
@@ -481,6 +521,15 @@ class Line:
             if r:
                 r["heard"] = r["heard"] or r["n"] > 0.6 * MIC_SR
                 self._finish()
+
+    def finish_if_heard(self):
+        """Hung up while talking: what was said is the prompt, if they said anything."""
+        with self.lock:
+            r = self.rec
+            if r and r["heard"]:
+                self._finish()
+            else:
+                self.rec = None
 
     def cancel_recording(self):
         with self.lock:
@@ -947,10 +996,11 @@ def receipt_image(take, cfg, src):
     W, M = DOTS, 40  # width and side margin, in printer dots
     S = 230          # each still, square
     frames = []
-    for frac in (0.2, 0.5, 0.8):
+    # the first and last stills are squares; the middle one is the whole frame, across the receipt
+    for frac, vf in ((0.2, f"scale=-2:{S},crop={S}:{S}"), (0.5, f"scale={W}:-2"), (0.8, f"scale=-2:{S},crop={S}:{S}")):
         try:
             png = subprocess.run(["ffmpeg", "-v", "error", "-ss", f"{cfg['secs'] * frac:.2f}", "-i", src, "-frames:v",
-                                  "1", "-vf", f"scale=-2:{S},crop={S}:{S}", "-f", "image2pipe", "-vcodec", "png", "-"],
+                                  "1", "-vf", vf, "-f", "image2pipe", "-vcodec", "png", "-"],
                                  capture_output=True, timeout=30).stdout
         except FileNotFoundError:  # no ffmpeg (a laptop test): a receipt without stills
             break
@@ -994,15 +1044,17 @@ def receipt_image(take, cfg, src):
     gamma = 1 + cfg.get("print_lighten", 0) / 50  # 35 -> 1.7: lifts the darks and mids, keeps the whites
     stills = iter(frames)
 
-    def still(right):
+    def still(right, lighten=True):
         nonlocal y
         f = next(stills, None)
         if f is None:
             return
-        f = ImageOps.autocontrast(f, cutoff=1).point(lambda v: round(255 * (v / 255) ** (1 / gamma)))
+        g = gamma if lighten else 1.0
+        f = ImageOps.autocontrast(f, cutoff=1).point(lambda v: round(255 * (v / 255) ** (1 / g)))
         # every printer dot used (error diffusion), so the still keeps the video's full detail
-        img.paste(f.convert("1", dither=Image.Dither.FLOYDSTEINBERG).convert("L"), (W - M - S if right else M, y))
-        y += S + 44
+        x = 0 if f.width >= W else (W - M - f.width if right else M)
+        img.paste(f.convert("1", dither=Image.Dither.FLOYDSTEINBERG).convert("L"), (x, y))
+        y += f.height + 44
 
     # the logo (the fal mark, "fal" and CALL-A-FAL in one line)
     if LOGO.exists():
@@ -1027,7 +1079,7 @@ def receipt_image(take, cfg, src):
     text(wrap(f"“{take['prompt']}”", said_font), said_font, 36)
     y += 40
 
-    still(right=False)
+    still(right=False, lighten=False)  # full width, and as dark as filmed
     text(["RESOLVED", f"IN {take['secs']:.1f} s"], big, 60)
     y += 36
 
@@ -1190,6 +1242,8 @@ class Booth:
         self.attract = []
         self.slideshow = []
         self.stt_secs = {}     # render id -> seconds the speech-to-text took (for the bill)
+        self.hung_up_cid = None  # a call hung up mid-sentence: what they'd said is still made
+        self.orphans = set()     # renders whose caller hung up: shown on the screen when they arrive
         self.call_no = 0
         self.online = True
         self.loud = True       # the phone's volume switch
@@ -1318,8 +1372,12 @@ class Booth:
         if not self.off_hook:
             return
         self.off_hook = False
+        if self.state == "listening":  # hung up instead of pressing #: whatever they said is still made
+            self.hung_up_cid = self.cid
+            self.line.finish_if_heard()
+        if self.pending is not None:   # hung up on hold: the video still comes, and goes up on the screen
+            self.orphans.add(self.pending)
         self.cid += 1
-        self.line.cancel_recording()
         self.line.stop()
         self.go_idle()
 
@@ -1351,6 +1409,15 @@ class Booth:
             self.bump_idle()
 
     def on_heard(self, cid, rec):
+        if cid == self.hung_up_cid and cid != self.cid:
+            self.hung_up_cid = None
+            if rec["heard"]:
+                log.info("hung up while talking: making it anyway")
+                rid = next(self.seq)
+                self.orphans.add(rid)
+                threading.Thread(target=self._transcribe_and_render, args=(cid, rid, rec["wav"], rec["speech_end"]),
+                                 daemon=True).start()
+            return
         if cid != self.cid or self.state != "listening":
             return
         if not rec["heard"]:
@@ -1373,8 +1440,16 @@ class Booth:
         except Exception:
             return self.post(("failed", cid, rid, "Our lines are busy. Hang up and try again."))
         self.post(("prompt", cid, rid, prompt))
-        if not heard_nothing(prompt) and not BLOCKED.search(prompt):
-            self._render(cid, rid, prompt, t0)
+        if heard_nothing(prompt) or BLOCKED.search(prompt):
+            return
+        try:
+            borrowed = self.fal.check_ip(prompt)
+        except Exception:
+            return self.post(("failed", cid, rid, "Our lines are busy. Hang up and try again."))
+        if borrowed:
+            log.info("not made, someone else's IP (%s): %r", borrowed, prompt)
+            return self.post(("failed", cid, rid, NO_IP))
+        self._render(cid, rid, prompt, t0)
 
     def on_prompt(self, cid, rid, prompt):
         log.info("heard: %r", prompt)
@@ -1413,6 +1488,15 @@ class Booth:
     def on_rendered(self, cid, rid, take):
         log.info("video: %s, %.1f s after they stopped talking", take["model"], take["secs"])
         self.cache.add(take)  # kept for the screen between calls, even if they hung up while it rendered
+        if rid in self.orphans:
+            self.orphans.discard(rid)
+            self.stt_secs.pop(rid, None)
+            if self.state == "idle" and not self.off_hook:  # their caller hung up: it goes up now, then the loop
+                self.take = take
+                self.screen.video(take["url"], mute=True)
+                self.set_view(said=f"“{take['prompt']}”", status="Pick up the phone to make your own.")
+                self.after(self.cfg["attract_after"], "attract", self.cid)
+            return
         if cid != self.cid or rid != self.pending or not self.off_hook:
             return
         self.pending = None
