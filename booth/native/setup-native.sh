@@ -80,9 +80,12 @@ Exec=$APP/run.sh
 X-GNOME-Autostart-enabled=true
 DESKTOP
 
-echo "==> Quiet the desktop (no first-run wizard, no update popups)"
+echo "==> Quiet the desktop (no first-run wizard, no update popups, no \"removable medium\" window for the Pico's drive)"
 sudo apt-get purge -y piwiz 2>/dev/null || true
 sudo systemctl disable --now packagekit.service 2>/dev/null || true
+mkdir -p "$HOME/.config/pcmanfm/default"
+sed -e 's/^mount_on_startup=1/mount_on_startup=0/' -e 's/^mount_removable=1/mount_removable=0/' -e 's/^autorun=1/autorun=0/' \
+  /etc/xdg/pcmanfm/default/pcmanfm.conf > "$HOME/.config/pcmanfm/default/pcmanfm.conf"
 
 echo "==> Self-test (fake phone, screen and fal; about a minute)"
 (cd "$APP" && venv/bin/python test_booth.py) || echo "!! self-test failed: see above before the show"
