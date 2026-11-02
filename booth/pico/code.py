@@ -16,6 +16,7 @@ import time
 
 import board
 import digitalio
+import supervisor
 import usb_hid
 from adafruit_hid.keyboard import Keyboard
 from adafruit_hid.keycode import Keycode
@@ -124,9 +125,14 @@ def off_hook():
 
 
 def tap(*codes):
-    kbd.press(*codes)
-    time.sleep(0.05)
-    kbd.release_all()
+    # With the laptop/Pi away (rebooting, cable out) while the Pico stays powered, sending a key raises OSError.
+    # That used to end code.py, leaving a phone that looks plugged in but sends nothing. Drop the key instead.
+    try:
+        kbd.press(*codes)
+        time.sleep(0.05)
+        kbd.release_all()
+    except OSError as e:
+        print("key not sent (USB host away):", e)
 
 
 def report_switches(sw, quiet=False):
@@ -149,59 +155,65 @@ star_down_at = None
 hash_down_at = None
 down = set()      # keys reported as pressed
 candidate = set()  # what the last scan saw; a change has to show up twice in a row (debounce)
-while True:
-    reading = off_hook()
-    if reading != state:
-        steady = DEBOUNCE_S if reading else HANGUP_STEADY_S
-        t0 = time.monotonic()
-        while off_hook() == reading and time.monotonic() - t0 < steady:
-            time.sleep(0.01)
-        if off_hook() == reading:
-            state = reading
-            led.value = state
-            print("hook:", "lifted" if state else "hung up")  # USB serial log, for testing
-            if state:
-                tap(*PICKUP_KEYS)
-            else:
-                tap(*HANGUP_KEYS)
-                if RELOAD_ON_HANGUP:
-                    time.sleep(0.5)
-                    tap(Keycode.CONTROL, Keycode.R)
+# Anything unexpected restarts code.py (back to "booth ready") rather than leaving the phone dead.
+try:
+    while True:
+        reading = off_hook()
+        if reading != state:
+            steady = DEBOUNCE_S if reading else HANGUP_STEADY_S
+            t0 = time.monotonic()
+            while off_hook() == reading and time.monotonic() - t0 < steady:
+                time.sleep(0.01)
+            if off_hook() == reading:
+                state = reading
+                led.value = state
+                print("hook:", "lifted" if state else "hung up")  # USB serial log, for testing
+                if state:
+                    tap(*PICKUP_KEYS)
+                else:
+                    tap(*HANGUP_KEYS)
+                    if RELOAD_ON_HANGUP:
+                        time.sleep(0.5)
+                        tap(Keycode.CONTROL, Keycode.R)
+                report_switches(switches)
+
+        sw = read_switches()
+        if sw == switch_candidate and sw != switches:  # same reading twice in a row (debounce)
+            switches = sw
             report_switches(switches)
+        switch_candidate = sw
+        if time.monotonic() - reported_at > SWITCH_RESEND_S:
+            report_switches(switches, quiet=True)
 
-    sw = read_switches()
-    if sw == switch_candidate and sw != switches:  # same reading twice in a row (debounce)
-        switches = sw
-        report_switches(switches)
-    switch_candidate = sw
-    if time.monotonic() - reported_at > SWITCH_RESEND_S:
-        report_switches(switches, quiet=True)
+        now = held_keys()
+        if now == candidate and now != down:
+            for n in now - down:
+                key = LAYOUT[n]
+                if key == "*":
+                    star_down_at = time.monotonic()
+                if key == "#":
+                    hash_down_at = time.monotonic()
+                print("key:", key, "" if state or not KEYS_ONLY_WHEN_OFF_HOOK else "(ignored: hung up)")
+                if state or not KEYS_ONLY_WHEN_OFF_HOOK:
+                    tap(*KEYCODES[key])
+            if LAYOUT.index("*") in down - now:
+                star_down_at = None
+            if LAYOUT.index("#") in down - now:
+                hash_down_at = None
+            down = now
+        candidate = now
 
-    now = held_keys()
-    if now == candidate and now != down:
-        for n in now - down:
-            key = LAYOUT[n]
-            if key == "*":
-                star_down_at = time.monotonic()
-            if key == "#":
-                hash_down_at = time.monotonic()
-            print("key:", key, "" if state or not KEYS_ONLY_WHEN_OFF_HOOK else "(ignored: hung up)")
-            if state or not KEYS_ONLY_WHEN_OFF_HOOK:
-                tap(*KEYCODES[key])
-        if LAYOUT.index("*") in down - now:
+        if star_down_at is not None and time.monotonic() - star_down_at > STAFF_RESET_HOLD_S:
             star_down_at = None
-        if LAYOUT.index("#") in down - now:
+            tap(Keycode.CONTROL, Keycode.R)
+
+        if hash_down_at is not None and time.monotonic() - hash_down_at > STAFF_SHUTDOWN_HOLD_S:
             hash_down_at = None
-        down = now
-    candidate = now
+            print("staff: shutdown")
+            tap(*SHUTDOWN_KEYS)
 
-    if star_down_at is not None and time.monotonic() - star_down_at > STAFF_RESET_HOLD_S:
-        star_down_at = None
-        tap(Keycode.CONTROL, Keycode.R)
-
-    if hash_down_at is not None and time.monotonic() - hash_down_at > STAFF_SHUTDOWN_HOLD_S:
-        hash_down_at = None
-        print("staff: shutdown")
-        tap(*SHUTDOWN_KEYS)
-
-    time.sleep(0.01)
+        time.sleep(0.01)
+except Exception as e:  # noqa: BLE001
+    print("crashed, restarting:", repr(e))
+    time.sleep(1)
+    supervisor.reload()
