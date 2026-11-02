@@ -19,7 +19,9 @@ The browser version still works and stays in the repo. Each Pi runs one or the o
 
 ## Install (per Pi, about 10 minutes)
 
-Run it from wherever the repo is on the Pi (the manual clones it to `~/hello-world`). It runs in place.
+**From a Mac, no keyboard or screen setup on the Pi:** run `./load-pi.sh` here (or double-click the **Load Pi** app, which runs it in Terminal). It asks once for the Wi-Fi networks (passwords hidden), then for each Pi: the booth number, its memory card (CanaKit's preloaded Raspberry Pi OS; the script writes the hostname, a `booth` user that logs in with this Mac's SSH key, and the Wi-Fi), then waits for the Pi to boot, downloads this branch onto it, runs `setup-native.sh` (paste the fal key when asked) and restarts it into the booth. `./load-pi.sh --pi-only 2` redoes just the install on `fal-booth-2` when it's already on the network.
+
+**Or by hand on the Pi.** Run it from wherever the repo is on the Pi (the manual clones it to `~/hello-world`). It runs in place.
 
 ```bash
 cd ~/hello-world/booth/native
