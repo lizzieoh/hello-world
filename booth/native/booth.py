@@ -45,7 +45,7 @@ log = logging.getLogger("booth")
 def load_config(path=HERE / "native.conf"):
     cfg = {"LINE": "1", "SECS": "10", "MODEL": "h3", "LANGUAGE": "en", "PRINTER": "/dev/usb/lp0", "GRAB": "1",
            "PLAYS_BEFORE_SLIDES": "4", "SLIDES": "6", "SLIDE_SECS": "2.5", "PRINT_LIGHTEN": "35",
-           "OUT_DEVICE": "", "IN_DEVICE": ""}
+           "OUT_DEVICE": "", "IN_DEVICE": "", "LOW_VOLUME": "40", "RING_EVERY": "120"}
     if path.exists():
         for raw in path.read_text().splitlines():
             line = raw.split("#", 1)[0].strip()
@@ -74,6 +74,10 @@ def load_config(path=HERE / "native.conf"):
         # After the video has played this many times, it turns into a slideshow of stills from it (0 = never).
         "plays_before_slides": max(0, int(cfg["PLAYS_BEFORE_SLIDES"])),
         "slides": max(2, int(cfg["SLIDES"])), "slide_secs": max(0.5, float(cfg["SLIDE_SECS"])),
+        # The phone's volume switch on LOW: the handset and the video's sound at this fraction of loud.
+        "low_volume": min(100, max(0, int(cfg["LOW_VOLUME"]))) / 100,
+        # The phone's ringer switch ON: while nobody's on the phone, it rings this often (seconds).
+        "ring_every": max(20.0, float(cfg["RING_EVERY"])),
     }
 
 
@@ -252,6 +256,13 @@ def silence(secs):
     return np.zeros(int(SR * secs), np.float32)
 
 
+def ring():
+    """A phone ringing for people walking by: the two-tone trill, 2 s on and 4 s off, three times."""
+    t = np.arange(int(2.0 * SR)) / SR
+    trill = (tone([440, 480], 2.0, peak=0.2) * (0.5 + 0.5 * np.sin(2 * np.pi * 20 * t))).astype(np.float32)
+    return np.concatenate([trill, silence(4.0), trill, silence(4.0), trill])
+
+
 def phone_band(x):
     """300-3400 Hz, like a real phone line, so everything on the line sounds like it came down one."""
     spec = np.fft.rfft(x)
@@ -355,6 +366,7 @@ class Line:
         self.lock = threading.Lock()
         self.clips = []
         self.rec = None
+        self.gain = 1.0  # the volume switch: 1 on loud, cfg["low_volume"] on low
         v = {name: phone_band(load_wav(voice_dir / f"{name}.wav")) for name in ("greeting", "hold", "menu")}
         click = (np.random.default_rng(1).uniform(-1, 1, int(0.03 * SR)) * 0.3
                  * np.exp(-np.arange(int(0.03 * SR)) / (0.005 * SR))).astype(np.float32)
@@ -366,6 +378,7 @@ class Line:
             "menu": v["menu"],
             "busy": np.concatenate([np.concatenate([tone([480, 620], 0.25), silence(0.25)])] * 12),
             "music": elevator_loop(),
+            "ring": ring(),
         }
         self.out = self.inp = None
         threading.Thread(target=self._keep_open, daemon=True).start()
@@ -419,7 +432,7 @@ class Line:
                     self.clips.remove(c)
                     if c.tag:
                         self.post(("clip_done", c.tag))
-        outdata[:, 0] = np.clip(mix, -1, 1)
+        outdata[:, 0] = np.clip(mix * self.gain, -1, 1)
 
     # ----- what plays -----
     def play(self, name, tag=None, **kw):
@@ -529,6 +542,7 @@ class Screen:
         self.extra = list(extra_args)
         self.sock = None
         self.lock = threading.RLock()
+        self.vol = 100  # percent; kept here so a restarted mpv comes back at the same level
         self.bg = HERE / "cache" / "bg.png"
         make_background(self.bg)
         self._start()
@@ -541,7 +555,7 @@ class Screen:
         self.proc = subprocess.Popen([
             "mpv", "--idle=yes", "--force-window=yes", "--fullscreen", "--no-input-terminal", "--msg-level=all=error", "--no-osc", "--no-osd-bar",
             "--osd-level=0", "--no-input-default-bindings", "--input-vo-keyboard=no", "--cursor-autohide=always",
-            "--keep-open=yes", "--image-display-duration=inf", "--loop-file=inf", "--mute=yes", "--volume=100",
+            "--keep-open=yes", "--image-display-duration=inf", "--loop-file=inf", "--mute=yes", f"--volume={self.vol}",
             "--ytdl=no", "--hwdec=auto-safe", "--cache=yes", "--demuxer-max-bytes=64MiB",
             "--osd-font=DejaVu Sans",
             "--audio-display=no", "--input-ipc-server=" + self.SOCK, *self.extra])
@@ -640,6 +654,10 @@ class Screen:
     def mute(self, on):
         self.cmd("set_property", "mute", on)
 
+    def volume(self, pct):
+        self.vol = pct
+        self.cmd("set_property", "volume", pct)
+
     def restart_clip(self):
         self.cmd("seek", 0, "absolute")
 
@@ -674,6 +692,9 @@ def find_font(bold=False):
 
 
 # ---------- the phone (the Pico, as a keyboard) ----------
+# The phone body's switches. The Pico sends their positions at startup, on every flip and every so often anyway.
+SWITCH_KEYS = {"F17": ("volume", True), "F18": ("volume", False), "F19": ("ringer", True), "F20": ("ringer", False)}
+
 class Phone:
     """Reads every keyboard that has F8 (the Pico, or a USB keyboard for testing) straight from /dev/input, grabbed
     so the keys never reach the desktop. Plugging the Pico in or out at any time is fine."""
@@ -709,6 +730,7 @@ class Phone:
         e = self.evdev.ecodes
         digits = {getattr(e, f"KEY_{d}"): str(d) for d in range(10)}
         digits.update({getattr(e, f"KEY_KP{d}"): str(d) for d in range(10)})
+        switches = {getattr(e, f"KEY_{k}"): ev for k, ev in SWITCH_KEYS.items()}
         shift = ctrl = False
         try:
             for ev in dev.read_loop():
@@ -730,6 +752,8 @@ class Phone:
                         self.post(("restart",))
                     elif c == e.KEY_F10:
                         self.post(("shutdown",))
+                    elif c in switches:
+                        self.post(switches[c])
                     elif (c == e.KEY_8 and shift) or c == e.KEY_KPASTERISK:
                         self.post(("key", "*"))
                     elif (c == e.KEY_3 and shift) or c == e.KEY_KPENTER:
@@ -1154,6 +1178,10 @@ class Booth:
         self.stt_secs = {}     # render id -> seconds the speech-to-text took (for the bill)
         self.call_no = 0
         self.online = True
+        self.loud = True       # the phone's volume switch
+        self.ringer = False    # the phone's ringer switch; off until the Pico says otherwise
+        self.ring_seq = 0      # bumped on every ringer flip, so an old ring timer stops
+        self.ringing = False
 
     def post(self, ev):
         self.q.put(ev)
@@ -1212,6 +1240,45 @@ class Booth:
         log.info("restart requested")
         raise SystemExit(0)
 
+    # The Pico repeats the switch positions every so often, so only a change does anything.
+    def on_volume(self, loud):
+        if loud == self.loud:
+            return
+        log.info("volume switch: %s", "loud" if loud else "low")
+        self.loud = loud
+        self.line.gain = 1.0 if loud else self.cfg["low_volume"]
+        self.screen.volume(100 if loud else round(100 * self.cfg["low_volume"]))
+
+    def on_ringer(self, on):
+        if on == self.ringer:
+            return
+        log.info("ringer switch: %s", "on" if on else "off")
+        self.ringer = on
+        self.ring_seq += 1
+        if on:
+            self.after(3.0, "ring", self.ring_seq)  # one ring soon, so whoever flipped it hears it work
+        elif self.ringing:
+            self.ringing = False
+            self.line.stop()
+            self.draw()
+
+    def on_ring(self, seq):
+        """Ringer on: while nobody's on the phone, it rings every so often to call people over."""
+        if seq != self.ring_seq:
+            return
+        self.after(self.cfg["ring_every"], "ring", seq)
+        if self.off_hook or self.state != "idle":
+            return
+        log.info("ringing")
+        self.ringing = True
+        self.draw()
+        self.after(self.line.play("ring"), "ring_done", self.cid)
+
+    def on_ring_done(self, cid):
+        if cid == self.cid and self.ringing:
+            self.ringing = False
+            self.draw()
+
     def pick_up(self):
         if self.off_hook:
             return
@@ -1222,6 +1289,7 @@ class Booth:
         self.cid += 1
         self.attempt = 0
         self.take = None
+        self.ringing = False
         self.line.stop(fade=False)
         self.screen.background()
         threading.Thread(target=self.fal.warm_up, daemon=True).start()
@@ -1581,6 +1649,8 @@ class Booth:
         dot = r"{\c&H6AD15B&}●" if self.online else r"{\c&H4B4BFF&}● offline"
         out.append(r"{\an7\pos(48,40)\fs28\bord0\shad0\c&HA8A0A0&}"
                    + f"Line {ass_text(self.cfg['line'])}  " + dot)
+        if self.ringing:
+            out.append(r"{\an8\pos(960,40)\fs48\b1\bord2\shad0\3c&H000000&\c&H9EE6FF&}Incoming call · pick up the phone")
         if v["center"]:
             out.append(r"{\an5\pos(960,540)\fs76\b1\bord3\shad0\3c&H000000&\c&HFFFFFF&}" + ass_text(v["center"]))
         else:

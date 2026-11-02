@@ -41,7 +41,8 @@ class BrowserScreen:
         self.post = post
         self.lock = threading.Lock()
         self.booth = None
-        self.state = {"src": None, "muted": True, "loop": True, "seq": 0, "restart": 0, "playlist": [], "pos": 0}
+        self.state = {"src": None, "muted": True, "loop": True, "seq": 0, "restart": 0, "playlist": [], "pos": 0,
+                      "volume": 100}
 
     def _set(self, **kw):
         with self.lock:
@@ -65,6 +66,10 @@ class BrowserScreen:
     def mute(self, on):
         with self.lock:
             self.state["muted"] = on
+
+    def volume(self, pct):
+        with self.lock:
+            self.state["volume"] = pct
 
     def restart_clip(self):
         with self.lock:
@@ -92,7 +97,7 @@ class BrowserScreen:
             s = dict(self.state)
         b = self.booth
         s.update(view=b.view if b else {}, online=b.online if b else True, line=b.cfg["line"] if b else "",
-                 state=b.state if b else "")
+                 state=b.state if b else "", ringing=b.ringing if b else False)
         return s
 
     def close(self):
@@ -126,11 +131,13 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;backgr
 #said{font-size:3.2vw;font-weight:700}#status{font-size:2vw;color:#ffe69e;margin-top:.6vh}
 #keys{font-size:2vw;margin-top:1vh}#keys b{margin-left:3vw}#keys .done{color:#5bd16a}
 #hint{position:absolute;right:2vw;top:2vh;font-size:1vw;color:#555}
+#ring{position:absolute;left:0;right:0;top:3vh;text-align:center;font-size:2.4vw;font-weight:700;color:#ffe69e}
 .hide{display:none!important}
 </style></head><body>
 <video id="v" playsinline></video>
 <div id="top">Line <span id="line"></span> <span id="dot">●</span></div>
 <div id="hint">click here once · F8 lift · F9 / space hang up · 0–9 * #</div>
+<div id="ring" class="hide">Incoming call · pick up the phone</div>
 <div id="center"></div>
 <div id="bar"><div id="said"></div><div id="status"></div><div id="keys"></div></div>
 <script>
@@ -140,7 +147,7 @@ const send = (path, body) => fetch(path, {method: "POST", body: JSON.stringify(b
 document.addEventListener("keydown", (e) => {
   if (e.repeat) return;
   let k = e.key;
-  if (k === "F8" || k === "F9" || k === " " || /^[0-9*#]$/.test(k)) { e.preventDefault(); send("/key", {key: k}); }
+  if (k === "F8" || k === "F9" || k === " " || /^[0-9*#]$/.test(k) || /^F(1[7-9]|20)$/.test(k)) { e.preventDefault(); send("/key", {key: k}); }
 });
 v.addEventListener("playing", () => send("/event", {name: "file_loaded"}));
 v.addEventListener("error", () => v.getAttribute("src") && send("/event", {name: "video_error"}));
@@ -154,7 +161,8 @@ async function tick() {
       if (s.src) { if (v.getAttribute("src") !== s.src) { v.src = s.src; } v.loop = s.loop; v.muted = s.muted; v.play().catch(() => {}); v.classList.remove("hide"); }
       else { v.removeAttribute("src"); v.load(); v.classList.add("hide"); }
     }
-    v.muted = s.muted;
+    v.muted = s.muted; v.volume = s.volume / 100;
+    $("ring").classList.toggle("hide", !s.ringing);
     if (s.restart !== restart) { restart = s.restart; v.currentTime = 0; v.play().catch(() => {}); }
     const view = s.view || {};
     $("center").textContent = view.center || ""; $("center").classList.toggle("hide", !view.center);
@@ -208,6 +216,8 @@ def serve(booth, screen):
                     booth.post(("hook", False))
                 elif k == " ":
                     booth.post(("toggle",))
+                elif k in B.SWITCH_KEYS:
+                    booth.post(B.SWITCH_KEYS[k])
                 elif k:
                     booth.post(("key", k))
             elif self.path == "/event":

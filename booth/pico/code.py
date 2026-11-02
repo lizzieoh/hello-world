@@ -4,8 +4,8 @@
 # Keypad 0-9 * # -> types that character (site: "press 2 for audio", "press 3 to regenerate")
 # Hold * for 3 s -> Ctrl+R (staff reset: restarts the booth app)
 # Hold # for 5 s -> F10 (staff: shut the booth down safely, then it can be unplugged)
-# Volume switch  -> F17 loud, F18 low  (each switch's position is sent at startup, on every flip, and again on
-# Ringer switch  -> F19 on,   F20 off   every lift and hang-up, so the app always knows where they are)
+# Volume switch  -> F17 loud, F18 low  (each switch's position is sent at startup, on every flip, on every lift
+# Ringer switch  -> F19 on,   F20 off   and hang-up, and every 30 s, so a restarted app always knows them)
 #
 # Wiring:
 #   hook switch: GP15 (pin 20) and GND (pin 18)
@@ -59,6 +59,7 @@ VOLUME_PINS = (board.GP16, board.GP17)  # joined = loud
 RINGER_PINS = (board.GP18, board.GP19)  # joined = ringer on
 VOLUME_KEYS = {True: (Keycode.F17,), False: (Keycode.F18,)}  # loud, low
 RINGER_KEYS = {True: (Keycode.F19,), False: (Keycode.F20,)}  # on, off
+SWITCH_RESEND_S = 30  # send both positions again this often, for a booth app that restarted since
 
 if FIND_KEYS:
     import keymonitor  # noqa: F401  (runs until FIND_KEYS is set back to False)
@@ -128,8 +129,11 @@ def tap(*codes):
     kbd.release_all()
 
 
-def report_switches(sw):
-    print("volume:", "loud" if sw[0] else "low", " ringer:", "on" if sw[1] else "off")
+def report_switches(sw, quiet=False):
+    global reported_at
+    reported_at = time.monotonic()
+    if not quiet:
+        print("volume:", "loud" if sw[0] else "low", " ringer:", "on" if sw[1] else "off")
     tap(*VOLUME_KEYS[sw[0]])
     tap(*RINGER_KEYS[sw[1]])
 
@@ -170,6 +174,8 @@ while True:
         switches = sw
         report_switches(switches)
     switch_candidate = sw
+    if time.monotonic() - reported_at > SWITCH_RESEND_S:
+        report_switches(switches, quiet=True)
 
     now = held_keys()
     if now == candidate and now != down:

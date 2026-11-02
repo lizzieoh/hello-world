@@ -48,6 +48,8 @@ To go back to the browser version, run `cd ~/hello-world/booth/pi && ./setup.sh 
 | `LANGUAGE` | `en` | `auto` lets Wizper guess the language (a little slower) |
 | `PRINTER` | `/dev/usb/lp0` | The receipt printer |
 | `ROTATE`, `SPEAKER_VOLUME`, `MIC_VOLUME` | | Same as the browser version |
+| `LOW_VOLUME` | `40` | The phone's volume switch on low: the handset and the video sound play at this percent of loud |
+| `RING_EVERY` | `120` | The phone's ringer switch on: while nobody's on the phone, it rings this often (seconds) |
 
 Changes take effect when the app restarts. Hold **\*** for 3 seconds on the phone, or reboot.
 
@@ -63,6 +65,8 @@ Changes take effect when the app restarts. Hold **\*** for 3 seconds on the phon
 | Hold **\*** 3 s | Staff: restart the app |
 | Hold **#** 5 s | Staff: shut the Pi down safely; unplug once the green light stops blinking |
 | Dial **\*123#** | Staff: clear the screen's feed of earlier videos (they move to `cache/archive/`, not deleted) |
+| Volume switch (F17 loud / F18 low) | Low turns the handset and the video sound down to `LOW_VOLUME` |
+| Ringer switch (F19 on / F20 off) | On: while nobody's on the phone, the earpiece rings and the screen says "Incoming call" every `RING_EVERY` seconds, starting a few seconds after it's switched on. Lifting the handset stops it. |
 | Space | Lift/hang up, for testing with a USB keyboard instead of the phone |
 
 A USB keyboard works as the phone, which is handy for testing before the phone is wired.

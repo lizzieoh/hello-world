@@ -112,8 +112,7 @@ class Line(B.Line):
 
     def playing(self):
         with self.lock:
-            return [c.data is self.sounds.get("menu") and "menu" or c.data is self.sounds["busy"] and "busy"
-                    or c.data is self.sounds["music"] and "music" or "other" for c in self.clips]
+            return [next((n for n, s in self.sounds.items() if c.data is s), "other") for c in self.clips]
 
 
 def talk(secs=1.0, start=0.3):
@@ -339,6 +338,37 @@ def test_reset_code_clears_the_feed():
     wait(lambda: not booth.cache.recent() and not booth.cache.slides(), 3, "feed empty")
     wait(lambda: booth.view.get("center") == "Pick up the phone.", 3, "blank screen")
     assert list((booth.cache.root / "archive").glob("*/*.mp4")), "videos archived, not deleted"
+    stop.set()
+
+
+def test_volume_switch():
+    booth, client, stop = make(low_volume=0.4)
+    booth.post(("volume", False))
+    wait(lambda: booth.line.gain == 0.4, 2, "handset turned down")
+    assert booth.screen.calls("volume") == [("volume", 40)]
+    booth.post(("volume", False))  # the Pico repeats the position; nothing changes
+    booth.post(("volume", True))
+    wait(lambda: booth.line.gain == 1.0, 2, "handset back to loud")
+    assert booth.screen.calls("volume") == [("volume", 40), ("volume", 100)]
+    stop.set()
+
+
+def test_ringer_rings_only_while_idle():
+    booth, client, stop = make(ring_every=1.0)
+    booth.post(("ringer", True))
+    wait(lambda: "ring" in booth.line.playing(), 6, "first ring, a few seconds after the switch")
+    assert booth.ringing and "Incoming call" in booth.screen.last_text
+    booth.post(("hook", True))
+    wait(lambda: booth.state == "greeting", 3, "picked up")
+    assert "ring" not in booth.line.playing() and not booth.ringing
+    time.sleep(1.5)
+    assert "ring" not in booth.line.playing(), "no ringing during a call"
+    booth.post(("hook", False))
+    wait(lambda: "ring" in booth.line.playing(), 4, "rings again once idle")
+    booth.post(("ringer", False))
+    wait(lambda: "ring" not in booth.line.playing() and not booth.ringing, 2, "ringer off stops it")
+    time.sleep(2.0)
+    assert "ring" not in booth.line.playing(), "stays quiet with the ringer off"
     stop.set()
 
 
