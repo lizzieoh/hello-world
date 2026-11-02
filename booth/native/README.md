@@ -123,6 +123,6 @@ It saves a receipt preview PNG. It runs no hardware and no fal calls, so it cost
 |---|---|
 | Black screen, nothing happens | `tail -50 booth.log` (in the `native` folder) |
 | Lifting the handset does nothing | `grep "phone keys" booth.log` should name the Pico. If not, replug it. Are you in the `input` group (`groups`)? |
-| No sound in the earpiece | `grep sink= booth.log` should show a USB sink. Replug the adapter, then restart (hold \*). |
+| No sound in the earpiece | `grep sink= booth.log` should show a USB sink. After a replug the booth fixes itself within about 15 seconds (`grep "audio adapter" booth.log`); if it says "still missing", replug the adapter firmly, then restart (hold \*). |
 | "Printer offline" | `ls -l /dev/usb/lp0` should exist and belong to group `lp`. Replug the printer's USB. |
 | Red dot, every call busy | Network. Check the travel router; the app retries on its own. |
