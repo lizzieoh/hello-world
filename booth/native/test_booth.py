@@ -211,8 +211,13 @@ def test_full_call():
     assert client.calls.count("minimax/h3-max/text-to-video") == 2
     booth.post(("hook", False))
     wait(lambda: booth.state == "idle", 3, "idle")
-    wait(lambda: booth.screen.calls("playlist"), 5, "earlier videos on the idle screen")
-    assert len(booth.screen.calls("playlist")[-1][1]) >= 1
+    # hung up: their video stays, with * to start over, and no feed of anyone else's
+    wait(lambda: booth.view.get("scene") == "after" and "START OVER" in booth.screen.last_text, 3, "their video stays")
+    time.sleep(1.0)  # (attract_after is 0.5 s here: the old feed would have come by now)
+    assert booth.view.get("scene") == "after" and not booth.screen.calls("playlist"), booth.screen.log[-3:]
+    booth.post(("key", "*"))
+    wait(lambda: booth.view.get("scene") == "attract" and booth.view.get("fresh"), 3, "* starts over")
+    assert "PICK UP" in booth.screen.last_text and booth.take is None and not booth.screen.calls("playlist")
     stop.set()
 
 
@@ -530,6 +535,7 @@ def test_idle_screen_shuffles_earlier_videos():
         wait(lambda: booth.take.get("done") and booth.take["done"].is_set(), 20, "saved with stills")
         booth.post(("hook", False))
         wait(lambda: booth.state == "idle", 3)
+    booth.post(("attract", booth.cid))  # the feed of earlier videos, when it's shown (the booth starting up)
     wait(lambda: booth.screen.calls("playlist"), 5, "idle shuffle")
     files = booth.screen.calls("playlist")[-1][1]
     assert set(files) == {f for f, _ in booth.cache.recent()} and len(set(files)) == 2, files
@@ -576,6 +582,11 @@ def test_ringer_rings_only_while_idle():
     time.sleep(1.5)
     assert "ring" not in booth.line.playing(), "no ringing during a call"
     booth.post(("hook", False))
+    wait(lambda: booth.state == "idle", 3)
+    if booth.lingering:  # their call still on the screen: no ringing over it until * clears it
+        time.sleep(1.5)
+        assert "ring" not in booth.line.playing()
+        booth.post(("key", "*"))
     wait(lambda: "ring" in booth.line.playing(), 4, "rings again once idle")
     booth.post(("ringer", False))
     wait(lambda: "ring" not in booth.line.playing() and not booth.ringing, 2, "ringer off stops it")
@@ -656,6 +667,24 @@ def test_hang_up_before_an_ip_swap_still_makes_one():
     wait(lambda: booth.screen.calls("video"), 15, "a video up on the screen anyway")
     assert any("text-to-video" in c for c in client.calls), client.calls
     assert booth.last_take and booth.last_take.get("surprise"), booth.last_take
+    stop.set()
+
+
+def test_hang_up_on_hold_keeps_their_call_on_screen():
+    """Hung up while it renders: the hold screen stays, clock running, then their video comes up and stays (no feed
+    of other videos) until * on the hook or the next pick-up."""
+    booth, client, stop = make()
+    lift_and_say(booth, talk())
+    wait(lambda: booth.state == "hold", 8, "on hold")
+    booth.post(("hook", False))
+    wait(lambda: booth.lingering, 2, "still their call")
+    assert booth.view.get("scene") == "hold" and not booth.screen.calls("playlist")
+    wait(lambda: booth.view.get("scene") == "after" and booth.take, 10, "their video comes up")
+    time.sleep(1.0)
+    assert booth.view.get("scene") == "after" and not booth.screen.calls("playlist")
+    booth.post(("hook", True))  # the next caller
+    wait(lambda: booth.state == "greeting", 3, "a new call")
+    assert not booth.lingering
     stop.set()
 
 

@@ -710,8 +710,9 @@ class Line:
             if r and (r["heard"] or r["n"] > 1.5 * MIC_SR):
                 r["heard"] = True
                 self._finish()
-            else:
-                self.rec = None
+                return True  # a "heard" event is on its way
+            self.rec = None
+            return False
 
     def cancel_recording(self):
         with self.lock:
@@ -1838,6 +1839,8 @@ class Booth:
         self.ringer = False    # the phone's ringer switch; off until the Pico says otherwise
         self.ring_seq = 0      # bumped on every ringer flip, so an old ring timer stops
         self.ringing = False
+        self.lingering = False  # their caller hung up, but their call keeps the screen (hold, then their video) until
+                                # someone taps * or picks up: no feed of other people's videos in between
         self.paused = None     # staff dashboard: the line is out of order, with this note on screen
         self.last_take = None  # the latest video made, for a reprint from the dashboard
         self.started = time.time()
@@ -1936,7 +1939,7 @@ class Booth:
         if seq != self.ring_seq:
             return
         self.after(self.cfg["ring_every"], "ring", seq)
-        if self.off_hook or self.state != "idle" or self.paused is not None:
+        if self.off_hook or self.state != "idle" or self.paused is not None or self.lingering:
             return
         log.info("ringing")
         self.ringing = True
@@ -1958,6 +1961,7 @@ class Booth:
             log.info("lifted while the line is out of order")
             return self.busy("Line out of order.", self.paused or "Please try the other line.", retry=False)
         self.stats["calls"] += 1
+        self.lingering = False
         self.call_no = next_call_number(Path(getattr(self.cache, "root", HERE / "cache")) / "calls.txt")
         self.take_offset = random.randrange(len(TAKES))
         log.info("lifted (call #%d)", self.call_no)
@@ -1982,13 +1986,22 @@ class Booth:
         if not self.off_hook:
             return
         self.off_hook = False
-        if self.state == "listening":  # hung up instead of pressing #: whatever they said is still made
-            self.hung_up_cid = self.cid
-            self.line.finish_if_heard()
+        if self.state == "listening" and self.line.finish_if_heard():  # hung up instead of pressing #: what they
+            self.hung_up_cid = self.cid                                  # said is still made
+        was = self.state
         if self.pending is not None:   # hung up on hold: the video still comes, and goes up on the screen
             self.orphans.add(self.pending)
         self.cid += 1
         self.line.stop()
+        if was in ("hold", "listening") and (self.pending is not None or self.hung_up_cid == self.cid - 1):
+            # the call carries on without them: the hold screen stays (its clock running), then their video
+            self.state, self.pending, self.lingering = "idle", None, True
+            if was == "listening":
+                self.hold_from = time.monotonic()
+                self.set_view("hold", said="", label="YOU SAID", stage="hear", done={}, since=time.monotonic(),
+                              model=None)
+            self.on_tick()
+            return
         self.go_idle()
 
     def on_key(self, k):
@@ -2000,6 +2013,8 @@ class Booth:
             return self.line.stop_recording()
         if k == "*" and self.off_hook and self.state in ("listening", "hold"):
             return self.cancel()
+        if k == "*" and not self.off_hook and self.lingering:  # the last call's screen, cleared for the next one
+            return self.start_over()
         if not self.off_hook:
             return
         if k == "1" and self.state in ("greeting", "listening"):
@@ -2030,6 +2045,8 @@ class Booth:
     def on_heard(self, cid, rec):
         if cid == self.hung_up_cid and cid != self.cid:
             self.hung_up_cid = None
+            if not rec["heard"] and self.lingering and not self.off_hook and not self.take:
+                return self.start_over()  # nothing was said after all
             if rec["heard"]:
                 log.info("hung up while talking: making it anyway")
                 rid = next(self.seq)
@@ -2275,12 +2292,13 @@ class Booth:
             self.orphans.discard(rid)
             self.stt_secs.pop(rid, None)
             self.llm_bill.pop(rid, None)
-            if self.state == "idle" and not self.off_hook:  # their caller hung up: it goes up now, then the loop
-                self.take = take
+            if self.state == "idle" and not self.off_hook and self.lingering:  # their caller hung up: it goes up
+                self.take = take                                              # now, and stays until * or a pick-up
+                self.hold_from = None
                 self.screen.frame(FRAME)
                 self.screen.video(take["url"], mute=True)
                 self.set_view("after")
-                self.after(self.cfg["attract_after"], "attract", self.cid)
+                self.slides_later(take)
             return
         if cid != self.cid or rid != self.pending or not self.off_hook:
             return
@@ -2368,6 +2386,10 @@ class Booth:
         self.play("menu", "menu")
 
     def on_failed(self, cid, rid, message):
+        if rid in self.orphans:  # their caller had hung up and it didn't come: the line is free again
+            self.orphans.discard(rid)
+            if self.lingering and not self.off_hook and not self.take:
+                self.start_over()
         self.stats["failed"] += 1
         self.last_error = {"at": time.time(), "what": " ".join(m for m in message if m)}
         if cid == self.cid and rid == self.pending and self.off_hook:
@@ -2564,10 +2586,11 @@ class Booth:
             return {"what": "Call ended"}
         if self.take:  # their clip still up after a hang-up
             hide_take(self.take)
-            self.take = None
-            self.state = "idle"
-            self.on_attract(self.cid)
+            self.start_over()
             return {"what": "Video hidden"}
+        if self.lingering:  # their call's hold screen after a hang-up: the video on its way never shows
+            self.start_over()
+            return {"what": "Call ended"}
         if self.attract and 0 <= self.attract_pos < len(self.attract):
             name = Path(self.attract[self.attract_pos][0]).name
             self.cache.hide(name)
@@ -2575,16 +2598,29 @@ class Booth:
             return {"what": "Video hidden"}
         return {"what": "Nothing on screen"}
 
+    def start_over(self):
+        """* on the hook after a call (or its video failing): the free line, PICK UP and nothing else. A video still
+        on its way is called off and never shown."""
+        log.info("start over: the last call's screen cleared")
+        for rid in self.orphans:
+            self.cancelled.add(rid)
+        self.orphans.clear()
+        self.lingering, self.take, self.hold_from = False, None, None
+        self.state = "idle"
+        self.screen.frame(None)
+        self.screen.background()
+        self.set_view("attract", said="", fresh=True)
+
     def go_idle(self):
         self.state = "idle"
         self.pending = None
         self.hold_from = None
         if self.take:
-            # the clip they just made keeps playing, muted, for a little while before the loop of recent ones
+            # the clip they just made keeps playing, muted, until * or the next pick-up: never the feed of others
             self.screen.mute(True)
+            self.lingering = True
             self.set_view("after")
             self.slides_later(self.take)  # it can turn into its own stills now nobody's watching it with sound
-            self.after(self.cfg["attract_after"], "attract", self.cid)
         else:
             self.on_attract(self.cid)
 
@@ -2619,6 +2655,12 @@ class Booth:
         if self.state == "ready" and self.take:
             self.screen.frame(FRAME)
             self.screen.video(self.take["url"], mute=not self.take["sound"])
+        elif self.state == "idle" and self.lingering and self.take:
+            self.screen.frame(FRAME)
+            self.screen.video(self.take.get("file") or self.take["url"], mute=True)
+        elif self.state == "idle" and self.lingering:
+            self.screen.frame(None)
+            self.screen.background()
         elif self.state == "idle":
             return self.on_attract(self.cid)
         else:
@@ -2639,7 +2681,8 @@ class Booth:
 
     def on_tick(self):
         """10 times a second while someone's talking (the meter) or on hold (the clock)."""
-        if self.state == "listening" or (self.state == "hold" and self.hold_from is not None):
+        if self.state == "listening" or (self.hold_from is not None and (self.state == "hold" or (
+                self.lingering and self.view.get("scene") == "hold"))):
             if self.ticking:
                 return
             self.ticking = True
@@ -2722,7 +2765,7 @@ class Booth:
 
     def _scene_attract(self, v, L):
         """Free line: what this phone has made, edge to edge, what was said in a small chip, and Pick up."""
-        if not self.attract:  # nothing made yet: the promise
+        if not self.attract or v.get("fresh"):  # nothing made yet, or cleared with *: the promise
             return self._plaque(L, "Pick up.", "Say an idea, get a 10-second video.", tok="H1") + self._pick_up(L)
         return self._said(L, v.get("said"), 980) + self._pick_up(L)
 
@@ -2791,7 +2834,7 @@ class Booth:
         """Their caller hung up: their video stays a while, edge to edge, before the feed comes back."""
         if not self.take:
             return self._scene_attract(v, L)
-        return self._pick_up(L, "PICK UP TO MAKE YOUR OWN")
+        return L.keys({"*": ("Start over", False, False)}) + self._pick_up(L, "PICK UP TO MAKE YOUR OWN")
 
     def _scene_message(self, v, L):
         out = self._plaque(L, v.get("head", ""), v.get("sub", ""))
