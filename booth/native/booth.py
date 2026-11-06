@@ -185,7 +185,7 @@ SURPRISE = [
 ]
 STT_NAMES = {"fal-ai/elevenlabs/speech-to-text/scribe-v2": "ElevenLabs Scribe v2",
              "fal-ai/cohere-transcribe": "Cohere Transcribe"}
-MODEL_NAMES = {"H3 Max": "fal H3 Max"}  # fal's post-trained MiniMax H3; the screen and receipt use the full names
+MODEL_NAMES = {}  # a model's name as the screen and receipt show it, when it differs: H3 Max is just "H3 Max" (Lizzie, Nov 6)
 
 
 def model_name(name):

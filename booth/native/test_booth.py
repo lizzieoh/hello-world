@@ -254,7 +254,7 @@ def test_every_scene_draws():
     booth.take = {"prompt": "a red phone", "you_said": "a phone from a film", "model": "H3 Max", "secs": 9.9,
                   "url": "https://v3b.fal.media/files/b/x/y.mp4", "at": 0}
     for scene, kw in [("attract", {"said": "“a red phone”"}), ("greeting", {}), ("listening", {}),
-                      ("hold", {"said": "", "stage": "render", "model": "fal H3 Max", "done": {}}),
+                      ("hold", {"said": "", "stage": "render", "model": "H3 Max", "done": {}}),
                       ("ready", {"keys": {}}), ("after", {}), ("message", {"head": "Our lines are busy.", "retry": True}),
                       ("staff", {"head": "Restarting…", "sub": ""})]:
         booth.set_view(scene, **kw)

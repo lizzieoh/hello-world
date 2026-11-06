@@ -138,8 +138,12 @@ line is doing from across the hall. The models, the bill and the links live on t
 | Staff | Light Sage |
 
 - **OFFLINE** (top right, black) means this Pi can't reach fal: check the router.
-- **The receipt's QR code** opens `SHARE_BASE` (`https://fal-adobe-max.vercel.app/v`) with the video's
-  fal link after `#`, so the page plays it with no server. Set `SHARE_BASE=` (empty) to print the video's own link instead.
+- **The receipt** (`sticker.py`) is the same design on both printers: 608 dots wide on the Zebra, 576 on an 80 mm
+  receipt printer, as long as it needs. Lockup, when and where, YOU SAID (and WE MADE YOU AN ORIGINAL after an IP
+  swap), the video's clearest frame with its timecode, "Generated in", the bill, the total, the QR, the sign-off.
+- **The receipt's QR code** is made for each call: it opens `SHARE_BASE` (`https://fal-adobe-max.vercel.app/v`) with the
+  video's fal link after `#`, and the page opens it in a popup over the event page (the video, what they said, the
+  models, Save and Share), with no server. Set `SHARE_BASE=` (empty) to print the video's own link instead.
 - **Typefaces:** Focal Maxi Medium (headlines), Focal Text and HAL Timezone Mono, from `brand/fonts/`. The fonts are
   licensed, so they aren't in git: copy `FocalMaxi-Medium.otf`, `FocalText-Regular.otf`, `FocalText-Medium.otf`,
   `HALTimezone-MonoRegular.otf`, `HALTimezone-Regular.otf` and `Focal-Upright-VF_wght.ttf` into `brand/fonts/` on each
