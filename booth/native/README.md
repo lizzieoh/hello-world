@@ -64,7 +64,7 @@ Hanging up doesn't lose the video. Hang up after **#**, mid-sentence without pre
 | `LANGUAGE` | `en` | What visitors speak (`es`, `fr`…), or `auto` to let the speech model guess |
 | `END_PAUSE`, `LISTEN_MAX` | `5`, `30` | Listening ends when the caller presses **\#**; for callers who never do, after this many seconds of quiet once they've spoken, or this long in all |
 | `PRINTER` | `/dev/usb/lp0` | The receipt printer |
-| `LOCATION` | `MIAMI` | Printed on the receipt under the line number |
+| `LOCATION` | `AUTO` | The place on the receipt. `AUTO` looks up the city this Pi is in from its internet address (once an hour); any other value, e.g. `MIAMI BEACH`, is printed as is |
 | `ROTATE`, `SPEAKER_VOLUME`, `MIC_VOLUME` | | Same as the browser version |
 | `LOW_VOLUME` | `40` | The phone's volume switch on low: the handset and the video sound play at this percent of loud |
 | `RING_EVERY` | `120` | The phone's ringer switch on: while nobody's on the phone, it rings this often (seconds) |

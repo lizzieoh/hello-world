@@ -614,7 +614,7 @@ def test_sticker():
     for take in ({"prompt": "orchid", "model": "H3 Max", "secs": 9.6, "url": URL, "costs": costs},
                  {"prompt": long, "you_said": long, "model": "H3 Max", "secs": 9.6, "url": URL, "costs": costs}):
         img = sticker.sticker_image(take, cfg, str(CLIP), B)
-        assert img.width == sticker.W and 1000 < img.height < 1900, img.size  # as long as it needs, never a scroll
+        assert img.width == sticker.W and 1400 < img.height < 2800, img.size  # as long as it needs, never a scroll
         narrow = sticker.sticker_image(take, cfg, str(CLIP), B, width=B.DOTS)  # the receipt printer's
         assert narrow.width == B.DOTS and len(B.escpos(narrow)) > narrow.height * B.DOTS // 8
     img.save(TMP / "sticker.png")

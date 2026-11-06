@@ -1,32 +1,92 @@
-"""The receipt as a sticker, for a Zebra label printer (ZPL or EPL), e.g. a GK420d with 80 mm thermal receipt paper,
-torn off at the bar; and the same design 576 dots wide for an 80 mm ESC/POS receipt printer, which cuts it.
+"""The receipt, for both printers: a Zebra label printer (ZPL or EPL, 608 dots, continuous paper, torn at the bar) and
+an 80 mm ESC/POS receipt printer (576 dots, cut). booth.py picks the language; the design is the same.
 
-Lizzie's layout (the "Frame 316121725" mock on the adobe max board, which is this file's render at 1.0757x), in black
-on white (thermal can't do colour): the lockup, a mono meta line with when and where, a dotted rule, what they said
-(and the original we made when they asked for someone else's IP), the video's clearest frame with nothing over it,
-"Generated in" with the seconds set right, the bill as rows between dotted rules with each model in a chip, the total,
-a QR to their video's page beside "SCAN TO KEEP YOUR VIDEO", and the sign-off. Continuous paper, so it is as long as it
-needs to be. booth.py picks the ZPL bytes when the printer says it speaks ZPL, ESC/POS otherwise.
+Lizzie's layout (the "CALL-A-FAL receipt · Nov 6 AM" frame in "(CURRENT) presentation R3" on the adobe max board), in
+black on white, with the type fixes from the fal-ui check: the lockup, ZERO LATENCY LINE and the event, the call and
+when and where (the place found from the network unless LOCATION names one), YOU SAID (and WE MADE YOU AN ORIGINAL
+after an IP swap), two key frames edge to edge with their timecodes, "Generated in", the itemized call, the total, a
+QR to their video's page, the sign-off. One divider everywhere: the big-dot rule (3-dot dots, 10 apart).
 """
+import json
+import threading
 import time
+import urllib.request
+from pathlib import Path
 
 import numpy as np
 
 W = 608           # 3 in at 203 dpi (a whole number of bytes) on the Zebra; booth.DOTS (576) on the receipt printer
-M = 28            # side margin for the words, in dots
-INSET = 12        # side margin for the photo: a label that sits a dot or two off never shows a sliver
-PHOTO = 584 / 354  # the photo's aspect in the mock
-PLACES = {"MIAMI": "Miami, FL", "MIAMI BEACH": "Miami Beach, FL"}  # the booth's LOCATION as the sticker spells it
+M = 36            # side margin, in dots
+PHOTO = 576 / 361  # the key frames' aspect in the design
+EVENT = "ADOBE MAX 2026 · BOOTH 423"
 # The gap between labels, in dots: 0 for continuous receipt paper (what the booths use), 24 for die-cut labels with a
 # 3 mm gap. Continuous paper with a gap set makes the Zebra hunt for a gap and stop, blinking red.
 LABEL_GAP = 0
-PAD = 46      # white above the lockup, as in the mock
-PAD_FOOT = 40  # and below the sign-off: a little more than the mock's 24, so the tear never comes near the print
+PAD = 40       # white above the lockup
+PAD_FOOT = 40  # and below the sign-off, so the tear never comes near the print
+_place = {"name": "", "tz": "", "at": 0.0, "busy": False}
+_place_lock = threading.Lock()
+PLACE_FILE = Path(__file__).resolve().parent / "cache" / "place.json"  # the last place found, kept across restarts
 
 
-def small_qr(data):
-    """The sticker's QR: small, as asked, so 3 dots a module (0.375 mm; the Zebra prints crisp dots, unlike the
-    receipt printer, which booth.qr_image's 4 is for) and a 2-module quiet zone. None without the qrcode package."""
+def _look_up_place(timeout=4):
+    """The city and time zone this Pi's internet address is in (ipinfo.io, no key)."""
+    try:
+        with urllib.request.urlopen("https://ipinfo.io/json", timeout=timeout) as r:
+            info = json.load(r)
+        city, tz = (info.get("city") or "").strip().upper(), (info.get("timezone") or "").strip()
+        if city:
+            with _place_lock:
+                _place.update(name=city, tz=tz)
+            PLACE_FILE.parent.mkdir(parents=True, exist_ok=True)
+            PLACE_FILE.write_text(json.dumps({"name": city, "tz": tz}))
+    except Exception:  # offline or rate-limited: keep the last place found, try again in a minute
+        with _place_lock:
+            _place["at"] = time.time() - 3600 + 60
+    finally:
+        with _place_lock:
+            _place["busy"] = False
+
+
+def place(cfg):
+    """Where the receipt says it is, and the time zone its clock is in: LOCATION when it names a place (the Pi's own
+    zone), else (LOCATION=AUTO or empty) the city this Pi's internet address is in. The lookup never holds up a print:
+    it runs in the background once an hour, and until it answers the receipt uses the last place found."""
+    loc = (cfg.get("location") or "").strip()
+    if loc and loc.upper() != "AUTO":
+        return loc.upper(), ""
+    with _place_lock:
+        if not _place["name"] and PLACE_FILE.exists():
+            try:
+                _place.update({k: v for k, v in json.loads(PLACE_FILE.read_text()).items() if k in ("name", "tz")})
+            except (OSError, ValueError):
+                pass
+        first = not _place["name"] and not _place["at"]  # never found one: worth a short wait, once
+        if time.time() - _place["at"] > 3600 and not _place["busy"]:
+            _place.update(at=time.time(), busy=True)
+            if not first:
+                threading.Thread(target=_look_up_place, daemon=True).start()
+    if first:
+        _look_up_place(timeout=2.5)
+    with _place_lock:
+        return _place["name"], _place["tz"]
+
+
+def local_time(at, tz):
+    """`at` as a struct_time in time zone `tz` (so the clock agrees with the city), else in the Pi's own zone."""
+    if tz:
+        try:
+            from datetime import datetime
+            from zoneinfo import ZoneInfo
+            return datetime.fromtimestamp(at, ZoneInfo(tz)).timetuple()
+        except Exception:
+            pass
+    return time.localtime(at)
+
+
+def small_qr(data, k=3):
+    """The receipt's QR, `k` dots a module: 3 (0.375 mm) on the Zebra, which prints crisp dots, 4 (0.5 mm) on the
+    receipt printer, whose dots spread (booth.qr_image's floor). A 2-module quiet zone. None without qrcode."""
     try:
         import qrcode
     except ImportError:
@@ -36,7 +96,7 @@ def small_qr(data):
     qr.add_data(data)
     qr.make(fit=True)
     q = qr.make_image(fill_color="black", back_color="white").convert("L")
-    return q.resize((q.width * 3, q.height * 3), Image.NEAREST)
+    return q.resize((q.width * k, q.height * k), Image.NEAREST)
 
 
 def speaks_zpl(path):
@@ -115,44 +175,43 @@ def key_frames(src, secs, size, count, candidates=18):
 
 
 def sticker_image(take, cfg, src, B, width=W):
-    """The sticker, as a 1-bit image `width` dots wide and as long as it needs. B is booth's module: its fonts, logo,
-    photo treatment and share link. Every size here is the mock's, divided by 1.0757."""
-    from PIL import Image, ImageDraw
-    title = B.brand_font("display", 46, 700)
-    label = B.brand_font("display", 24, 600)  # thermal drops Focal's 500 strokes; 600 holds
+    """The receipt, as a 1-bit image `width` dots wide and as long as it needs. B is booth's module: its fonts, logo,
+    photo treatment, model names and share link."""
+    from PIL import Image, ImageDraw, ImageFont
+    big = B.brand_font("display", 46, 700)        # "Generated in" and its seconds, one weight
     total_f = B.brand_font("display", 32, 700)
-    said_f = B.brand_font("display", 34, 600)
-    mono = B.brand_font("mono", 22, 700)
+    sign_f = B.brand_font("display", 26, 600)     # thermal drops Focal's 500 strokes; 600 holds
+    mono = B.brand_font("mono", 24, 700)
     small = B.brand_font("mono", 20, 700)
+    try:  # what they said, and the QR's line, in Focal Text Medium
+        said_f = ImageFont.truetype(str(B.BRAND / "fonts" / "FocalText-Medium.otf"), 32)
+        note_f = ImageFont.truetype(str(B.BRAND / "fonts" / "FocalText-Medium.otf"), 24)
+    except OSError:
+        said_f, note_f = B.brand_font("display", 32, 600), B.brand_font("display", 24, 600)
     probe = ImageDraw.Draw(Image.new("L", (1, 1)))
-    img = Image.new("L", (width, 4000), 255)  # cropped to what was drawn
+    img = Image.new("L", (width, 5000), 255)  # cropped to what was drawn
     d = ImageDraw.Draw(img)
 
     def ink(xy, text, font, **kw):
-        """Text, struck twice a dot apart when it's mono: HAL Timezone has one weight, and its one-dot serifs drop
-        out on thermal paper. Mono advances don't change, so nothing moves."""
+        """Text; mono is struck twice a dot apart (HAL Timezone has one weight, and single strokes print grey)."""
         d.text(xy, text, font=font, fill=0, **kw)
         if font in (mono, small):
             d.text((xy[0] + 1, xy[1]), text, font=font, fill=0, **kw)
 
-    def chip(x, y, text):
-        """fal's square chip: white, a 2-dot border, mono inside. Returns its width."""
-        w = int(probe.textlength(text, font=small)) + 18
-        d.rectangle([x, y, x + w, y + 28], fill=255, outline=0, width=2)
-        ink((x + 9, y + 4), text, small)
-        return w
+    def lr(yy, left, right, font):
+        ink((M, yy), left, font)
+        ink((width - M, yy), right, font, anchor="ra")
 
     def dots(yy):
-        """fal's dotted rule, in dots big enough to survive the paper."""
-        for x in range(M, width - M, 10):
+        """The big-dot rule: 3-dot dots, 10 apart, margin to margin."""
+        for x in range(M, width - M - 2, 10):
             d.rectangle([x, yy, x + 2, yy + 2], fill=0)
 
-    def wrap(text, font, most=5):
-        """Lines that fit the column, at most `most` (the last one ends in … when it's cut)."""
+    def wrap(text, font, room, most=5):
         lines, cur = [], ""
         for word in text.split():
             trial = f"{cur} {word}".strip()
-            if probe.textlength(trial, font=font) <= width - 2 * M or not cur:
+            if probe.textlength(trial, font=font) <= room or not cur:
                 cur = trial
             else:
                 lines.append(cur)
@@ -160,104 +219,111 @@ def sticker_image(take, cfg, src, B, width=W):
         lines += [cur] if cur else []
         if len(lines) > most:
             lines = lines[:most]
-            while lines[-1] and probe.textlength(lines[-1] + "…”", font=font) > width - 2 * M:
+            while lines[-1] and probe.textlength(lines[-1] + "…”", font=font) > room:
                 lines[-1] = lines[-1].rsplit(" ", 1)[0] if " " in lines[-1] else lines[-1][:-1]
             lines[-1] = lines[-1].rstrip(",.;:-“") + "…”"
         return lines
 
-    # ---- the top: the lockup, then the meta line, when and where, then a dotted rule
+    # ---- the top: the lockup, the line and the event, then the call and when and where
     y = PAD
     if B.LOGO.exists():
-        mark = B.logo_image(380)  # the lockup at about two thirds of the text column, centred
+        mark = B.logo_image(424)
         img.paste(0, ((width - mark.width) // 2, y), mark)
-        y += mark.height + 21
+        y += mark.height + 30
     else:
         d.text((width // 2, y), "CALL-A-FAL", font=B.brand_font("display", 54, 900), fill=0, anchor="mt")
-        y += 78
-    at = time.localtime(take.get("at"))
-    when = time.strftime("%b %d, %Y · %I:%M %p", at).replace(" 0", " ")
-    loc = (cfg.get("location") or "").strip()
-    ink((width // 2, y), " · ".join(p for p in (when, PLACES.get(loc.upper(), loc.title())) if p), small, anchor="ma")
-    y += 68
+        y += 90
+    ink((width // 2, y), f"ZERO LATENCY LINE {str(cfg.get('line', '')).zfill(2)}", mono, anchor="ma")
+    y += 38
+    ink((width // 2, y), EVENT, small, anchor="ma")
+    y += 50
     dots(y)
-    y += 3 + 28
+    y += 22
+    city, tz = place(cfg)
+    at = local_time(take.get("at") or time.time(), tz)
+    lr(y, f"CALL #{take.get('call', 0):04d}", time.strftime("%I:%M %p", at).lstrip("0"), mono)
+    y += 40
+    date = time.strftime("%b %d %Y", at).upper()
+    while city and probe.textlength(f"{date}  {city}", font=mono) > width - 2 * M:  # a long city never hits the date
+        city = city[:-1]
+    lr(y, date, city.rstrip(), mono)
+    y += 40
+    dots(y)
+    y += 30
 
     # ---- what they said, and the original we made when it was someone else's
     def said(head, words):
         nonlocal y
         ink((M, y), head, small)
-        y += 32
+        y += 31
         words = words.strip()
-        for line in wrap(f"“{words[:1].upper() + words[1:]}”", said_f, most=4):  # sentence case, as on the page
+        for line in wrap(f"“{words[:1].upper() + words[1:]}”", said_f, width - 2 * M):
             hang = probe.textlength("“", font=said_f) if line.startswith("“") else 0  # the quote mark hangs
             d.text((M - hang, y), line, font=said_f, fill=0)
-            y += 42
+            y += 36
     if take.get("you_said"):  # they asked for someone else's IP
         said("YOU SAID", take["you_said"])
-        y += 18
+        y += 32
         said("WE MADE YOU AN ORIGINAL", take.get("prompt") or "")
     elif take.get("prompt"):
         said("ONE OF OURS" if take.get("surprise") else "YOU SAID", take["prompt"])
-    y += 22
+    y += 40
 
-    # ---- the video's clearest frame, edge to edge, nothing printed over it
-    fw = width - 2 * INSET
+    # ---- two key frames, edge to edge (the Zebra's a little in, so a label a dot off never shows a sliver)
+    inset = 0 if width <= 576 else 12
+    fw = width - 2 * inset
     fh = round(fw / PHOTO)
     try:
-        frames = key_frames(src, cfg["secs"], (fw, fh), 1)
-    except FileNotFoundError:  # no ffmpeg (a laptop test): a sticker without the photo
+        frames = key_frames(src, cfg["secs"], (fw, fh), 2)
+    except FileNotFoundError:  # no ffmpeg (a laptop test): no photos
         frames = []
-    if frames:
-        t, f = frames[0]
-        img.paste(B.thermal_photo(f, 1 + cfg.get("print_lighten", 0) / 120), (INSET, y))
-        y += fh
-    y += 39
+    for t, f in frames:
+        img.paste(B.thermal_photo(f, 1 + cfg.get("print_lighten", 0) / 120), (inset, y))
+        tc = f"{int(t // 60)}:{t % 60:04.1f}"
+        cw = int(probe.textlength(tc, font=small)) + 22
+        d.rectangle([inset + 8, y + 8, inset + 8 + cw, y + 36], fill=255, outline=0, width=2)
+        ink((inset + 19, y + 13), tc, small)
+        y += fh + 7
+    y += 31
 
-    # ---- how fast, then the bill: one row per item, each over a dotted rule, then the total
-    d.text((M, y), "Generated in", font=title, fill=0)
-    d.text((width - M, y), f"{take.get('gen_secs', take['secs']):.1f} s", font=title, fill=0, anchor="ra")
-    y += 72
-    bill = {}  # an IP check raced over two models is one line, "+1" after the first model's name
-    for item, model, cost in take.get("costs") or []:
-        first, usd, n = bill.get(item, (model, 0.0, 0))
-        bill[item] = (first, usd + cost, n + 1)
-    bill = [(item, B.model_name(model) + (f" +{n - 1}" if n > 1 else ""), round(usd, 4))
-            for item, (model, usd, n) in bill.items()]
-    for item, model, cost in bill:
-        price = f"${cost:.4f}"
-        name = sentence(item)
-        d.text((M, y + 1), name, font=label, fill=0)
-        x = M + probe.textlength(name, font=label) + 12
-        room = width - M - probe.textlength(" " + price, font=mono) - x - 18
-        while model and probe.textlength(model, font=small) > room:  # a long model name never hits the price
-            model = model[:-1]
-        if model:
-            chip(x, y, model)
-        ink((width - M, y + 3), price, mono, anchor="ra")
-        dots(y + 41)
-        y += 57
-    total = sum(c for _, _, c in bill)  # what's printed, so it adds up
-    d.text((M, y), "Total", font=total_f, fill=0)
-    d.text((width - M, y), f"${total:.4f}", font=total_f, fill=0, anchor="ra")
-    y += 55
+    # ---- how fast, then the itemized call and the total
+    lr(y, "Generated in", f"{take.get('gen_secs', take['secs']):.1f} s", big)
+    y += 80
     dots(y)
-    y += 3 + 41
+    y += 28
+    ink((M, y), "ITEMIZED CALL", small)
+    y += 39
+    bill = [(item, B.model_name(model), round(cost, 4)) for item, model, cost in take.get("costs") or []]
+    for item, model, cost in bill:
+        lr(y, item, f"${cost:.4f}", mono)
+        y += 28
+        if model:
+            ink((M + 16, y), model, small)
+        y += 36
+    y += 16
+    lr(y, "Total", f"${sum(c for _, _, c in bill):.4f}", total_f)  # what's printed, so it adds up
+    y += 65
+    dots(y)
+    y += 30
 
-    # ---- the way back: a QR to their video's page, made for this call, and the sign-off
+    # ---- the way back: a QR to their video's page, made for this call
     share = getattr(B, "share_url", None)  # the event page when this booth has one, else the video's own link
-    q = small_qr(share(take, cfg, words=False) if share else take["url"]) if take.get("url") else None
+    k = 3 if width > 576 else 4
+    q = small_qr(share(take, cfg, words=False) if share else take["url"], k) if take.get("url") else None
     if q is not None:
-        qh = q.height - 12  # the code itself, inside its 6-dot quiet zone
-        img.paste(q, (M - 6, y - 6))  # the code's edge on the margin; its quiet zone sits in the margin
-        x = M + qh + 18
-        mid = y + qh // 2
-        ink((x, mid - 2), "SCAN TO KEEP", small, anchor="ls")
-        ink((x, mid + 26), "YOUR VIDEO", small, anchor="ls")
-        y += qh + 13
-    side = 74  # the sign-off sits in from the margins, as in the mock
-    ink((side, y), "Your creative direct line", small)
-    ink((width - side, y), "fal.ai", small, anchor="ra")
-    y += 28 + PAD_FOOT
+        qh = q.height - 4 * k  # the code itself, inside its 2-module quiet zone
+        img.paste(q, (M - 2 * k, y - 2 * k))
+        x = M + qh + 16
+        yy = y
+        for line in wrap("Scan to keep your video and try fal Agent inside Photoshop", note_f, width - M - x, most=4):
+            d.text((x, yy), line, font=note_f, fill=0)  # a sentence, so Focal Text, not mono
+            yy += 30
+        y += max(qh, yy - y) + 28
+        dots(y)
+        y += 16
+    d.text((M, y), "Your creative direct line.", font=sign_f, fill=0)
+    d.text((width - M, y), "fal.ai", font=sign_f, fill=0, anchor="ra")
+    y += 33 + PAD_FOOT
     return img.crop((0, 0, width, y)).point(lambda v: 255 if v > 200 else 0).convert("1")
 
 
