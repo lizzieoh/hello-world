@@ -135,7 +135,8 @@ Full quantities, cables and small parts are in `booth/SHOPPING.md`.
 **Models**
 - Video: **H3 Max** (`minimax/h3-max/text-to-video`, 768P, 10 s) first, then **FLUX 3 Max** (`blackforestlabs/flux-3-max/text-to-video`) as backup. `MODEL=flux` in `native.conf` swaps the order.
 - A request fal refuses (4xx, safety) is not retried on the backup model.
-- Speech to text: **Wizper** (`fal-ai/wizper`). If it hasn't answered in 1.5 s, **ElevenLabs Scribe v2** joins and the first answer wins; 12 s deadline.
+- Speech to text: **ElevenLabs Scribe v2** (`fal-ai/elevenlabs/speech-to-text/scribe-v2`). If it hasn't answered in 1.2 s, **Cohere Transcribe** (`fal-ai/cohere-transcribe`) joins and the first answer wins; 12 s deadline.
+- IP check: **Gemini 3.1 Flash Lite** and **GPT-6 Luna** raced through `openrouter/router`, 4 s deadline. Rewrites: GPT-6 Luna, with Flash Lite if Luna is slow.
 
 **Keys**
 

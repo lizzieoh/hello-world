@@ -8,7 +8,8 @@ The pieces, each kept simple so it can't take the others down:
   Phone   the Pico, read straight from the kernel (evdev), so no window ever has to have focus
   Line    the handset: one always-open output stream that mixes voice lines, music and tones, and an always-open mic
   Screen  mpv full screen, driven over its IPC socket: videos stream from fal's URL, text is drawn as an OSD overlay
-  Fal     fal_client: Wizper for the words, H3 Max (or FLUX 3 Max) for the video, the other one as the backup
+  Fal     fal_client: Scribe for the words, a language-model race for the IP check, H3 Max (or FLUX 3 Max) for
+          the video, each with a backup
   Printer ESC/POS straight to /dev/usb/lp0: no CUPS, no driver
 Everything reports to one queue and one thread runs the call (Booth.run), so there are no races between a hang-up
 and a video arriving: each call has a number, and anything from an older call is ignored.
@@ -18,10 +19,12 @@ Run by run.sh, which restarts it if it ever exits. Settings: native.conf next to
 import base64
 import glob
 import heapq
+import inspect
 import io
 import itertools
 import json
 import logging
+import math
 import os
 import queue
 import random
@@ -45,8 +48,8 @@ log = logging.getLogger("booth")
 def load_config(path=HERE / "native.conf"):
     cfg = {"LINE": "1", "SECS": "10", "MODEL": "h3", "LANGUAGE": "en", "PRINTER": "/dev/usb/lp0", "GRAB": "1",
            "PLAYS_BEFORE_SLIDES": "4", "SLIDES": "6", "SLIDE_SECS": "2.5", "PRINT_LIGHTEN": "35",
-           "OUT_DEVICE": "", "IN_DEVICE": "", "LOW_VOLUME": "40", "RING_EVERY": "120", "LOCATION": "MIAMI",
-           "END_PAUSE": "5", "LISTEN_MAX": "30"}
+           "OUT_DEVICE": "", "IN_DEVICE": "", "LOW_VOLUME": "40", "RING_EVERY": "120", "LOCATION": "MIAMI BEACH",
+           "END_PAUSE": "5", "LISTEN_MAX": "30", "SHARE_BASE": "https://fal-adobe-max.vercel.app/v"}
     if path.exists():
         for raw in path.read_text().splitlines():
             line = raw.split("#", 1)[0].strip()
@@ -60,6 +63,7 @@ def load_config(path=HERE / "native.conf"):
         "flux_first": cfg["MODEL"].lower() == "flux",
         "language": cfg["LANGUAGE"],
         "printer": cfg["PRINTER"],
+        "share_base": cfg["SHARE_BASE"].strip(),  # the event page the QR codes open; empty = the video's own link
         "location": cfg["LOCATION"],  # printed on the receipt, next to the line number
         # How much lighter the receipt's pictures print, 0-100 (0 = as filmed). Thermal paper prints dark.
         "print_lighten": min(100, max(0, int(cfg["PRINT_LIGHTEN"]))),
@@ -71,7 +75,7 @@ def load_config(path=HERE / "native.conf"):
         # long in all (seconds). No speech at all for no_speech seconds counts as a silent caller.
         "silence": max(0.5, float(cfg["END_PAUSE"])), "listen_max": max(5.0, float(cfg["LISTEN_MAX"])),
         "no_speech": 6.0,
-        "render_timeout": 45.0,                                  # per model, then the next model
+        "render_timeout": 20.0,                                  # per model, then the next model (H3: ~11 s)
         "menu_after": 3.0,                                       # seconds into the clip before the menu is read
         "off_hook_idle": 60.0,                                   # handset left off after the menu -> busy signal
         "history": 12,                                           # recent videos kept for the screen between calls
@@ -123,25 +127,76 @@ IP_CHECK_PROMPT = (
     "You screen prompts for a public video booth. The booth must NEVER make anyone else's intellectual property. "
     'Reply with JSON only: {"ok": true} or {"ok": false, "what": "<short name of the IP>"}.\n'
     "Not ok: any copyrighted or trademarked character, franchise, film, show, game, comic, book, song or mascot, "
-    "named OR clearly described (e.g. a yellow square sponge in brown shorts who lives in a pineapple); any brand, "
-    "company, logo, product or app (Adobe, Nike, Coca-Cola, iPhone, fal included); any real person, celebrity, "
-    "politician or public figure; any named artist's or studio's style (Pixar, Ghibli, Disney, Wes Anderson).\n"
+    "named, misspelled, translated OR clearly described (e.g. a yellow square sponge in brown shorts who lives in a "
+    "pineapple); their signature items, logos, catchphrases and lyrics (a lightsaber, a swoosh, golden arches); any "
+    "brand, company, logo, product or app (Adobe, Nike, Coca-Cola, iPhone, fal included); any real person, "
+    "celebrity, athlete, politician or public figure, named or described by their role (the president, the governor "
+    "of Florida); any named artist's, director's or studio's style (Pixar, Ghibli, Disney, Wes Anderson).\n"
     "Ok: original ideas, generic animals, objects, foods, drinks, places, cities, landmarks, sports, jobs, genres "
     "and moods (a sponge, a spider, a superhero I made up, a cartoon, anime style, Miami at night, a pumpkin spice "
-    "latte, a burger, sneakers, a smartphone, a quarterback). Words used in their ordinary meaning are ok (frozen "
-    "lake, a sonic boom). Judge only what is actually asked for.")
+    "latte, a burger, sneakers, a smartphone, a quarterback). Public-domain myths, legends, fairy tales and classic "
+    "literary characters are ok (Zeus, King Arthur, a mermaid, Dracula, Sherlock Holmes, Alice in Wonderland), but "
+    "not a studio's version of them. Words used in their ordinary meaning are ok (frozen lake, a sonic boom). "
+    "If a description fits a well-known character, film, mascot, logo or person, it is not ok even without a name. "
+    "When unsure, block. Judge only what is actually asked for.")
 REMIX_PROMPT = (
-    "You work at a video booth that only makes original ideas. The caller asked for something that borrows "
-    "someone else's intellectual property ({what}). Change only the borrowed part: replace each borrowed character, "
-    "brand, logo or real person with an original one nobody could mistake for it: a different kind of character "
-    "altogether (a superhero becomes, say, a chef, a robot or an animal), NOT its colours, NOT its shape, NOT its outfit, none of its signature traits, no names (SpongeBob is "
-    "yellow and square, so not yellow and not square). Keep everything else "
-    "exactly as they said it: the places, the action, the time of day and the mood. Make it fun. Reply with the "
-    "new prompt only: one sentence, under 30 words.")
-CANCELLED = "Cancelled, nothing made. Try another idea after the beep, or hang up."
-REMIXING = "That one's someone else's character, so our agent is making you an original."
-ASK_AGAIN = "That one belongs to someone else. Try your own idea after the beep."
-ORIGINAL_ONLY = " Original characters and designs only: no logos, brand names or famous people."
+    "You work at a video booth that only makes original ideas. The caller's idea borrows someone else's "
+    "intellectual property ({what}). Swap out only the borrowed part. Replace each borrowed character, brand, logo "
+    "or real person with an original one of a different kind altogether (a superhero becomes, say, a chef, a robot "
+    "or an animal): not its colours, shape, outfit, powers, signature items, catchphrases or name. A named studio's, "
+    "show's or artist's look becomes a plain description of a look, with no name (80s neon pastels, hand-painted "
+    "animation). Drop words that point back to it (the famous theme park, the studio that made...). Keep the "
+    "caller's own words for everything else: the same places (a swamp stays a swamp), action, time of day and mood; "
+    "add no new places or times. Make it fun and easy to picture. Reply with the new prompt only: one sentence, "
+    "under 30 words.")
+# 1 (surprise me): one of ours, for anyone stuck for an idea (and for a second silence). Originals only, Miami and
+# making things, each worth trying on H3 Max before the show; none goes through the IP check.
+SURPRISE = [
+    "A flamingo DJ spinning records on a South Beach rooftop at sunset",
+    "A manatee astronaut floating past the moon over Biscayne Bay",
+    "Pastel art deco hotels on Ocean Drive blooming into giant tropical flowers",
+    "A paper lantern drifting down a neon-lit Miami street on a warm night",
+    "A pelican lifeguard blowing a whistle on a crowded beach",
+    "A hummingbird barista pouring a cafecito at a tiny walk-up window",
+    "A paintbrush painting the sunrise over the ocean, one stroke at a time",
+    "A lime-green vintage convertible driving through a storm of confetti",
+    "A giant mango rolling down an empty highway at golden hour",
+    "A choir of parrots singing in a palm tree at dawn",
+    "A pencil sketch of a chair folding itself into a real wooden chair",
+    "Purple lightning drawing glowing patterns across the night sky over the bay",
+    "A pastel lifeguard tower sprouting palm leaves at golden hour",
+    "A robot florist arranging orchids in a sunlit greenhouse",
+    "A jellyfish made of stained glass drifting through a coral reef",
+    "Origami cranes taking off from a desk and flying out an open window",
+    "A lighthouse keeper's cat watching a storm roll in over the sea",
+    "A vintage typewriter typing out flowers instead of letters",
+    "An iguana sunbathing on a lounge chair beside a turquoise pool",
+    "A hot air balloon shaped like a lemon drifting over the Everglades",
+    "A potter's wheel spinning a vase made of ocean water",
+    "Neon palm trees swaying in a warm night breeze",
+    "A tiny sailboat crossing a bathtub ocean during a bubble storm",
+    "A marching band of crabs parading along the shoreline",
+    "A cloud raining confetti over a rooftop party",
+    "A seagull stealing a croqueta from a beach picnic, in slow motion",
+    "A city of cardboard boxes coming to life at night",
+    "A koi fish swimming through the sky between skyscrapers",
+    "A violinist playing on a pier as dolphins jump in time",
+    "A sunflower field turning to follow a disco ball",
+]
+STT_NAMES = {"fal-ai/elevenlabs/speech-to-text/scribe-v2": "ElevenLabs Scribe v2",
+             "fal-ai/cohere-transcribe": "Cohere Transcribe"}
+MODEL_NAMES = {"H3 Max": "fal H3 Max"}  # fal's post-trained MiniMax H3; the screen and receipt use the full names
+
+
+def model_name(name):
+    return MODEL_NAMES.get(name, name or "")
+
+
+BUSY = ("Our lines are busy.", "")
+REFUSED = ("That one didn't go through.", "")
+FRIENDLY = ("Let's keep it friendly.", "")
+ORIGINAL_ONLY = (" Original characters and designs only: no logos, brand names or famous people. No signs, text, "
+                 "lettering, neon words, patches or badges; unbranded equipment.")
 
 
 # ---------- fal ----------
@@ -154,18 +209,28 @@ class Refused(Exception):
 
 
 class Fal:
-    STT = "fal-ai/wizper"
-    STT_BACKUP = "fal-ai/elevenlabs/speech-to-text/scribe-v2"
-    STT_BACKUP_AFTER = 1.5  # s
+    # Measured Nov 4 on phone-quality clips: Scribe got every word right and never stalled (p50 0.8 s); Cohere is
+    # quicker but slips on noisy audio, so it only joins when Scribe is slow. Wizper stalled in bursts (up to 53 s).
+    STT = "fal-ai/elevenlabs/speech-to-text/scribe-v2"
+    STT_BACKUP = "fal-ai/cohere-transcribe"
+    STT_BACKUP_AFTER = 1.2  # s
     STT_DEADLINE = 12       # s, then the caller hears "lines are busy"
+    SCRIBE_LANG = {"en": "eng", "es": "spa", "fr": "fra", "de": "deu", "pt": "por", "it": "ita", "ja": "jpn",
+                   "ko": "kor", "zh": "zho"}  # Scribe wants three-letter codes
     IP_CHECK = "openrouter/router"
-    IP_CHECK_MODELS = ("anthropic/claude-haiku-4.5", "openai/gpt-6-luna")  # about 1 s; the second if the first fails
-    LLM_NAMES = {"anthropic/claude-haiku-4.5": "Claude Haiku 4.5", "openai/gpt-6-luna": "GPT-6 Luna"}
+    # Raced from the start, first answer wins: neither let any of 46 described or misspelled IP prompts through
+    # (Haiku 4.5 let 4 through), and together they answer in about 1 s.
+    IP_CHECK_MODELS = ("google/gemini-3.1-flash-lite", "openai/gpt-6-luna")
+    IP_CHECK_DEADLINE = 4  # s; no verdict by then and nothing is made
+    # Luna's originals passed the re-check 93% of the time (Haiku's 62%); Flash Lite joins if Luna is slow.
+    REMIX_MODELS = ("openai/gpt-6-luna", "google/gemini-3.1-flash-lite")
+    REMIX_BACKUP_AFTER = 1.5  # s
+    REMIX_DEADLINE = 12       # s, including the re-check
+    LLM_NAMES = {"google/gemini-3.1-flash-lite": "Gemini 3.1 Flash Lite", "openai/gpt-6-luna": "GPT-6 Luna"}
 
     def _llm(self, model, system, prompt, bill, label, timeout=8, **kw):
         """One language-model call through fal. Its cost (fal reports it) goes on the receipt's bill."""
-        r = self.client.run(self.IP_CHECK, {"model": model, "system_prompt": system, "prompt": prompt, **kw},
-                            timeout=timeout)
+        r = self._run(self.IP_CHECK, {"model": model, "system_prompt": system, "prompt": prompt, **kw}, timeout)
         if bill is not None:
             bill.append((label, self.LLM_NAMES.get(model, model), float((r.get("usage") or {}).get("cost") or 0)))
         return r.get("output") or ""
@@ -176,6 +241,9 @@ class Fal:
             import fal_client
             client = fal_client.SyncClient(key=fal_key(), default_timeout=20)
         self.client = client
+        self.hard_timeouts = "start_timeout" in inspect.signature(client.run).parameters
+        if not self.hard_timeouts:
+            log.warning("fal_client too old for hard timeouts: run setup-native.sh again to update it")
         secs = cfg["secs"]
         self.models = [
             ("H3 Max", "minimax/h3-max/text-to-video",
@@ -188,21 +256,12 @@ class Fal:
         if cfg["flux_first"]:
             self.models.reverse()
 
-    def load_prices(self):
-        """fal's current prices for the models in use; the PRICES list if fal can't be reached."""
-        self.prices = dict(PRICES)
-        try:
-            ids = [e for _, e, _ in self.models] + [self.STT, self.STT_BACKUP]
-            r = self.client._client.get("https://api.fal.ai/v1/models/pricing",
-                                        params=[("endpoint_id", e) for e in ids], timeout=8)
-            for p in r.json().get("prices", []):
-                self.prices[p["endpoint_id"]] = float(p["unit_price"])
-            log.info("prices: %s", {k.split("/")[1]: v for k, v in self.prices.items()})
-        except Exception as e:
-            log.warning("price lookup failed, using the built-in list: %s", e)
-
     def endpoint(self, name):
         return next(e for n, e, _ in self.models if n == name)
+
+    def put_first(self, flux):
+        """Staff dashboard: which video model goes first (the other stays the backup)."""
+        self.models.sort(key=lambda m: (m[0] == "FLUX 3 Max") != flux)
 
     def warm_up(self):
         """Open the connection to fal while the greeting plays, so the real requests skip DNS and TLS."""
@@ -211,44 +270,65 @@ class Fal:
         except Exception:
             pass
 
-    def transcribe(self, wav_bytes):
-        """Wizper first; if it hasn't answered in STT_BACKUP_AFTER s (it once stalled for 77 s), Scribe joins the race.
-        First good answer wins; the other is left to finish on its own. Returns (text, endpoint)."""
-        uri = "data:audio/x-wav;base64," + base64.b64encode(wav_bytes).decode()
-        lang = self.cfg["language"]
-        tries = [(self.STT, {"audio_url": uri, "task": "transcribe", **({} if lang == "auto" else {"language": lang})}),
-                 (self.STT_BACKUP, {"audio_url": uri, "diarize": False, "tag_audio_events": False})]
+    def _run(self, endpoint, args, secs):
+        """client.run that really gives up after `secs`. Without start_timeout, fal_client quietly retries a
+        timed-out request up to 10 times (a 6 s limit once took 47 s)."""
+        if self.hard_timeouts:
+            return self.client.run(endpoint, args, timeout=secs, start_timeout=secs)
+        return self.client.run(endpoint, args, timeout=secs)
+
+    @staticmethod
+    def _first(tries, deadline, stagger=0.0):
+        """A race between (name, function) tries. The first starts at once; each next one after `stagger` s more, or
+        straight away when every one started so far has failed. The first to return wins (name, result) and the rest
+        finish on their own. Raises the last error if they all fail, or TimeoutError after `deadline` s."""
         answers = queue.Queue()
 
-        def one(endpoint, args):
+        def one(name, fn):
             try:
-                text = SOUND_TAGS.sub("", self.client.run(endpoint, args, timeout=15).get("text") or "")
-                answers.put((endpoint, " ".join(text.split()), None))
+                answers.put((name, fn(), None))
             except Exception as e:
-                answers.put((endpoint, None, e))
+                answers.put((name, None, e))
 
         t0 = time.monotonic()
-        deadline = t0 + self.STT_DEADLINE
-        started, failed = 0, 0
+        started = failed = 0
         while True:
-            # start the next one at once, or when the last one failed, or when Wizper is slow
-            if started < len(tries) and (started == 0 or failed == started or
-                                         time.monotonic() - t0 > self.STT_BACKUP_AFTER):
+            if started < len(tries) and (started == failed or time.monotonic() - t0 >= stagger * started):
                 threading.Thread(target=one, args=tries[started], daemon=True).start()
                 started += 1
-            wait = deadline - time.monotonic()
+                continue
+            wait = t0 + deadline - time.monotonic()
             if wait <= 0:
-                raise TimeoutError(f"no transcript in {self.STT_DEADLINE:.0f} s")
+                raise TimeoutError(f"no answer in {deadline:.0f} s")
             try:
-                endpoint, text, err = answers.get(timeout=min(wait, 0.1))
+                name, result, err = answers.get(timeout=min(wait, 0.05))
             except queue.Empty:
                 continue
             if err is None:
-                return text, endpoint
-            log.warning("transcribe failed (%s): %s", endpoint.split("/")[-1], err)
+                return name, result
+            log.warning("%s failed: %s", name.split("/")[-1], err)
             failed += 1
             if failed == len(tries):
                 raise err
+
+    def transcribe(self, wav_bytes):
+        """Scribe first; if it hasn't answered in STT_BACKUP_AFTER s, Cohere joins the race. First good answer
+        wins. Returns (text, endpoint)."""
+        uri = "data:audio/x-wav;base64," + base64.b64encode(wav_bytes).decode()
+        lang = self.cfg["language"]
+        scribe = {"audio_url": uri, "diarize": False, "tag_audio_events": False}
+        if lang in self.SCRIBE_LANG:
+            scribe["language_code"] = self.SCRIBE_LANG[lang]
+        cohere = {"audio_url": uri, **({} if lang == "auto" else {"language": lang})}
+
+        def ask(endpoint, args):
+            text = self._run(endpoint, args, self.STT_DEADLINE)
+            return " ".join(SOUND_TAGS.sub("", text.get("text") or "").split())
+
+        endpoint, text = self._first([(self.STT, lambda: ask(self.STT, scribe)),
+                                      (self.STT_BACKUP, lambda: ask(self.STT_BACKUP, cohere))],
+                                     self.STT_DEADLINE, self.STT_BACKUP_AFTER)
+        return text, endpoint
 
     def check_ip(self, prompt, bill=None):
         """None if the prompt is an original idea, else what it borrows (a character, brand, real person...).
@@ -257,43 +337,39 @@ class Fal:
         m = IP_NAMES.search(prompt)
         if m:  # free, so it isn't on the bill
             return m.group(0)
-        last = None
-        for model in self.IP_CHECK_MODELS:
-            try:
-                out = self._llm(model, IP_CHECK_PROMPT, prompt, bill, "IP CHECK", timeout=6, temperature=0,
-                                max_tokens=60)
-                verdict = json.loads(re.search(r"\{.*?\}", out, re.S).group(0))
-                return None if verdict.get("ok") is True else str(verdict.get("what") or "someone else's IP")
-            except Exception as e:
-                log.warning("IP check failed (%s): %s", model, e)
-                last = e
-        raise last
+
+        def ask(model):
+            out = self._llm(model, IP_CHECK_PROMPT, prompt, bill, "IP CHECK", timeout=self.IP_CHECK_DEADLINE,
+                            temperature=0, max_tokens=60)
+            verdict = json.loads(re.search(r"\{.*?\}", out, re.S).group(0))  # no verdict: the other one decides
+            return None if verdict.get("ok") is True else str(verdict.get("what") or "someone else's IP")
+
+        return self._first([(m, lambda m=m: ask(m)) for m in self.IP_CHECK_MODELS], self.IP_CHECK_DEADLINE)[1]
 
     def remix(self, prompt, borrowed, bill=None):
         """The prompt turned into an original idea with the same energy, checked again before it's used. Raises
         if it can't be made original (the caller is then asked for another idea)."""
-        last = None
-        for model in self.IP_CHECK_MODELS:
-            try:
-                out = self._llm(model, REMIX_PROMPT.format(what=borrowed), prompt, bill, "MADE ORIGINAL",
-                                temperature=0.7, max_tokens=80)
-                original = " ".join(out.strip().strip('"“”').split())
-                if not original:
-                    raise RuntimeError("empty remix")
-                still = self.check_ip(original, bill)
-                if still:
-                    raise RuntimeError(f"the remix still borrows {still}: {original!r}")
-                return original
-            except Exception as e:
-                log.warning("remix failed (%s): %s", model, e)
-                last = e
-        raise last
+        def ask(model):
+            out = self._llm(model, REMIX_PROMPT.format(what=borrowed), prompt, bill, "MADE ORIGINAL",
+                            timeout=self.REMIX_DEADLINE, temperature=0.7, max_tokens=80)
+            original = " ".join(out.strip().strip('"“”').split())
+            if not original:
+                raise RuntimeError("empty remix")
+            still = self.check_ip(original, bill)
+            if still:
+                raise RuntimeError(f"the remix still borrows {still}: {original!r}")
+            return original
 
-    def render(self, prompt, stop=None):
+        return self._first([(m, lambda m=m: ask(m)) for m in self.REMIX_MODELS], self.REMIX_DEADLINE,
+                           self.REMIX_BACKUP_AFTER)[1]
+
+    def render(self, prompt, stop=None, trying=None):
         """Each model gets one go, in order. Returns (url, model name). `stop()` true (the caller pressed *) calls the
-        job off."""
+        job off; `trying(name)` hears which model is on it, so the hold screen can say so."""
         last = None
         for name, endpoint, build in self.models:
+            if trying:
+                trying(name)
             try:
                 return self._one(endpoint, build(prompt + ORIGINAL_ONLY), stop), name
             except (Refused, Cancelled):
@@ -355,6 +431,17 @@ def tone(freqs, secs, peak=0.12):
 
 def silence(secs):
     return np.zeros(int(SR * secs), np.float32)
+
+
+def generating_audio(secs=0.9):
+    """2 (sound on): a short run of soft rising blips, like something being made, then the video's sound comes in."""
+    out = []
+    for i, f in enumerate([660, 740, 830, 880, 990, 1110, 1320]):
+        n = int(0.05 * SR)
+        t = np.arange(n) / SR
+        blip = np.sin(2 * np.pi * f * t) * np.exp(-t / 0.018) * 0.12
+        out += [blip.astype(np.float32), silence(secs / 7 - 0.05)]
+    return np.concatenate(out)
 
 
 def ring():
@@ -423,6 +510,10 @@ DTMF = {k: (r, c) for r, row in zip([697, 770, 852, 941], ["123", "456", "789", 
         for c, k in zip([1209, 1336, 1477], row)}
 
 
+MMHM_AFTER = 7.0   # seconds into a prompt before the first "mm-hm"
+MMHM_EVERY = 8.0   # and then at most this often (three a prompt)
+
+
 class Clip:
     def __init__(self, data, tag=None, loop=False, delay=0.0, fade_in=0.0):
         self.data, self.tag, self.loop = data, tag, loop
@@ -467,8 +558,11 @@ class Line:
         self.lock = threading.Lock()
         self.clips = []
         self.rec = None
+        self.meter = (0.0, False, 0.0)
         self.gain = 1.0  # the volume switch: 1 on loud, cfg["low_volume"] on low
         v = {name: phone_band(load_wav(voice_dir / f"{name}.wav")) for name in ("greeting", "hold", "menu")}
+        # "mm-hm": a soft nod in the earpiece while a long prompt is still coming, so they know the line is open
+        mmhm = [0.6 * phone_band(load_wav(f)) for f in sorted(voice_dir.glob("mmhm*.wav"))]
         click = (np.random.default_rng(1).uniform(-1, 1, int(0.03 * SR)) * 0.3
                  * np.exp(-np.arange(int(0.03 * SR)) / (0.005 * SR))).astype(np.float32)
         self.sounds = {
@@ -481,7 +575,10 @@ class Line:
             "music": elevator_loop(),
             "ring": ring(),
             "beep": tone([1000], 0.4),
+            "generating_audio": generating_audio(),
+            **{f"mmhm{i}": m for i, m in enumerate(mmhm)},
         }
+        self.mmhms = len(mmhm)
         self.out = self.inp = None
         threading.Thread(target=self._keep_open, daemon=True).start()
 
@@ -608,11 +705,22 @@ class Line:
             if rms > 1e-4:
                 r["floor"] = min(rms, r["floor"] * 1.005)
             if rms > max(0.015, r["floor"] * 3):
+                if not r["heard"]:
+                    r["talk_from"] = now
                 r["heard"], r["last_loud"] = True, now
+                # a long prompt, still going: "mm-hm" every so often (never in a pause, so it can't end the turn)
+                if now - r.get("talk_from", now) >= MMHM_AFTER and now >= r.get("next_mmhm", 0) and r.get("mmhms", 0) < 3:
+                    r["next_mmhm"], r["mmhms"] = now + MMHM_EVERY, r.get("mmhms", 0) + 1
+                    self.post(("mmhm", r["cid"], r["mmhms"]))
+            self.meter = (min(1.0, rms / max(0.06, r["floor"] * 12)), r["heard"], now - (r["last_loud"] or now))
             c = self.cfg
             if ((r["heard"] and now - r["last_loud"] > c["silence"]) or (not r["heard"] and now > c["no_speech"])
                     or now > c["listen_max"]):
                 self._finish()
+
+    def level(self):
+        """(0-1 loudness of the last block, speech heard yet, seconds quiet since) while recording."""
+        return self.meter if self.rec else (0.0, False, 0.0)
 
     def _finish(self):  # with self.lock held
         r, self.rec = self.rec, None
@@ -644,6 +752,243 @@ def ass_text(s):
     return re.sub(r"[{}\\\n\r]", " ", s)
 
 
+def clip_words(s, n):
+    """At most n characters, cut between words, with an ellipsis (and the closing quote, if it was quoted)."""
+    if len(s) <= n:
+        return s
+    cut = s[:n - 2].rsplit(" ", 1)[0].rstrip(",.;:-")
+    return cut + ("…”" if s.endswith("”") else "…")
+
+
+# ---------- the screen's look ----------
+# fal's UI system at booth scale: one grid (header 96 px, stage, a key strip 174 px), a few type sizes big enough for
+# a 16" screen read from across the stand, dressed like the booth's plaques: Light Sage, the wall's Model Purple and
+# grey squares and dots around the edge, and the words in big HAL Timezone Mono capitals. Everything is one ASS overlay.
+def ass_colour(hex6):
+    return f"&H{hex6[4:6]}{hex6[2:4]}{hex6[0:2]}&"
+
+
+WHITE, BLACK, NEON, BRONZE = ass_colour("FFFFFF"), ass_colour("000000"), ass_colour("ADFF00"), ass_colour("403700")
+SAGE, LIGHT_PURPLE = ass_colour("E5ECE7"), ass_colour("D5BBFF")
+MODEL_PURPLE, PIXEL_GREY = ass_colour("AB77FF"), ass_colour("CACED2")  # the wall's pixel squares and dots
+FACES = {"display": ("Focal Maxi Medium", "FocalMaxi-Medium.otf"), "body": ("Focal Text", "FocalText-Regular.otf"),
+         "label": ("Focal Text Medium", "FocalText-Medium.otf"), "mono": ("HAL Timezone Mono", "HALTimezone-MonoRegular.otf")}
+# token: (face, size in px, tracking in em)
+TYPE = {"H1": ("mono", 260, 0.0), "H2": ("mono", 132, 0.0), "H3": ("mono", 84, 0.0), "K": ("mono", 56, 0.02),
+        "D1": ("display", 300, -0.04), "D2": ("display", 150, -0.03), "D3": ("display", 96, -0.02),
+        "D4": ("display", 72, -0.02), "B": ("label", 64, -0.01), "S": ("body", 48, -0.01), "M": ("mono", 44, 0.04),
+        "MS": ("mono", 34, 0.06)}
+SCREEN_W, SCREEN_H, MARGIN = 1920, 1080, 72
+HEADER, STRIP = 96, 174           # the header's height, the key strip's height
+FRAME = (0, 0, SCREEN_W, SCREEN_H)  # the video on the ready screen: the whole screen, the key strip across its foot
+KEY_ORDER = "123456789*0#"        # the strip lists keys in the order they sit on the phone
+# (column, row, square or dot, colour) on a 30 x 17 grid of 64 px cells: the plaque's scatter, kept to the edges
+SCATTER = [(2, 1, "s", ass_colour("CACED2")), (4, 2, "o", ass_colour("AB77FF")), (2, 3, "s", ass_colour("CACED2")),
+           (2, 4, "o", ass_colour("AB77FF")), (7, 2, "s", ass_colour("CACED2")), (13, 0, "s", ass_colour("AB77FF")),
+           (21, 2, "s", ass_colour("AB77FF")), (20, 3, "s", ass_colour("CACED2")), (25, 2, "s", ass_colour("CACED2")),
+           (26, 2, "o", ass_colour("AB77FF")), (28, 4, "s", ass_colour("CACED2")), (1, 9, "s", ass_colour("AB77FF")),
+           (2, 9, "o", ass_colour("CACED2")), (27, 9, "o", ass_colour("AB77FF")), (28, 10, "s", ass_colour("CACED2"))]
+
+
+class Look:
+    """ASS for each piece of the screen. Text is measured with the same font files libass draws, so lines wrap where
+    the screen will actually break them."""
+
+    def __init__(self, fonts=None):
+        self.fonts = fonts = fonts or BRAND / "fonts"
+        self._pil = {}
+        self.have = {k: (fonts / f).exists() for k, (_, f) in FACES.items()}
+        self.lockup = ""
+        svg = BRAND / "call-a-fal-lockup.svg"
+        if svg.exists():
+            self.lockup = svg_to_ass(svg.read_text())
+
+    def face(self, kind):
+        return FACES[kind][0] if self.have.get(kind) else "DejaVu Sans"
+
+    def font(self, tok):
+        """A PIL font that measures like libass draws `tok`: libass sizes a font so its Windows ascent + descent
+        (the OS/2 table) is the size in px; PIL sizes it by the em."""
+        if tok not in self._pil:
+            from PIL import ImageFont
+            kind, size, _ = TYPE[tok]
+            path = self.fonts / FACES[kind][1]
+            path = str(path) if path.exists() else find_font(bold=kind != "body")
+            asc, desc = win_metrics(path)
+            self._pil[tok] = (ImageFont.truetype(path, max(1, round(size / (asc + desc)))), size * asc / (asc + desc),
+                              size * desc / (asc + desc))
+        return self._pil[tok][0]
+
+    def ascent(self, tok):
+        self.font(tok)
+        return self._pil[tok][1]
+
+    def descent(self, tok):
+        self.font(tok)
+        return self._pil[tok][2]
+
+    def width(self, text, tok):
+        _, size, track = TYPE[tok]
+        return self.font(tok).getlength(text) + track * size * max(0, len(text) - 1)
+
+    def wrap(self, text, tok, width, lines=99, balance=False):
+        if balance:  # as narrow as it can go without adding a line, so no word sits alone on the last one
+            n = len(self.wrap(text, tok, width))
+            while 1 < n <= lines and width > 200 and len(self.wrap(text, tok, width - 20)) == n:
+                width -= 20
+        out, cur = [], ""
+        for word in text.split():
+            trial = f"{cur} {word}".strip()
+            if self.width(trial, tok) <= width or not cur:
+                cur = trial
+            else:
+                out.append(cur)
+                cur = word
+        out += [cur] if cur else []
+        if len(out) > lines:  # the last line that fits gets the ellipsis (and keeps a closing quote)
+            out = out[:lines]
+            tail = out[-1]
+            while tail and self.width(tail + "…”", tok) > width:
+                tail = tail.rsplit(" ", 1)[0] if " " in tail else tail[:-1]
+            out[-1] = tail.rstrip(",.;:-") + ("…”" if text.endswith("”") else "…")
+        return out
+
+    def text(self, x, y, text, tok, colour=BLACK, an=7, alpha=0):
+        kind, size, track = TYPE[tok]
+        return (f"{{\\an{an}\\pos({x:.0f},{y:.0f})\\fn{self.face(kind)}\\fs{size}\\fsp{track * size:.1f}\\b0"
+                f"\\bord0\\shad0\\c{colour}\\alpha&H{alpha:02X}&}}{ass_text(text)}")
+
+    def lines(self, x, y, lines, tok, colour=BLACK, gap=None, an=7):
+        gap = gap or TYPE[tok][1] * 1.0
+        return [self.text(x, y + i * gap, line, tok, colour, an) for i, line in enumerate(lines)]
+
+    @staticmethod
+    def shape(path, colour, alpha=0):
+        return f"{{\\an7\\pos(0,0)\\p1\\bord0\\shad0\\c{colour}\\alpha&H{alpha:02X}&}}{path}{{\\p0}}"
+
+    @staticmethod
+    def box(x, y, w, h):
+        return f"m {x:.0f} {y:.0f} l {x + w:.0f} {y:.0f} l {x + w:.0f} {y + h:.0f} l {x:.0f} {y + h:.0f} "
+
+    def rect(self, x, y, w, h, colour, alpha=0):
+        return self.shape(self.box(x, y, w, h), colour, alpha)
+
+    @staticmethod
+    def dot(x, y, d):
+        """A circle of diameter d with its top left at x, y (four Bézier quarters)."""
+        r, k = d / 2, d / 2 * 0.5523
+        cx, cy = x + r, y + r
+        return (f"m {cx:.0f} {cy - r:.0f} b {cx + k:.0f} {cy - r:.0f} {cx + r:.0f} {cy - k:.0f} {cx + r:.0f} {cy:.0f} "
+                f"b {cx + r:.0f} {cy + k:.0f} {cx + k:.0f} {cy + r:.0f} {cx:.0f} {cy + r:.0f} "
+                f"b {cx - k:.0f} {cy + r:.0f} {cx - r:.0f} {cy + k:.0f} {cx - r:.0f} {cy:.0f} "
+                f"b {cx - r:.0f} {cy - k:.0f} {cx - k:.0f} {cy - r:.0f} {cx:.0f} {cy - r:.0f} ")
+
+    def scatter(self, cells=SCATTER, size=64):
+        """The booth wall's squares and dots, on a hidden 64 px grid, clear of the middle where the words go."""
+        paths = {}
+        for col, row, shape, colour in cells:
+            x, y = col * size, row * size
+            paths.setdefault(colour, []).append(self.dot(x, y, size) if shape == "o" else self.box(x, y, size, size))
+        return [self.shape("".join(p), c) for c, p in paths.items()]
+
+    def mat(self, colour, hole=None):
+        """The whole screen in one colour, with a hole where the video shows through."""
+        path = self.box(0, 0, SCREEN_W, SCREEN_H)
+        if hole:  # wound the other way, so it cuts out under either fill rule
+            x, y, w, h = hole
+            path += f"m {x} {y} l {x} {y + h} l {x + w} {y + h} l {x + w} {y} "
+        return self.shape(path, colour)
+
+    def dotted(self, y, x0=MARGIN, x1=SCREEN_W - MARGIN, colour=BLACK):
+        """fal's dotted rule: 2 px dots, 1 on and 7 off."""
+        return self.shape("".join(self.box(x, y, 2, 2) for x in range(int(x0), int(x1), 16)), colour)
+
+    def logo(self, x, y, h, colour=BLACK):
+        if not self.lockup:
+            return self.text(x, y, "CALL-A-FAL", "M", colour)
+        k = h / 33  # the lockup SVG is 209 x 33
+        return f"{{\\an7\\pos({x},{y})\\p1\\bord0\\shad0\\c{colour}\\fscx{k * 100:.1f}\\fscy{k * 100:.1f}}}{self.lockup}{{\\p0}}"
+
+    def keycap(self, x, y, key, label, primary=False, dim=False, ink=BLACK):
+        """A 120 px key: White with a 2 px stroke (Model Purple for the one to press), the digit, its label."""
+        out = [self.rect(x, y, 120, 120, BLACK, 0x99 if dim else 0)]
+        out.append(self.rect(x + 2, y + 2, 116, 116, MODEL_PURPLE if primary else WHITE))
+        out.append(self.text(x + 60, y + 60, key, "H3", BLACK, an=5, alpha=0x99 if dim else 0))
+        out.append(self.text(x + 144, y + 60, label.upper(), "K", ink, an=4, alpha=0x99 if dim else 0))
+        return out, 144 + self.width(label.upper(), "K") + 80
+
+    def strip(self, keys, tray=SAGE):
+        """The key strip: only the keys that do something now, in phone order. keys = {key: (label, primary, dim)}."""
+        out = [self.rect(0, SCREEN_H - STRIP, SCREEN_W, STRIP, tray)]
+        x = MARGIN
+        for k in sorted(keys, key=KEY_ORDER.index):
+            label, primary, dim = keys[k]
+            cap, w = self.keycap(x, SCREEN_H - STRIP + 27, k, label, primary, dim)
+            out += cap
+            x += w
+        return out
+
+    def qr(self, x, y, data, size):
+        """A QR code as one drawing: dark modules merged into runs, on a White tile with a 4-module quiet zone."""
+        try:
+            import qrcode
+        except ImportError:
+            return []
+        q = qrcode.QRCode(border=0, error_correction=qrcode.constants.ERROR_CORRECT_L)
+        q.add_data(data)
+        q.make(fit=True)
+        m = q.get_matrix()
+        n = len(m)
+        k = max(2, int(size // (n + 8)))
+        pad = 4 * k
+        path = []
+        for r, row in enumerate(m):
+            c = 0
+            while c < n:
+                if row[c]:
+                    start = c
+                    while c < n and row[c]:
+                        c += 1
+                    path.append(self.box(x + pad + start * k, y + pad + r * k, (c - start) * k, k))
+                else:
+                    c += 1
+        side = n * k + 2 * pad
+        return [self.rect(x, y, side, side, WHITE), self.shape("".join(path), BLACK)], side
+
+
+def win_metrics(path):
+    """A font's Windows ascent and descent (OS/2 usWinAscent, usWinDescent) in ems: what libass sizes by."""
+    import struct
+    data = Path(path).read_bytes()
+    tables = {}
+    for i in range(struct.unpack(">H", data[4:6])[0]):
+        tag, _, off, _ = struct.unpack(">4sIII", data[12 + 16 * i:28 + 16 * i])
+        tables[tag] = off
+    try:
+        upem = struct.unpack(">H", data[tables[b"head"] + 18:tables[b"head"] + 20])[0]
+        asc, desc = struct.unpack(">HH", data[tables[b"OS/2"] + 74:tables[b"OS/2"] + 78])
+        return asc / upem, desc / upem
+    except (KeyError, struct.error):  # a font collection or no OS/2 table: the usual proportions
+        return 0.95, 0.25
+
+
+def svg_to_ass(svg):
+    """An SVG's outlines (absolute M, L, C, Z, as Figma exports them) as an ASS drawing, so the real logo draws as
+    vectors at any size."""
+    out = []
+    for d in re.findall(r'\bd="([^"]+)"', svg):
+        for cmd, nums in re.findall(r"([MLCZ])([^MLCZ]*)", d):
+            v = [float(n) for n in re.findall(r"-?\d*\.?\d+(?:e-?\d+)?", nums)]
+            pts = [f"{v[i]:.2f} {v[i + 1]:.2f}" for i in range(0, len(v) - 1, 2)]
+            if cmd == "M":
+                out.append("m " + pts[0])
+            elif cmd == "L":
+                out += ["l " + p for p in pts]
+            elif cmd == "C":
+                out += ["b " + " ".join(pts[i:i + 3]) for i in range(0, len(pts) - 2, 3)]
+    return " ".join(out)
+
+
 class Screen:
     """mpv full screen. Nothing on it is a window anyone can click: videos and the background image are mpv's
     playlist, and every word on screen is one OSD overlay redrawn as a whole."""
@@ -660,6 +1005,13 @@ class Screen:
         make_background(self.bg)
         self._start()
 
+    @staticmethod
+    def font_args():
+        """fal's own fonts for the words on screen (Focal, Focal Text, HAL Timezone Mono), when brand/fonts has them."""
+        if (BRAND / "fonts").is_dir():
+            return ["--osd-fonts-dir=" + str(BRAND / "fonts"), "--osd-font=HAL Timezone Mono"]
+        return ["--osd-font=DejaVu Sans"]
+
     def _start(self):
         try:
             os.unlink(self.SOCK)
@@ -670,7 +1022,7 @@ class Screen:
             "--osd-level=0", "--no-input-default-bindings", "--input-vo-keyboard=no", "--cursor-autohide=always",
             "--keep-open=yes", "--image-display-duration=inf", "--loop-file=inf", "--mute=yes", f"--volume={self.vol}",
             "--ytdl=no", "--hwdec=auto-safe", "--cache=yes", "--demuxer-max-bytes=64MiB",
-            "--osd-font=DejaVu Sans",
+            *self.font_args(),
             "--audio-display=no", "--input-ipc-server=" + self.SOCK, *self.extra])
         for _ in range(100):
             try:
@@ -764,6 +1116,13 @@ class Screen:
         self.cmd("set_property", "loop-playlist", "inf")
         self.cmd("loadlist", str(path), "replace")
 
+    def frame(self, box=None):
+        """Put the video in a box on the screen (x, y, w, h at 1920 x 1080), or full screen with None."""
+        x, y, w, h = box or (0, 0, SCREEN_W, SCREEN_H)
+        for side, v in (("left", x / SCREEN_W), ("top", y / SCREEN_H), ("right", 1 - (x + w) / SCREEN_W),
+                        ("bottom", 1 - (y + h) / SCREEN_H)):
+            self.cmd("set_property", f"video-margin-ratio-{side}", round(v, 4))
+
     def mute(self, on):
         self.cmd("set_property", "mute", on)
 
@@ -780,23 +1139,14 @@ class Screen:
 
 
 def make_background(path):
-    """A quiet near-black card with the logo, for the moments there's no video. Redrawn when the logo changes."""
-    if path.exists() and (not LOGO.exists() or path.stat().st_mtime > LOGO.stat().st_mtime):
-        return
-    from PIL import Image, ImageDraw, ImageFont
+    """A plain White card for the moments there's no video (the overlay draws everything on it)."""
+    if path.exists():
+        from PIL import Image
+        if Image.open(path).getpixel((0, 0)) == (255, 255, 255):
+            return
+    from PIL import Image
     path.parent.mkdir(parents=True, exist_ok=True)
-    img = Image.new("RGB", (1920, 1080), (11, 11, 15))
-    d = ImageDraw.Draw(img)
-    for y in range(1080):  # a faint glow from the bottom
-        a = max(0, (y - 540) / 540) ** 2
-        d.line([(0, y), (1920, y)], fill=(int(11 + 14 * a), int(11 + 10 * a), int(15 + 22 * a)))
-    if LOGO.exists():
-        mark = logo_image(560)
-        img.paste((90, 90, 104), (960 - mark.width // 2, 120 - mark.height // 2), mark)
-    else:
-        font = ImageFont.truetype(find_font(bold=True), 44)
-        d.text((960, 120), "CALL-A-FAL", font=font, fill=(90, 90, 104), anchor="mm")
-    img.save(path)
+    Image.new("RGB", (SCREEN_W, SCREEN_H), (255, 255, 255)).save(path)
 
 
 def find_font(bold=False):
@@ -936,6 +1286,12 @@ class Cache:
                     f.write(chunk)
             part.rename(self.root / name)
             take["file"] = str(self.root / name)
+            if take.get("hidden"):  # pulled by staff while it downloaded: kept out of the loop
+                dest = self.root / "archive" / "hidden"
+                dest.mkdir(parents=True, exist_ok=True)
+                (self.root / name).rename(dest / name)
+                take["file"] = str(dest / name)
+                return
             stills = self._pull_stills(name)
             with self.lock:
                 self.items = [{"file": name, "prompt": take["prompt"], "stills": stills}] + self.items
@@ -969,6 +1325,26 @@ class Cache:
                 if st.exists():
                     st.rename(dest / ("stills-" + st.name))
             return len(items)
+
+    def hide(self, name):
+        """Staff dashboard: one video out of the feed, to cache/archive/hidden/ (kept, out of the loop)."""
+        with self.lock:
+            keep = [h for h in self.items if h["file"] != name]
+            if len(keep) == len(self.items):
+                return False
+            dest = self.root / "archive" / "hidden"
+            dest.mkdir(parents=True, exist_ok=True)
+            f = self.root / name
+            if f.exists():
+                f.rename(dest / f.name)
+            self.items = keep
+            self.index.write_text(json.dumps(self.items))
+            return True
+
+    def listing(self):
+        with self.lock:
+            return [{"file": h["file"], "prompt": h["prompt"], "still": (h.get("stills") or [None])[0]}
+                    for h in self.items]
 
     def recent(self):
         with self.lock:
@@ -1022,7 +1398,6 @@ def logo_image(width):
     a = Image.open(LOGO).convert("RGBA").getchannel("A")
     return a.resize((width, round(width * a.height / a.width)), Image.LANCZOS)
 
-# fal's list prices (USD), used if the live price lookup at start-up can't be reached.
 RESET_CODE = "*123#"  # staff: clears the screen's feed of earlier videos
 
 # 3 (regenerate): one of these rides along with the caller's words, so each take really is a different video
@@ -1035,8 +1410,12 @@ TAKES = [
     "A playful, unexpected version with different characters and a fast tracking shot.",
 ]
 
-PRICES = {"minimax/h3-max/text-to-video": 0.0325, "blackforestlabs/flux-3-max/text-to-video": 0.02125,
-          "fal-ai/wizper": 0.00111, "fal-ai/elevenlabs/speech-to-text/scribe-v2": 0.008}
+# What fal charges for the show (Nov 10-12), in USD per second of video or of the caller's audio, at the settings the
+# booth uses. Kept here because fal's price lookup only gives each model's cheapest resolution, not the one we use.
+#   H3 Max 768P: $0.056 (30% off, Nov 1-15; $0.08 from Nov 16).  FLUX 3 Max 720p: $0.17 from Nov 8.
+#   Scribe v2: $0.008 a minute.  Cohere: $0.25 an hour.
+PRICES = {"minimax/h3-max/text-to-video": 0.056, "blackforestlabs/flux-3-max/text-to-video": 0.17,
+          "fal-ai/elevenlabs/speech-to-text/scribe-v2": 0.008 / 60, "fal-ai/cohere-transcribe": 0.25 / 3600}
 
 
 def brand_font(kind, size, weight=None):
@@ -1050,7 +1429,7 @@ def brand_font(kind, size, weight=None):
         if weight:
             try:
                 font.set_variation_by_axes([weight])
-            except Exception:
+            except Exception:  # HAL Timezone: one weight, already dark enough for thermal paper
                 pass
         return font
     if kind == "mono":
@@ -1062,29 +1441,69 @@ def brand_font(kind, size, weight=None):
     return ImageFont.truetype(find_font(bold=(weight or 400) >= 600 or kind == "display"), size)
 
 
-def glitch_row(width, seed, height=28):
-    """A strip of the brand's pixel 'glitch dust', in black, for dividers."""
+def pixel_corner(seed, cell=14):
+    """The booth wall's pixel squares for a corner of the receipt: a small L or staircase, solid black for the
+    wall's purple and a 2-dot checker for its grey (a 1-dot checker prints as mud)."""
     from PIL import Image, ImageDraw
     rnd = random.Random(seed)
-    img = Image.new("L", (width, height), 255)
+    img = Image.new("L", (cell * 4, cell * 3), 255)
     d = ImageDraw.Draw(img)
-    cell = 7
-    x = 0
-    while x < width:
-        x += rnd.choice([cell, cell * 2, cell * 3, cell * 5])
-        if rnd.random() < 0.55:
-            w = cell * rnd.choice([1, 1, 2, 3])
-            y = cell * rnd.randrange(height // cell)
-            d.rectangle([x, y, x + w - 1, y + cell - 1], fill=0)
+    shapes = [[(0, 0), (1, 0), (0, 1)], [(0, 0), (1, 1), (2, 2)], [(0, 0), (1, 0), (2, 0), (2, 1)],
+              [(0, 0), (0, 1), (1, 1), (2, 2)]]
+    for i, (cx, cy) in enumerate(rnd.choice(shapes)):
+        x, y = cx * cell, cy * cell
+        if (i + seed) % 3:
+            d.rectangle([x, y, x + cell - 1, y + cell - 1], fill=0)
+        else:
+            for yy in range(0, cell, 2):
+                for xx in range(0, cell, 2):
+                    if (xx + yy) // 2 % 2 == 0:
+                        d.rectangle([x + xx, y + yy, x + xx + 1, y + yy + 1], fill=0)
     return img
 
 
-def sharpest_frame(src, at, vf, spread=0.3):
-    """The frame at `at` seconds, or one either side of it if that's sharper (less motion blur): three tries,
-    scored by how much fine detail they have (the variance of the Laplacian)."""
+def share_url(take, cfg, words=True):
+    """Where the QR on the receipt goes: the event page, with the video (and, `words`, what was
+    said) in the part of the link after #, so the page needs no server and the words never reach its logs. The
+    receipt keeps only a short version of the words: they're printed right there, and a shorter link is a coarser QR
+    that phones read off thermal paper first time. Without a base (or for a video that isn't on fal's CDN), the video's own link."""
+    from urllib.parse import quote, urlsplit
+    url, base = take.get("url") or "", cfg.get("share_base", "")
+    parts = urlsplit(url)
+    if not base or parts.scheme != "https" or not parts.netloc.endswith("fal.media"):
+        return url
+    said = take.get("prompt") or ""
+    if not words and len(said) > 70:  # the receipt: a short version (the full words are printed right there)
+        said = said[:68].rsplit(" ", 1)[0].rstrip(",.;:-") + "…"
+    q = {"m": parts.netloc + parts.path, "p": said[:140],
+         "o": (take.get("you_said") or "")[:100] if words else "", "l": str(cfg.get("line", "")),
+         "s": f"{take.get('gen_secs', take.get('secs', 0)):.1f}", "t": str(int(take.get("at") or time.time())),
+         "mo": "flux" if "flux" in str(take.get("model", "")).lower() else "h3"}
+    return base + "#" + "&".join(f"{k}={quote(v, safe='/.,').replace('%20', '+')}" for k, v in q.items() if v)
+
+
+def qr_image(data, target):
+    """A QR code about `target` dots wide, every module a whole number of dots (at least 4, 0.5 mm on paper),
+    so phones read it off thermal paper. None without the qrcode package."""
+    try:
+        import qrcode
+    except ImportError:
+        return None
+    from PIL import Image
+    qr = qrcode.QRCode(border=2, box_size=1, error_correction=qrcode.constants.ERROR_CORRECT_L)
+    qr.add_data(data)
+    qr.make(fit=True)
+    k = max(4, target // (qr.modules_count + 4))
+    q = qr.make_image(fill_color="black", back_color="white").convert("L")
+    return q.resize((q.width * k, q.height * k), Image.NEAREST)
+
+
+def sharpest_frame(src, at, vf, spread=0.3, tries=3):
+    """The best frame for paper of `tries` around `at` seconds, `spread` apart: the most fine detail (the variance of
+    the Laplacian: no motion blur) times the most contrast (what survives black-and-white thermal printing)."""
     from PIL import Image
     best, score = None, -1.0
-    for t in (at - spread, at, at + spread):
+    for t in (at + spread * (k - (tries - 1) / 2) for k in range(tries)):
         png = subprocess.run(["ffmpeg", "-v", "error", "-ss", f"{max(0.0, t):.2f}", "-i", src, "-frames:v", "1",
                               "-vf", vf, "-f", "image2pipe", "-vcodec", "png", "-"],
                              capture_output=True, timeout=30).stdout
@@ -1092,7 +1511,7 @@ def sharpest_frame(src, at, vf, spread=0.3):
             continue
         f = Image.open(io.BytesIO(png)).convert("L")
         a = np.asarray(f, np.float32)
-        s = float((4 * a[1:-1, 1:-1] - a[:-2, 1:-1] - a[2:, 1:-1] - a[1:-1, :-2] - a[1:-1, 2:]).var())
+        s = float((4 * a[1:-1, 1:-1] - a[:-2, 1:-1] - a[2:, 1:-1] - a[1:-1, :-2] - a[1:-1, 2:]).var()) * float(a.std())
         if s > score:
             best, score = f, s
     return best
@@ -1110,24 +1529,31 @@ def thermal_photo(f, gamma):
 
 
 def receipt_image(take, cfg, src):
-    """The receipt: lots of white, the logo, a full-width still and a small square one, a few big lines in
-    mono, and the itemized bill."""
-    from PIL import Image, ImageDraw, ImageOps
-    W, M = DOTS, 40  # width and side margin, in printer dots
-    S = 230          # each still, square
+    """The receipt, set like a till slip in the booth's brand: the lockup, the wall's pixel squares, when and where,
+    what they said, the video's clearest frame (chipped with its model, as fal shows every output) and a strip of
+    three more, how fast it was made, the itemized call, and a big QR to keep the video."""
+    from PIL import Image, ImageDraw
+    W, M = DOTS, 36  # width and side margin, in printer dots
+    secs = cfg["secs"]
+    model = model_name(take.get("model"))
+    # the clearest frame of 40-60% through, full width (the video model cuts between shots, so the very middle can
+    # be a crowd or a close-up), then three across, early, middle-late and near the end
+    cell = (W - 2 * M - 2 * 12) // 3
+    shots = [(0.5, f"scale={W}:-2:flags=lanczos", secs * 0.05, 5)]
+    shots += [(f, f"scale={cell}:-2:flags=lanczos", 0.3, 3) for f in (0.15, 0.65, 0.92)]
     frames = []
-    # two stills: the whole frame across the receipt, then a square near the end of the clip
-    for frac, vf in ((0.5, f"scale={W}:-2:flags=lanczos"), (0.8, f"scale=-2:{S}:flags=lanczos,crop={S}:{S}")):
+    for frac, vf, spread, tries in shots:
         try:
-            f = sharpest_frame(src, cfg["secs"] * frac, vf)
+            f = sharpest_frame(src, secs * frac, vf, spread, tries)
         except FileNotFoundError:  # no ffmpeg (a laptop test): a receipt without stills
             break
         if f:
             frames.append(f)
 
-    # Thermal paper drops strokes one dot thin, so everything below the big lines is bold.
-    big = brand_font("mono", 50, 700)
-    said_font = brand_font("mono", 27, 700)
+    # Thermal paper drops strokes one dot thin: Focal at 500 and up, mono at its one (bold enough) weight.
+    said_font = brand_font("display", 40, 500)
+    head = brand_font("display", 34, 500)
+    big = brand_font("mono", 44, 700)
     mono = brand_font("mono", 24, 700)
     small = brand_font("mono", 20, 700)
     probe = ImageDraw.Draw(Image.new("L", (1, 1)))
@@ -1143,9 +1569,9 @@ def receipt_image(take, cfg, src):
                 cur = word
         return lines + ([cur] if cur else [])
 
-    img = Image.new("L", (W, 4000), 255)  # cropped to what was drawn
+    img = Image.new("L", (W, 4400), 255)  # cropped to what was drawn
     d = ImageDraw.Draw(img)
-    y = 36
+    y = 30
 
     def text(lines, font, gap, x=M):
         nonlocal y
@@ -1159,81 +1585,100 @@ def receipt_image(take, cfg, src):
         d.text((W - M, y), right, font=font, fill=0, anchor="ra")
         y += gap
 
-    # Thermal dots spread, so the pictures are lifted to print true: 35 (the default) -> 1.5 for the squares, and
-    # 1.3 for the big middle one, which prints a little darker.
+    def dots(gap=24):
+        """fal's dotted rule: 2-dot squares, 2 on and 2 off."""
+        nonlocal y
+        for x in range(M, W - M, 4):
+            d.rectangle([x, y, x + 1, y + 1], fill=0)
+        y += gap
+
+    # Thermal dots spread, so the pictures are lifted to print true (35, the default, -> 1.3 for the big one, which
+    # prints a little darker, and 1.5 for the strip).
     lighten = cfg.get("print_lighten", 0)
     stills = iter(frames)
 
-    def still(right, darker=False):
-        nonlocal y
-        f = next(stills, None)
-        if f is None:
-            return
-        f = thermal_photo(f, 1 + lighten / (120 if darker else 70))
-        x = 0 if f.width >= W else (W - M - f.width if right else M)
-        img.paste(f, (x, y))
-        y += f.height + 44
-
-    # the logo (the fal mark, "fal" and CALL-A-FAL in one line)
+    # the wall's pixel squares in the top corners, a different pattern each call
+    corner = pixel_corner(take.get("call", 0))
+    img.paste(corner, (12, 12))
+    img.paste(corner.transpose(Image.FLIP_LEFT_RIGHT), (W - 12 - corner.width, 12))
+    y = 24
+    # the lockup (the fal mark, "fal" and CALL-A-FAL in one line), then the line it came from
     if LOGO.exists():
-        mark = logo_image(400)
-        img.paste(0, ((W - mark.width) // 2, y), mark)
-        y += mark.height + 56
+        mark = logo_image(W - 2 * M - 80)
+        img.paste(0, ((W - mark.width) // 2, y + 40), mark)
+        y += 40 + mark.height + 26
     else:
-        d.text((W // 2, y), "CALL-A-FAL", font=brand_font("display", 60, 900), fill=0, anchor="mt")
-        y += 96
+        d.text((W // 2, y + 40), "CALL-A-FAL", font=brand_font("display", 60, 700), fill=0, anchor="mt")
+        y += 124
+    d.text((W // 2, y), f"ZERO LATENCY LINE {str(cfg.get('line', '')).zfill(2)}", font=mono, fill=0, anchor="mt")
+    y += 34
+    d.text((W // 2, y), "ADOBE MAX 2026 · BOOTH 423", font=small, fill=0, anchor="mt")
+    y += 50
 
-    # the brand's glitch dust (a different pattern each call), then when and where
-    img.paste(glitch_row(W, take.get("call", 0)), (0, y)); y += 50
+    # when and where, set out like a till receipt
     at = time.localtime(take.get("at"))
-    row(time.strftime("%b %d %Y", at).upper(), time.strftime("%I:%M %p", at), gap=34)
-    row((cfg.get("location") or "").upper(), "")
-    y += 28
+    dots()
+    row(f"CALL #{take.get('call', 0):04d}", time.strftime("%I:%M %p", at).lstrip("0"))
+    row(time.strftime("%b %d %Y", at).upper(), (cfg.get("location") or "").upper())
+    y += 2
+    dots(30)
 
-    # what they asked for
-    text(["YOU SAID"], small, 30)
-    text(wrap(f"“{take.get('you_said') or take['prompt']}”", said_font), said_font, 36)
-    if take.get("you_said"):  # someone else's IP: what the agent made instead
-        y += 20
+    # what they asked for, in the brand's headline face
+    if take.get("you_said"):  # someone else's IP: what the agent made instead, said kindly
+        text(["YOU ASKED FOR"], small, 28)
+        text(wrap(f"“{take['you_said']}”", mono), mono, 30)
+        y += 18
         text(["WE MADE YOU AN ORIGINAL"], small, 30)
-        text(wrap(f"“{take['prompt']}”", said_font), said_font, 36)
-    y += 40
+    else:
+        text(["ONE OF OURS" if take.get("surprise") else "YOU SAID"], small, 30)
+    text(wrap(f"“{take['prompt']}”", said_font), said_font, 46)
+    y += 30
 
-    still(right=False, darker=True)  # full width
-    text(["GENERATED", f"IN {take['secs']:.1f} s"], big, 60)
-    y += 36
+    # the clearest frame, full width, nothing over it
+    f = next(stills, None)
+    if f is not None:
+        f = thermal_photo(f, 1 + lighten / 120)
+        img.paste(f, (0, y))
+        y += f.height + 12
+    # and three more across, like a strip of film
+    strip = [next(stills, None) for _ in range(3)]
+    if all(strip):
+        for i, f in enumerate(strip):
+            img.paste(thermal_photo(f, 1 + lighten / 70), (M + i * (cell + 12), y))
+        y += strip[0].height + 30
+    else:
+        y += 18
+
+    # how fast
+    d.text((M, y), "GENERATED IN", font=big, fill=0)
+    d.text((W - M, y), f"{take.get('gen_secs', take['secs']):.1f} s", font=big, fill=0, anchor="ra")
+    y += 66
+    dots(28)
 
     # the bill: every model the call used, and what it cost
     text(["ITEMIZED CALL"], small, 34)
     for label, detail, cost in take.get("costs") or []:
         row(label, f"${cost:.4f}")  # four decimals throughout, so the lines add up to the total
-        text([detail], small, 30, x=M + 16)
+        text([model_name(detail)], small, 30, x=M + 16)
     total = sum(round(c, 4) for _, _, c in take.get("costs") or [])  # what's printed above, so it adds up
     d.line([(M, y), (W - M, y)], fill=0, width=2); y += 16
-    row("TOTAL", f"${total:.4f}", font=brand_font("mono", 40, 700), gap=50)
-    y += 36
+    row("TOTAL", f"${total:.4f}", font=brand_font("mono", 40, 700), gap=56)
+    dots(30)
 
-    still(right=True)
-
-    # a QR code to keep the video, with its caption beside it: small, but every module a whole number of dots
-    # (at least 3, about 0.4 mm), so phones still read it
-    try:
-        import qrcode
-        qr = qrcode.QRCode(border=0, box_size=1, error_correction=qrcode.constants.ERROR_CORRECT_L)
-        qr.add_data(take["url"])
-        qr.make(fit=True)
-        k = max(3, 120 // qr.modules_count)
-        q = qr.make_image(fill_color="black", back_color="white").convert("L")
-        q = q.resize((q.width * k, q.height * k), Image.NEAREST)
+    # the way back to the video: a big QR
+    q = qr_image(share_url(take, cfg, words=False), 236) if take.get("url") else None
+    if q is not None:
         img.paste(q, (M, y))
-        for i, line in enumerate(("SCAN TO KEEP", "YOUR VIDEO")):
-            d.text((M + q.width + 28, y + q.height // 2 - 28 + i * 30), line, font=small, fill=0)
-        y += q.height + 36
-    except Exception:  # no qrcode package, or no URL: the receipt still prints
-        pass
+        x = M + q.width + 28
+        d.text((x, y), "Keep your", font=head, fill=0)
+        d.text((x, y + 38), "video", font=head, fill=0)
+        y += max(q.height, 190) + 26
+        dots(30)
 
-    row("Your creative direct line", "fal.ai", font=small, gap=30)
-    y += 20
+    text(["$100 IN fal CREDITS: TAP THE TWO fal", "TAGS AT OUR FRONT DESK."], small, 28)
+    y += 14
+    dots(30)
+    row("Your creative direct line.", "fal.ai", font=brand_font("display", 26, 500), gap=40)
     return img.crop((0, 0, W, y)).point(lambda v: 255 if v > 200 else 0).convert("1")
 
 
@@ -1257,8 +1702,12 @@ class Printer:
         if take.get("done"):
             take["done"].wait(20)
         src = take.get("file") or take["url"]
-        data = escpos(receipt_image(take, self.cfg, src))
         path = printer_path(self.cfg)
+        import sticker
+        if sticker.speaks_zpl(path):  # a Zebra label printer: the receipt as one sticker, in its language
+            data = sticker.label(path, sticker.sticker_image(take, self.cfg, src, sys.modules[__name__]))
+        else:
+            data = escpos(receipt_image(take, self.cfg, src))
         if "/" not in path:
             # a printer queue name (e.g. on a Mac): the same bytes, passed through untouched
             subprocess.run(["lp", "-d", path, "-o", "raw"], input=data, check=True, capture_output=True, timeout=30)
@@ -1361,7 +1810,10 @@ class Booth:
         self.pending = None   # number of the render we're waiting for; a newer one (3 pressed) replaces it
         self.hold_from = None
         self.last_key = 0.0
-        self.view = {"said": "", "status": "", "keys": None, "center": ""}
+        self.view = {"scene": "attract"}
+        self.look = Look()
+        self.surprised = []      # the last few surprise ideas, so the feed doesn't repeat itself
+        self.ticking = False     # a screen tick is already queued
         self.attract = []
         self.slideshow = []
         self.stt_secs = {}     # render id -> seconds the speech-to-text took (for the bill)
@@ -1375,6 +1827,13 @@ class Booth:
         self.ringer = False    # the phone's ringer switch; off until the Pico says otherwise
         self.ring_seq = 0      # bumped on every ringer flip, so an old ring timer stops
         self.ringing = False
+        self.paused = None     # staff dashboard: the line is out of order, with this note on screen
+        self.last_take = None  # the latest video made, for a reprint from the dashboard
+        self.started = time.time()
+        self.stats = {"calls": 0, "videos": 0, "failed": 0, "fallbacks": 0, "pulled": 0, "prints": 0, "print_fails": 0,
+                      "last_print": None, "render_secs": []}
+        self.attract_pos = 0
+        self.last_error = None
 
     def post(self, ev):
         self.q.put(ev)
@@ -1420,17 +1879,23 @@ class Booth:
         self.on_hook(not self.off_hook)
 
     def on_shutdown(self):
-        """Staff (# held 5 s): say so on screen, then power the Pi off safely so it can be unplugged."""
+        """Staff (# held 5 s, handset on the hook): say so on screen, then power the Pi off safely so it can be
+        unplugged. With the handset off the hook it's a caller holding #, so nothing happens."""
+        if self.off_hook:
+            return log.info("# held during a call: not shutting down")
         log.info("shutdown requested")
         self.line.cancel_recording()
         self.line.stop(fade=False)
         self.state = "busy"
         self.screen.background()
-        self.set_view(center="Shutting down. Unplug when the green light stops blinking.")
+        self.set_view("staff", head="Shutting down.", sub="Unplug when the green light stops blinking.")
         threading.Timer(3, lambda: subprocess.run(["sudo", "-n", "shutdown", "-h", "now"], check=False)).start()
 
     def on_restart(self):
+        if self.off_hook:
+            return log.info("* held during a call: not restarting")
         log.info("restart requested")
+        self.set_view("staff", head="Restarting…", sub="Back in a few seconds.")
         raise SystemExit(0)
 
     # The Pico repeats the switch positions every so often, so only a change does anything.
@@ -1460,7 +1925,7 @@ class Booth:
         if seq != self.ring_seq:
             return
         self.after(self.cfg["ring_every"], "ring", seq)
-        if self.off_hook or self.state != "idle":
+        if self.off_hook or self.state != "idle" or self.paused is not None:
             return
         log.info("ringing")
         self.ringing = True
@@ -1475,6 +1940,13 @@ class Booth:
     def pick_up(self):
         if self.off_hook:
             return
+        if self.paused is not None:  # out of order: the busy tone and the note, no call
+            self.off_hook = True
+            self.cid += 1
+            self.ringing = False
+            log.info("lifted while the line is out of order")
+            return self.busy("Line out of order.", self.paused or "Please try the other line.", retry=False)
+        self.stats["calls"] += 1
         self.call_no = next_call_number(Path(getattr(self.cache, "root", HERE / "cache")) / "calls.txt")
         self.take_offset = random.randrange(len(TAKES))
         log.info("lifted (call #%d)", self.call_no)
@@ -1484,14 +1956,16 @@ class Booth:
         self.take = None
         self.ringing = False
         self.line.stop(fade=False)
+        self.screen.frame(None)
         self.screen.background()
         threading.Thread(target=self.fal.warm_up, daemon=True).start()
         self.greet()
 
-    def greet(self):
+    def greet(self, head=None, sub=None, clip="greeting"):
+        """The greeting and the beep (or, with a `head`, just the beep after a message), then listening."""
         self.state = "greeting"
-        self.set_view(center="Leave your prompt after the beep.")
-        self.play("greeting", "greeted")
+        self.set_view("greeting", head=head, sub=sub)
+        self.play(clip if head is None else "beep", "greeted")
 
     def hang_up(self):
         if not self.off_hook:
@@ -1517,6 +1991,11 @@ class Booth:
             return self.cancel()
         if not self.off_hook:
             return
+        if k == "1" and self.state in ("greeting", "listening"):
+            return self.surprise()
+        if k == "*" and self.state == "busy" and self.view.get("retry"):
+            self.line.stop(fade=False)
+            return self.greet(head="Let's try again.")
         self.bump_idle()
         if self.state == "ready" and self.take and k in "230":
             return self.act(k)
@@ -1530,8 +2009,9 @@ class Booth:
         if what == "greeted" and self.state == "greeting":
             log.info("greeting done, listening (call %d, try %d)", self.cid, self.attempt + 1)
             self.state = "listening"
-            self.set_view(center="Listening…  press # when you're done, * to cancel.")
+            self.set_view("listening", idea=random.choice(SURPRISE))
             self.line.record(self.cid)
+            self.on_tick()
         elif what == "menu":
             self.bump_idle()
 
@@ -1549,7 +2029,9 @@ class Booth:
             return
         if not rec["heard"]:
             self.attempt += 1
-            return self.greet() if self.attempt < 2 else self.busy("Didn't hear anything. Hang up and try again.")
+            if self.attempt < 2:
+                return self.greet(head="Didn't catch that.", sub="Try again after the beep.")
+            return self.surprise()  # a second silence: nobody leaves without a video
         # On hold straight away: the hold line and music cover the transcription as well as the render.
         self.line.hold()
         self.start_hold(rec["speech_end"], said="")
@@ -1565,7 +2047,8 @@ class Booth:
             self.stt_secs[rid] = (secs, endpoint, max(0, len(wav) - 44) / (2 * MIC_SR))
             log.info("transcribed in %.1f s by %s (%d KB of audio)", secs, endpoint.split("/")[-1], len(wav) // 1024)
         except Exception:
-            return self.post(("failed", cid, rid, "Our lines are busy. Hang up and try again."))
+            return self.post(("failed", cid, rid, BUSY))
+        self.post(("stage", cid, rid, "check", STT_NAMES.get(endpoint, "")))
         self.post(("prompt", cid, rid, prompt))
         if heard_nothing(prompt) or BLOCKED.search(prompt) or rid in self.cancelled:
             return
@@ -1573,10 +2056,12 @@ class Booth:
         try:
             borrowed = self.fal.check_ip(prompt, bill)
         except Exception:
-            return self.post(("failed", cid, rid, "Our lines are busy. Hang up and try again."))
+            return self.post(("failed", cid, rid, BUSY))
         if rid in self.cancelled:
             return
         if not borrowed:
+            winner = next((m for label, m, _ in bill if label == "IP CHECK"), "")
+            self.post(("stage", cid, rid, "checked", winner))
             return self._render(cid, rid, prompt, t0)
         # Someone else's IP: never made. The agent makes them an original with the same energy instead.
         log.info("someone else's IP (%s): %r", borrowed, prompt)
@@ -1586,17 +2071,41 @@ class Booth:
         except Exception:
             return self.post(("ask_again", cid, rid))
         log.info("made an original instead: %r", original)
+        self.post(("stage", cid, rid, "remixed", next((m for label, m, _ in bill if label == "MADE ORIGINAL"), ""),
+                   original))
         if rid not in self.cancelled:
             self._render(cid, rid, original, t0, you_said=prompt)
 
     def on_remixing(self, cid, rid):
         if cid == self.cid and rid == self.pending:
-            self.view["said"] = REMIXING
+            self.view["stage"] = "remix"
+            self.view["since"] = time.monotonic()
+
+    def on_stage(self, cid, rid, stage, model="", original=""):
+        """The hold screen's three steps, as each one really finishes, with the model that did it."""
+        v = self.view
+        if cid != self.cid or rid != self.pending or v.get("scene") != "hold":
+            return
+        if stage == "check":
+            v["done"]["hear"] = f"HEARD YOU · {model}".rstrip(" ·").upper()
+        elif stage == "checked":
+            v["done"]["check"] = f"ORIGINAL ✓ · {model}".rstrip(" ·").upper()
+        elif stage == "remixed":
+            v["done"]["check"] = f"REMIXED ✓ · {model}".rstrip(" ·").upper()
+            v["label"], v["said"] = "OUR AGENT MADE YOU AN ORIGINAL", f"“{original}”"
+        elif stage == "render":
+            v["backup"] = v.get("model") is not None  # a second model on the line: the first one failed
+            v["model"] = model_name(model)
+        if stage in ("check", "render") or stage.endswith("ed"):
+            v["stage"] = {"check": "check", "checked": "render", "remixed": "render", "render": "render"}[stage]
+            v["since"] = time.monotonic()
+        self.draw()
 
     def cancel(self):
         """* while listening or on hold: nothing is made (a render already running is called off at fal), and the
         caller can try another idea after the beep, or hang up."""
         log.info("cancelled with * (%s)", self.state)
+        was = self.state
         self.line.cancel_recording()
         if self.pending is not None:
             self.cancelled.add(self.pending)
@@ -1604,9 +2113,10 @@ class Booth:
         self.hold_from = None
         self.line.stop()
         self.screen.background()
-        self.state = "greeting"
-        self.set_view(center=CANCELLED)
-        self.play("beep", "greeted")
+        if was == "listening":
+            self.greet(head="Start over.", sub="New idea after the beep.")
+        else:
+            self.greet(head="Cancelled.", sub="New idea after the beep.")
 
     def on_ask_again(self, cid, rid):
         """Couldn't make it original: no busy tone, just another go after the beep."""
@@ -1616,52 +2126,76 @@ class Booth:
         self.hold_from = None
         self.line.stop()
         self.screen.background()
-        self.state = "greeting"
-        self.set_view(center=ASK_AGAIN)
-        self.play("beep", "greeted")
+        self.greet(head="Let's try one of yours.", sub="That one belongs to someone else.")
 
     def on_prompt(self, cid, rid, prompt):
         log.info("heard: %r", prompt)
         if cid != self.cid or rid != self.pending:
             return
         if heard_nothing(prompt):
-            return self.busy("Sorry, we didn't catch that. Hang up and try again.")
+            self.pending = self.hold_from = None
+            self.line.stop(fade=False)
+            return self.greet(head="Didn't catch that.", sub="Try again after the beep.")
         if BLOCKED.search(prompt):
-            return self.busy("Let's keep it friendly. Hang up and try another one.")
+            return self.busy(*FRIENDLY)
         self.view["said"] = f"“{prompt}”"
+        self.draw()
 
     def regenerate(self, prompt, take=1, you_said=None):
         """3: the same prompt again, but a different take of it. The model reads the same words the same way every
         time (same person, same street), so each take adds its own direction. The screen and receipt keep their words."""
         self.line.hold()
-        self.start_hold(time.monotonic(), said=f"“{prompt}”", keep_video=True)
+        self.start_hold(time.monotonic(), said=f"“{prompt}”", keep_video=True, label=f"TAKE {take + 1} OF 3",
+                        stage="render", done={"hear": "SAME IDEA", "check": "ORIGINAL ✓"}, take=take)
         self.pending = rid = next(self.seq)
         threading.Thread(target=self._render, args=(self.cid, rid, prompt, time.monotonic(), take, you_said),
                          daemon=True).start()
 
-    def _render(self, cid, rid, prompt, t0, take=0, you_said=None):
+    def surprise(self):
+        """1: one of our ideas, straight to hold. Curated, so no speech-to-text and no IP check."""
+        fresh = [i for i in SURPRISE if i not in self.surprised] or SURPRISE
+        idea = random.choice(fresh)
+        self.surprised = (self.surprised + [idea])[-len(SURPRISE) // 2:]
+        log.info("surprise: %r", idea)
+        self.line.cancel_recording()
+        self.line.stop(fade=False)
+        self.line.hold()
+        self.start_hold(time.monotonic(), said=f"“{idea}”", label="ONE OF OURS", stage="render",
+                        done={"hear": "SURPRISE IDEA", "check": "CURATED ✓ · ONE OF OURS"})
+        self.pending = rid = next(self.seq)
+        threading.Thread(target=self._render, args=(self.cid, rid, idea, time.monotonic(), 0, None, True),
+                         daemon=True).start()
+
+    def _render(self, cid, rid, prompt, t0, take=0, you_said=None, surprise=False):
         t = time.monotonic()
         asked = prompt
         if take:
             asked = f"{prompt.rstrip(' .')}. {TAKES[(take - 1 + self.take_offset) % len(TAKES)]}"
             log.info("take %d: %s", take + 1, asked)
         try:
-            url, model = self.fal.render(asked, stop=lambda: rid in self.cancelled)
+            url, model = self.fal.render(asked, stop=lambda: rid in self.cancelled,
+                                         trying=lambda name: self.post(("stage", cid, rid, "render", name)))
             log.info("rendered in %.1f s", time.monotonic() - t)
         except Cancelled:
             return log.info("render called off at fal")
         except Refused:
-            return self.post(("failed", cid, rid, "That one didn't go through. Hang up and try another."))
+            return self.post(("failed", cid, rid, REFUSED))
         except Exception:
-            return self.post(("failed", cid, rid, "Our lines are busy. Hang up and try again."))
+            return self.post(("failed", cid, rid, BUSY))
         self.post(("rendered", cid, rid, {"prompt": prompt, "you_said": you_said, "take": take, "url": url, "model": model,
-                                          "secs": time.monotonic() - t0, "at": time.time(), "printed": False,
-                                          "answered": False, "sound": False}))
+                                          "secs": time.monotonic() - t0, "gen_secs": time.monotonic() - t,
+                                          "at": time.time(), "printed": False,
+                                          "answered": False, "sound": False, "surprise": surprise}))
 
     def on_rendered(self, cid, rid, take):
         if rid in self.cancelled:  # finished just as * was pressed: dropped
             return
         log.info("video: %s, %.1f s after they stopped talking", take["model"], take["secs"])
+        self.stats["videos"] += 1
+        if self.fal and take.get("model") != self.fal.models[0][0]:
+            self.stats["fallbacks"] += 1
+        self.stats["render_secs"] = (self.stats["render_secs"] + [round(take["secs"], 1)])[-50:]
+        self.last_take = take
         self.cache.add(take)  # kept for the screen between calls, even if they hung up while it rendered
         if rid in self.orphans:
             self.orphans.discard(rid)
@@ -1669,8 +2203,9 @@ class Booth:
             self.llm_bill.pop(rid, None)
             if self.state == "idle" and not self.off_hook:  # their caller hung up: it goes up now, then the loop
                 self.take = take
+                self.screen.frame(FRAME)
                 self.screen.video(take["url"], mute=True)
-                self.set_view(said=f"“{take['prompt']}”", status="Pick up the phone to make your own.")
+                self.set_view("after")
                 self.after(self.cfg["attract_after"], "attract", self.cid)
             return
         if cid != self.cid or rid != self.pending or not self.off_hook:
@@ -1683,21 +2218,18 @@ class Booth:
         self.state = "ready"
         self.hold_from = None
         self.line.stop()
+        self.screen.frame(FRAME)
         self.screen.video(take["url"], mute=True)
-        self.set_view(said=f"“{take['prompt']}”", status=f"Ready in {take['secs']:.1f} s", keys={})
+        self.set_view("ready", keys={})
         self.after(8, "menu", cid, rid)  # in case the clip never reports it's playing
         self.bump_idle()
 
     def costs(self, take, rid):
-        """The receipt's bill: (item, detail, USD). Speech-to-text is billed by compute time, so it's an estimate."""
-        prices = getattr(self.fal, "prices", PRICES)
+        """The receipt's bill: (item, detail, USD)."""
         items = []
         if rid in self.stt_secs:
-            secs, endpoint, audio_secs = self.stt_secs.pop(rid)
-            if endpoint == Fal.STT:  # billed per compute second
-                items.append(("SPEECH TO TEXT", "wizper", secs * prices.get(endpoint, PRICES[endpoint])))
-            else:  # billed per minute of audio
-                items.append(("SPEECH TO TEXT", "scribe", audio_secs / 60 * prices.get(endpoint, PRICES[endpoint])))
+            secs, endpoint, audio_secs = self.stt_secs.pop(rid)  # both speech models bill by the second of audio
+            items.append(("SPEECH TO TEXT", STT_NAMES.get(endpoint, endpoint), audio_secs * PRICES.get(endpoint, 0)))
         # the IP check (and the original made instead, if it borrowed), one line per kind and model
         merged = {}
         for label, model, usd in self.llm_bill.pop(rid, []):
@@ -1708,7 +2240,7 @@ class Booth:
             endpoint = self.fal.endpoint(take["model"])
         except (StopIteration, AttributeError):
             endpoint = ""
-        price = prices.get(endpoint, PRICES.get(endpoint, 0))
+        price = PRICES.get(endpoint, 0)
         items.append((f"VIDEO {self.cfg['secs']} s", take["model"], price * self.cfg["secs"]))
         return items
 
@@ -1728,7 +2260,7 @@ class Booth:
 
     def on_to_slides(self, rid, token):
         t = self.take
-        if t and t["rid"] == rid and t.get("playing_since") == token and self.state in ("ready", "idle"):
+        if t and t["rid"] == rid and t.get("playing_since") == token and self.state == "idle":
             threading.Thread(target=self._wait_for_stills, args=(t, token), daemon=True).start()
 
     def _wait_for_stills(self, t, token):
@@ -1738,7 +2270,7 @@ class Booth:
 
     def on_slides_ready(self, rid, token):
         t = self.take
-        if not (t and t["rid"] == rid and t.get("playing_since") == token and self.state in ("ready", "idle")):
+        if not (t and t["rid"] == rid and t.get("playing_since") == token and self.state == "idle"):
             return
         slides = self.cache.slides()
         if len(slides) < 2:
@@ -1762,8 +2294,10 @@ class Booth:
         self.play("menu", "menu")
 
     def on_failed(self, cid, rid, message):
+        self.stats["failed"] += 1
+        self.last_error = {"at": time.time(), "what": " ".join(m for m in message if m)}
         if cid == self.cid and rid == self.pending and self.off_hook:
-            self.busy(message)
+            self.busy(*message)
 
     # ----- the menu -----
     def act(self, k):
@@ -1774,16 +2308,19 @@ class Booth:
         keys = self.view["keys"]
         if k == "2":
             t["sound"] = not t["sound"]
-            if t.get("slides"):  # the slideshow has no sound: back to the video, from the start
-                t["slides"] = False
-                self.screen.video(t.get("file") or t["url"], mute=not t["sound"])
-                self.slides_later(t)
+            if t["sound"]:  # a moment of "making the sound" in the earpiece, then the video comes back with it
+                keys["2"] = "Generating audio…"
+                self.line.play("generating_audio")
+                self.after(len(self.line.sounds["generating_audio"]) / SR, "sound_on", self.cid, t)
+            elif t.get("slides"):
+                keys["2"] = None
             else:
-                self.screen.mute(not t["sound"])
-                if t["sound"]:
-                    self.screen.restart_clip()
-            keys["2"] = "Sound on" if t["sound"] else None
+                self.screen.mute(True)
+                keys["2"] = None
         elif k == "3":
+            if t.get("take", 0) >= 2:  # three takes a call, so the next caller gets a turn
+                keys["3"] = "3 takes max"
+                return self.draw()
             self.screen.mute(True)
             self.take = None
             return self.regenerate(t["prompt"], t.get("take", 0) + 1, t.get("you_said"))
@@ -1792,6 +2329,24 @@ class Booth:
             keys["0"] = "Printing…"
             threading.Thread(target=self._print, args=(self.cid, t), daemon=True).start()
         self.draw()
+
+    def on_sound_on(self, cid, t):
+        if cid != self.cid or self.take is not t or not t["sound"] or self.state != "ready":
+            return
+        if t.get("slides"):  # the slideshow has no sound: back to the video, from the start
+            t["slides"] = False
+            self.screen.video(t.get("file") or t["url"], mute=False)
+            self.slides_later(t)
+        else:
+            self.screen.mute(False)
+            self.screen.restart_clip()
+        self.view["keys"]["2"] = "Sound on"
+        self.draw()
+
+    def on_mmhm(self, cid, n):
+        """A long prompt is still coming: a soft "mm-hm" in the earpiece, so they know someone's on the line."""
+        if cid == self.cid and self.state == "listening" and getattr(self.line, "mmhms", 0):
+            self.line.play(f"mmhm{(n - 1) % self.line.mmhms}")
 
     def _print(self, cid, take):
         try:
@@ -1802,22 +2357,30 @@ class Booth:
             self.post(("printed", cid, take, False))
 
     def on_printed(self, cid, take, ok):
+        self.stats["prints" if ok else "print_fails"] += 1
+        if ok:
+            self.stats["last_print"] = time.time()
+        if not ok:
+            self.last_error = {"at": time.time(), "what": "Print failed"}
         if not ok:
             take["printed"] = False  # 0 again tries again
         if cid == self.cid and self.take is take and self.state == "ready":
-            self.view["keys"]["0"] = "Printed" if ok else "Printer offline"
+            self.view["keys"]["0"] = "Printed ✓" if ok else "Printer's out"
             self.draw()
 
     # ----- busy, idle -----
-    def busy(self, message):
+    def busy(self, head, sub="", retry=True):
+        """Something went wrong (or the call's over): the busy tone, and on screen what happened and what to do.
+        With `retry`, * starts the call over."""
         self.state = "busy"
         self.pending = None
         self.hold_from = None
         self.line.cancel_recording()
         self.line.stop(fade=False)
         self.line.play("busy")
+        self.screen.frame(None)
         self.screen.background()
-        self.set_view(center=message)
+        self.set_view("message", head=head, sub=sub, retry=retry)
 
     def bump_idle(self):
         self.last_key = time.monotonic()
@@ -1826,7 +2389,7 @@ class Booth:
     def on_idle_check(self, cid, armed):
         # After the menu, a handset left off the hook gets the busy signal, like a real line.
         if cid == self.cid and self.off_hook and self.state == "ready" and armed >= self.last_key:
-            self.busy("Please hang up the phone.")
+            self.busy("Thanks for calling.", "Please hang up the phone.", retry=False)
 
     def reset_feed(self):
         """Staff (*123#): nothing from earlier calls on the screen. The videos go to cache/archive, not the bin."""
@@ -1834,9 +2397,114 @@ class Booth:
         log.info("feed reset: %d videos moved to cache/archive", n)
         self.take, self.attract, self.slideshow = None, [], []
         if self.off_hook:
-            self.busy(f"Feed cleared ({n} videos put away). Hang up the phone.")
+            self.busy(f"Feed cleared ({n} videos put away).", "Hang up the phone.", retry=False)
+            self.set_view("staff", head=f"Feed cleared ({n} videos put away).", sub="Hang up the phone.")
         else:
             self.go_idle()
+
+    # ----- the staff dashboard (control.py talks to this over a local socket) -----
+    def status(self):
+        t = self.take or {}
+        secs = self.stats["render_secs"]
+        return {
+            "line": self.cfg["line"], "state": self.state, "scene": self.view.get("scene"), "off_hook": self.off_hook,
+            "paused": self.paused, "online": self.online, "ringer": self.ringer, "loud": self.loud,
+            "call_no": self.call_no, "prompt": t.get("prompt") or (self.view.get("said") or "").strip("“”"),
+            "first_model": self.fal.models[0][0] if self.fal else None,
+            "stats": {k: v for k, v in self.stats.items() if k != "render_secs"},
+            "render_avg": round(sum(secs) / len(secs), 1) if secs else None,
+            "render_last": secs[-1] if secs else None,
+            "last_error": self.last_error, "app_up": round(time.time() - self.started),
+            "can_reprint": bool(self.last_take), "feed": len(self.cache.items) if self.cache else 0,
+        }
+
+    def on_control(self, cmd, args, reply):
+        """One staff command from the dashboard. `reply` gets a dict back (ok + what happened)."""
+        def done(ok=True, **kw):
+            reply.put({"ok": ok, **kw})
+        log.info("dashboard: %s %s", cmd, args or "")
+        if cmd == "status":
+            return done(status=self.status())
+        if cmd == "pause":
+            self.paused = str(args.get("note") or "")[:80]
+            self.ringing = False
+            if not self.off_hook:
+                self.draw()
+            return done(paused=self.paused)
+        if cmd == "resume":
+            self.paused = None
+            if self.off_hook and self.state == "busy" and self.view.get("head") == "Line out of order.":
+                self.set_view("message", head="Line open again.", sub="Hang up, then pick up.", retry=False)
+            elif not self.off_hook:
+                self.go_idle()
+            return done()
+        if cmd == "feed":
+            return done(feed=self.cache.listing())
+        if cmd == "hide":
+            ok = self.cache.hide(str(args.get("file", "")))
+            if ok and not self.off_hook and self.state == "idle" and not self.take:
+                self.on_attract(self.cid)
+            return done(ok)
+        if cmd == "clear_feed":
+            if self.off_hook:
+                return done(False, error="Someone's on the phone")
+            self.reset_feed()
+            return done()
+        if cmd == "pull":
+            return done(**self.pull())
+        if cmd == "next_clip":
+            self.on_next_clip()
+            return done()
+        if cmd == "ring":
+            if self.off_hook or self.state != "idle" or self.paused is not None:
+                return done(False, error="Only when the line is free")
+            self.ringing = True
+            self.draw()
+            self.after(self.line.play("ring"), "ring_done", self.cid)
+            return done()
+        if cmd == "model":
+            self.fal.put_first(args.get("first") == "flux")
+            return done(first_model=self.fal.models[0][0])
+        if cmd == "reprint":
+            if not self.last_take:
+                return done(False, error="Nothing made yet")
+            threading.Thread(target=self._print, args=(-1, self.last_take), daemon=True).start()
+            return done()
+        if cmd == "test_print":
+            threading.Thread(target=test_print, daemon=True).start()
+            return done()
+        done(False, error="unknown command")
+
+    def pull(self):
+        """Staff kill switch: whatever's on the TV right now comes off. Mid-call, the call ends (a render still running
+        is called off and never shown or kept) and the caller is asked to hang up; idle, the video showing is hidden
+        from the feed."""
+        def hide_take(t):
+            t["hidden"] = True  # a download still running drops it when it lands
+            if t.get("file"):
+                self.cache.hide(Path(t["file"]).name)
+        self.stats["pulled"] += 1
+        if self.off_hook:
+            log.warning("dashboard pulled the call (%s)", self.state)
+            if self.pending is not None:
+                self.cancelled.add(self.pending)
+            if self.take:
+                hide_take(self.take)
+            self.take = None
+            self.busy("Thanks for calling.", "Please hang up the phone.", retry=False)
+            return {"what": "Call ended"}
+        if self.take:  # their clip still up after a hang-up
+            hide_take(self.take)
+            self.take = None
+            self.state = "idle"
+            self.on_attract(self.cid)
+            return {"what": "Video hidden"}
+        if self.attract and 0 <= self.attract_pos < len(self.attract):
+            name = Path(self.attract[self.attract_pos][0]).name
+            self.cache.hide(name)
+            self.on_attract(self.cid)
+            return {"what": "Video hidden"}
+        return {"what": "Nothing on screen"}
 
     def go_idle(self):
         self.state = "idle"
@@ -1845,7 +2513,8 @@ class Booth:
         if self.take:
             # the clip they just made keeps playing, muted, for a little while before the loop of recent ones
             self.screen.mute(True)
-            self.set_view(said=f"“{self.take['prompt']}”", status="Pick up the phone to make your own.")
+            self.set_view("after")
+            self.slides_later(self.take)  # it can turn into its own stills now nobody's watching it with sound
             self.after(self.cfg["attract_after"], "attract", self.cid)
         else:
             self.on_attract(self.cid)
@@ -1855,18 +2524,23 @@ class Booth:
             return
         self.take = None  # their clip (or its slideshow) makes way for a shuffle of earlier videos
         self.attract = shuffled(self.cache.recent())
+        self.screen.frame(None)
         if self.attract:
             self.screen.playlist([f for f, _ in self.attract])
-            self.set_view(said=f"“{self.attract[0][1]}”", status="Pick up the phone to make your own.")
+            self.set_view("attract", said=f"“{self.attract[0][1]}”")
         else:
             self.screen.background()
-            self.set_view(center="Pick up the phone.")
+            self.set_view("attract", said="")
 
     def on_playlist_pos(self, pos):
         # their own slideshow still lingering after a hang-up, or the shuffle of earlier videos
         shown = self.slideshow if self.take and self.take.get("slides") else self.attract
+        if isinstance(pos, int):
+            self.attract_pos = pos
         if self.state == "idle" and isinstance(pos, int) and 0 <= pos < len(shown):
-            self.set_view(said=f"“{shown[pos][1]}”", status="Pick up the phone to make your own.")
+            if self.view.get("scene") == "attract":
+                self.view["said"] = f"“{shown[pos][1]}”"
+                self.draw()
 
     def on_next_clip(self):
         if self.state == "idle" and self.attract:
@@ -1874,29 +2548,38 @@ class Booth:
 
     def on_screen_restarted(self):
         if self.state == "ready" and self.take:
+            self.screen.frame(FRAME)
             self.screen.video(self.take["url"], mute=not self.take["sound"])
         elif self.state == "idle":
             return self.on_attract(self.cid)
         else:
+            self.screen.frame(None)
             self.screen.background()
         self.draw()
 
     # ----- on hold -----
-    def start_hold(self, t0, said, keep_video=False):
+    def start_hold(self, t0, said, keep_video=False, label="YOU SAID", stage="hear", done=None, take=0):
         self.state = "hold"
         self.hold_from = t0
+        self.screen.frame(None)
         if not keep_video:
             self.screen.background()
-        self.set_view(said=said)
+        self.set_view("hold", said=said, label=label, stage=stage, done=dict(done or {}), since=time.monotonic(),
+                      model=None)
         self.on_tick()
 
     def on_tick(self):
-        if self.state != "hold" or self.hold_from is None:
-            return
-        label = "On hold" if self.view["said"] else "Connecting you to our fastest agent"
-        self.view["status"] = f"{label} · {time.monotonic() - self.hold_from:.1f} s  ·  * to cancel"
-        self.draw()
-        self.after(0.1, "tick")
+        """10 times a second while someone's talking (the meter) or on hold (the clock)."""
+        if self.state == "listening" or (self.state == "hold" and self.hold_from is not None):
+            if self.ticking:
+                return
+            self.ticking = True
+            self.after(0.1, "tick_next")
+            self.draw()
+
+    def on_tick_next(self):
+        self.ticking = False
+        self.on_tick()
 
     # ----- network light (for the staff) -----
     def _watch_network(self):
@@ -1916,35 +2599,163 @@ class Booth:
         self.draw()
 
     # ----- words on screen -----
-    def set_view(self, said="", status="", keys=None, center=""):
-        self.view = {"said": said, "status": status, "keys": keys, "center": center}
+    # The screen is a sign, not a page: one big thing per state, and only the keys that work right now. Everything
+    # else (the models, the bill, the links) lives on the receipt and the event page.
+    def set_view(self, scene, **kw):
+        self.view = {"scene": scene, **kw}
         self.draw()
 
     def draw(self):
-        v, out = self.view, []
-        dot = r"{\c&H6AD15B&}●" if self.online else r"{\c&H4B4BFF&}● offline"
-        out.append(r"{\an7\pos(48,40)\fs28\bord0\shad0\c&HA8A0A0&}"
-                   + f"Line {ass_text(self.cfg['line'])}  " + dot)
-        if self.ringing:
-            out.append(r"{\an8\pos(960,40)\fs48\b1\bord2\shad0\3c&H000000&\c&H9EE6FF&}Incoming call · pick up the phone")
-        if v["center"]:
-            out.append(r"{\an5\pos(960,540)\fs76\b1\bord3\shad0\3c&H000000&\c&HFFFFFF&}" + ass_text(v["center"]))
+        v = self.view
+        scene = "ringing" if self.ringing and v.get("scene") == "attract" else v.get("scene", "attract")
+        if self.paused is not None and scene in ("attract", "ringing", "after"):
+            out = self._plaque(self.look, "Out of order.", self.paused or "Please try the other line.")
         else:
-            if v["said"] or v["status"]:
-                out.append(r"{\an7\pos(0,800)\p1\bord0\shad0\c&H000000&\alpha&H60&}m 0 0 l 1920 0 l 1920 280 l 0 280{\p0}")
-            if v["said"]:
-                out.append(r"{\an2\pos(960,925)\fs62\b1\bord2\shad0\3c&H000000&\c&HFFFFFF&}" + ass_text(v["said"][:120]))
-            if v["status"]:
-                out.append(r"{\an2\pos(960,995)\fs40\bord2\shad0\3c&H000000&\c&H9EE6FF&}" + ass_text(v["status"]))
-            if v["keys"] is not None:
-                labels = {"2": "Sound", "3": "Regenerate", "0": "Print"}
-                parts = []
-                for k in "230":
-                    done = v["keys"].get(k)
-                    parts.append("{" + (r"\c&H6AD15B&" if done else r"\c&HFFFFFF&") + r"\b1}" + f"[{k}]"
-                                 + r"{\b0} " + ass_text(done or labels[k]))
-                out.append(r"{\an2\pos(960,1058)\fs38\bord2\shad0\3c&H000000&}" + "      ".join(parts))
+            out = getattr(self, "_scene_" + scene)(v, self.look)
+        if not self.online:  # for the staff: this line can't reach fal
+            out.append(self.look.rect(SCREEN_W - 300, 0, 300, 56, BLACK))
+            out.append(self.look.text(SCREEN_W - 150, 28, "● OFFLINE", "MS", WHITE, an=5))
         self.screen.text("\n".join(out))
+
+    def _plaque(self, L, head, sub="", tok="H2", y=None):
+        """The booth plaque: Light Sage, the wall's squares and dots, and the words big and centred in mono caps."""
+        out = [L.mat(SAGE)] + L.scatter()
+        lines = L.wrap(head.upper(), tok, SCREEN_W - 480, lines=3, balance=True)
+        size = TYPE[tok][1]
+        block = size * len(lines) + (40 + 64 if sub else 0)
+        y = (SCREEN_H - STRIP - block) / 2 if y is None else y
+        out += L.lines(SCREEN_W / 2, y, lines, tok, gap=size, an=8)
+        if sub:
+            out += L.lines(SCREEN_W / 2, y + size * len(lines) + 40, L.wrap(sub.upper(), "K", SCREEN_W - 480, lines=2),
+                           "K", gap=64, an=8)
+        return out
+
+    def _scene_attract(self, v, L):
+        """Free line: what this phone has made, full screen, with what was said under it and a block to pick up."""
+        band = 200
+        if self.attract:
+            out = [L.rect(0, SCREEN_H - band, SCREEN_W, band, SAGE)]
+            lines = L.wrap((v.get("said") or "").upper(), "K", SCREEN_W - 560 - 2 * MARGIN, lines=2, balance=True)
+            out += L.lines(MARGIN, SCREEN_H - band / 2 - 32 * len(lines), lines, "K", gap=64)
+        else:  # nothing made yet: the promise
+            out = self._plaque(L, "Pick up.", "Say an idea, get a 10-second video.", tok="H1")
+            band = STRIP
+        out.append(L.rect(SCREEN_W - 560, SCREEN_H - band, 560, band, MODEL_PURPLE))
+        out.append(L.text(SCREEN_W - 280, SCREEN_H - band / 2, "PICK UP", "H3", an=5))
+        return out
+
+    def _scene_ringing(self, v, L):
+        return self._plaque(L, "Pick up.", "Incoming call", tok="H1")
+
+    def _scene_greeting(self, v, L):
+        out = self._plaque(L, v.get("head") or "Leave your prompt after the beep.", v.get("sub", ""))
+        out += L.strip({"1": ("Surprise me", False, False)}, tray=SAGE)
+        return out
+
+    def _scene_listening(self, v, L):
+        level, heard, quiet = self.line.level() if self.line else (0.0, False, 0.0)
+        out = self._plaque(L, "Go ahead.", y=300)
+        n, size, gap = 16, 64, 16  # a row of the wall's squares, lit by how loud they are
+        x0 = (SCREEN_W - (n * size + (n - 1) * gap)) / 2
+        lit = round(level * n)
+        out.append(L.shape("".join(L.box(x0 + i * (size + gap), 540, size, size) for i in range(lit, n)), PIXEL_GREY))
+        if lit:
+            out.append(L.shape("".join(L.box(x0 + i * (size + gap), 540, size, size) for i in range(lit)), MODEL_PURPLE))
+        out += L.strip({"1": ("Surprise me", False, False), "*": ("Start over", False, False),
+                        "#": ("Send", True, False)}, tray=SAGE)
+        return out
+
+    def _scene_hold(self, v, L):
+        """On hold: their words, a giant clock, and one line saying which model has the call right now."""
+        now = time.monotonic()
+        secs = now - (self.hold_from or now)
+        out = [L.mat(SAGE)] + L.scatter()
+        said = (v.get("said") or "Hearing you…").upper()
+        out += L.lines(SCREEN_W / 2, 330, L.wrap(said, "H3", SCREEN_W - 480, lines=2, balance=True), "H3", gap=84, an=8)
+        out.append(L.text(SCREEN_W / 2, 500, f"{secs:4.1f}s".strip(), "H1", an=8))  # mono: the digits never jitter
+        stage, model = v.get("stage", "hear"), v.get("model") or ""
+        doing = {"hear": "Hearing you", "check": "Checking it's original",
+                 "remix": "Making it an original", "render": "Rendering"}[stage]
+        if stage == "render" and model:
+            doing = f"{'Backup line' if v.get('backup') else 'Rendering'} · {model}"
+        out.append(L.text(SCREEN_W / 2, 790, (doing + "…").upper(), "K", an=8))
+        out += L.strip({"*": ("Start over", False, False)}, tray=SAGE)
+        return out
+
+    def _chip(self, L, x, y, model):
+        """fal's chip on generated video, naming the model: White, Black mono, 16 px in from the top left."""
+        if not model:
+            return []
+        label = model_name(model)
+        return [L.rect(x + 16, y + 16, L.width(label, "MS") + 24, 48, WHITE), L.text(x + 28, y + 40, label, "MS", an=4)]
+
+    def _scene_ready(self, v, L):
+        t, keys = self.take, v.get("keys") or {}
+        out = self._chip(L, 0, 0, t.get("model"))
+        out += L.strip({"2": (keys.get("2") or "Sound", False, False),
+                        "3": (keys.get("3") or "Another take", False, keys.get("3") == "3 takes max"),
+                        "0": (keys.get("0") or "Print receipt", not keys.get("0"), keys.get("0") == "Printed ✓")},
+                       tray=SAGE)
+        return out
+
+    def _scene_after(self, v, L):
+        """Their caller hung up: their video stays a while before the feed comes back."""
+        t = self.take
+        if not t:
+            return self._scene_attract(v, L)
+        out = self._chip(L, 0, 0, t.get("model"))
+        out.append(L.rect(0, SCREEN_H - STRIP, SCREEN_W, STRIP, SAGE))
+        out.append(L.text(SCREEN_W / 2, SCREEN_H - STRIP / 2, "PICK UP TO MAKE YOUR OWN", "H3", an=5))
+        return out
+
+    def _scene_message(self, v, L):
+        out = self._plaque(L, v.get("head", ""), v.get("sub", ""))
+        if v.get("retry"):
+            out += L.strip({"*": ("Try again", True, False)}, tray=SAGE)
+        return out
+
+    def _scene_staff(self, v, L):
+        return self._plaque(L, v.get("head", ""), v.get("sub", ""))
+
+
+CONTROL_SOCK = "/tmp/fal-booth-ctl.sock"
+
+
+def serve_control(booth, path=CONTROL_SOCK):
+    """The staff dashboard's way in (control.py, on this Pi only): one JSON line per connection,
+    {"cmd": ..., "args": {...}}, answered with one JSON line. Commands run on the booth's own loop."""
+    try:
+        os.unlink(path)
+    except OSError:
+        pass
+    srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    srv.bind(path)
+    os.chmod(path, 0o600)
+    srv.listen(8)
+
+    def one(conn):
+        with conn:
+            try:
+                conn.settimeout(5)
+                msg = json.loads(conn.makefile().readline() or "{}")
+                reply = queue.Queue()
+                booth.post(("control", str(msg.get("cmd", "")), msg.get("args") or {}, reply))
+                out = reply.get(timeout=4)
+            except queue.Empty:
+                out = {"ok": False, "error": "The booth is busy; try again"}
+            except Exception as e:
+                out = {"ok": False, "error": str(e)}
+            try:
+                conn.sendall((json.dumps(out) + "\n").encode())
+            except OSError:
+                pass
+
+    def loop():
+        while True:
+            conn, _ = srv.accept()
+            threading.Thread(target=one, args=(conn,), daemon=True).start()
+
+    threading.Thread(target=loop, daemon=True).start()
 
 
 def main():
@@ -1957,11 +2768,14 @@ def main():
     booth.line = Line(booth.post, cfg)
     booth.screen = Screen(booth.post)
     booth.fal = Fal(cfg)
-    threading.Thread(target=booth.fal.load_prices, daemon=True).start()
     threading.Thread(target=watch_heat, daemon=True).start()
     booth.printer = Printer(cfg)
     booth.cache = Cache(cfg["history"], secs=cfg["secs"])
     Phone(booth.post, grab=cfg["grab"])
+    try:
+        serve_control(booth)
+    except OSError as e:
+        log.warning("no staff dashboard socket: %s", e)
     try:
         booth.run()
     finally:

@@ -59,12 +59,19 @@ class Client:
         self.ip = None  # a word the IP check flags wherever it appears (the remix too); None = all original
         self.remix = "a round pink sea creature in a tiny top hat dancing on the beach"
         self.prompts = []  # what each video model was asked for
+        self.models = {}   # language model -> a status code or 'hang', for the IP check race
 
-    def run(self, endpoint, args, timeout=None):
+    def run(self, endpoint, args, timeout=None, start_timeout=None):
         self.calls.append(endpoint)
+        assert start_timeout, "without it fal_client retries a timed-out request up to 10 times"
         if endpoint == B.Fal.IP_CHECK:
             if isinstance(self.plan.get(endpoint), int):
                 raise HTTPError(self.plan[endpoint])
+            what = self.models.get(args["model"])
+            if what == "hang":
+                time.sleep(30)
+            if isinstance(what, int):
+                raise HTTPError(what)
             time.sleep(0.05)
             usage = {"cost": 0.0003}
             if args["system_prompt"] != B.IP_CHECK_PROMPT:  # asked to remix it into an original
@@ -73,7 +80,7 @@ class Client:
             verdict = {"ok": False, "what": self.ip} if borrowed else {"ok": True}
             return {"output": f"```json\n{json.dumps(verdict)}\n```", "usage": usage}  # fenced, as some models do
         assert args["audio_url"].startswith("data:audio/x-wav;base64,")
-        assert args.get("language", "en") == "en"
+        assert args.get("language", "en") == "en" and args.get("language_code", "eng") == "eng"
         if self.plan.get(endpoint) == "hang":
             time.sleep(30)
         time.sleep(0.05)
@@ -177,17 +184,22 @@ def test_full_call():
     wait(lambda: "music" in booth.line.playing(), 3, "hold music")
     wait(lambda: booth.view["said"] == "“a red phone ringing on the moon”", 5, "prompt on screen")
     wait(lambda: booth.state == "ready", 8, "video ready")
-    assert client.calls[:3] == ["fal-ai/wizper", B.Fal.IP_CHECK, "minimax/h3-max/text-to-video"], client.calls
+    # speech to text, both IP checkers at once, then the video
+    assert client.calls[:4] == [B.Fal.STT, B.Fal.IP_CHECK, B.Fal.IP_CHECK, "minimax/h3-max/text-to-video"], client.calls
     url = booth.screen.calls("video")[-1][1]
     assert url == URL and booth.screen.calls("video")[-1][2] is True  # muted
-    assert "Ready in" in booth.view["status"] and "[2]" in booth.screen.last_text
+    wait(lambda: booth.view["scene"] == "ready" and "ANOTHER TAKE" in booth.screen.last_text, 2, "ready screen")
+    assert ("frame", B.FRAME) in booth.screen.log
     booth.post(("file_loaded",))
     wait(lambda: "menu" in booth.line.playing(), 6, "menu read")
     booth.post(("key", "2"))
+    wait(lambda: "generating_audio" in booth.line.playing(), 1, "the generating-audio cue first")
+    assert ("mute", False) not in booth.screen.log and booth.view["keys"]["2"] == "Generating audio…"
     wait(lambda: ("mute", False) in booth.screen.log and booth.screen.calls("restart_clip"), 3, "sound on")
+    assert booth.view["keys"]["2"] == "Sound on"
     wait(lambda: "menu" not in booth.line.playing(), 1, "a key cuts the menu off (after a short fade)")
     booth.post(("key", "0"))
-    wait(lambda: booth.view["keys"].get("0") == "Printed", 25, "printed")
+    wait(lambda: booth.view["keys"].get("0") == "Printed ✓", 25, "printed")
     data = (TMP / "printer.bin").read_bytes()
     assert data.startswith(b"\x1b@") and data.endswith(b"\x1dV\x42\x00") and b"\x1dv0\x00" in data
     booth.post(("key", "3"))
@@ -202,13 +214,51 @@ def test_full_call():
     stop.set()
 
 
-def test_no_speech_twice_is_busy():
+def test_no_speech_twice_gets_one_of_ours():
     booth, client, stop = make(no_speech=0.6)
     lift_and_say(booth, lambda t: 0.0)
-    wait(lambda: booth.state == "busy", 15, "busy")
-    assert "Didn't hear" in booth.view["center"] and booth.attempt == 2
-    assert "busy" in booth.line.playing()
-    assert "fal-ai/wizper" not in client.calls
+    wait(lambda: booth.view.get("head") == "Didn't catch that.", 8, "asked again after one silence")
+    wait(lambda: booth.state == "hold", 15, "a surprise idea after the second")
+    assert booth.view["label"] == "ONE OF OURS" and booth.attempt == 2
+    wait(lambda: booth.state == "ready", 10, "ready")
+    assert booth.take["surprise"] and booth.take["prompt"] in B.SURPRISE
+    assert B.Fal.STT not in client.calls and B.Fal.IP_CHECK not in client.calls  # curated: no speech, no check
+    stop.set()
+
+
+def test_one_is_surprise_me():
+    booth, client, stop = make()
+    lift_and_say(booth, lambda t: 0.0)
+    booth.post(("key", "1"))
+    wait(lambda: booth.state == "hold", 3, "on hold with one of ours")
+    assert booth.view["said"].strip("“”") in B.SURPRISE and "music" in booth.line.playing()
+    wait(lambda: booth.state == "ready", 10, "ready")
+    assert client.calls == ["minimax/h3-max/text-to-video"], client.calls
+    assert [label for label, _, _ in booth.take["costs"]] == ["VIDEO 10 s"]
+    stop.set()
+
+
+def test_staff_holds_do_nothing_mid_call():
+    booth, client, stop = make()
+    lift_and_say(booth, talk())
+    booth.post(("shutdown",))
+    booth.post(("restart",))  # SystemExit if it weren't ignored
+    wait(lambda: booth.state == "hold", 8, "the call carries on")
+    stop.set()
+
+
+def test_every_scene_draws():
+    booth, client, stop = make()
+    booth.take = {"prompt": "a red phone", "you_said": "a phone from a film", "model": "H3 Max", "secs": 9.9,
+                  "url": "https://v3b.fal.media/files/b/x/y.mp4", "at": 0}
+    for scene, kw in [("attract", {"said": "“a red phone”"}), ("greeting", {}), ("listening", {}),
+                      ("hold", {"said": "", "stage": "render", "model": "fal H3 Max", "done": {}}),
+                      ("ready", {"keys": {}}), ("after", {}), ("message", {"head": "Our lines are busy.", "retry": True}),
+                      ("staff", {"head": "Restarting…", "sub": ""})]:
+        booth.set_view(scene, **kw)
+        assert booth.screen.last_text.count("\\pos(") > 1, scene
+    assert "v3b.fal.media/files/b/x/y.mp4" in B.share_url(booth.take, booth.cfg)
+    assert B.share_url(booth.take, dict(booth.cfg, share_base="")) == booth.take["url"]
     stop.set()
 
 
@@ -233,7 +283,7 @@ def test_pause_does_not_end_listening():
 
 def test_stalled_speech_to_text_falls_back():
     client = Client()
-    client.plan["fal-ai/wizper"] = "hang"
+    client.plan[B.Fal.STT] = "hang"
     cfg = B.load_config()
     t = time.monotonic()
     text, endpoint = B.Fal(cfg, client).transcribe(b"RIFF" + bytes(4000))
@@ -265,7 +315,7 @@ def test_refusal_is_not_retried():
     client.plan["minimax/h3-max/text-to-video"] = 422
     lift_and_say(booth, talk())
     wait(lambda: booth.state == "busy", 15, "busy after refusal")
-    assert "didn't go through" in booth.view["center"]
+    assert "didn't go through" in booth.view["head"]
     assert "blackforestlabs/flux-3-max/text-to-video" not in client.calls
     stop.set()
 
@@ -284,7 +334,7 @@ def test_blocked_prompt():
     client.text = "a naked man"
     lift_and_say(booth, talk())
     wait(lambda: booth.state == "busy", 10, "busy")
-    assert "friendly" in booth.view["center"]
+    assert "friendly" in booth.view["head"]
     assert not any("text-to-video" in c for c in client.calls)
     stop.set()
 
@@ -326,7 +376,7 @@ def test_star_cancels_while_listening():
     time.sleep(0.2)
     booth.line.mic = lambda t: 0.0
     booth.post(("key", "*"))
-    wait(lambda: booth.view["center"] == B.CANCELLED, 3, "cancelled")
+    wait(lambda: booth.view.get("head") == "Start over.", 3, "cancelled")
     wait(lambda: booth.state == "listening", 5, "listening again after the beep")
     booth.post(("hook", False))  # hanging up straight away makes nothing: they said nothing new
     time.sleep(0.5)
@@ -353,7 +403,7 @@ def test_quiet_caller_who_hangs_up_is_still_tried():
     lift_and_say(booth, lambda t: 0.004)  # under the speech detector
     wait(lambda: (r := booth.line.rec) is not None and r["n"] > 2 * B.MIC_SR, 3, "2 s in")
     booth.post(("hook", False))
-    wait(lambda: "fal-ai/wizper" in client.calls, 3, "sent to speech to text")
+    wait(lambda: B.Fal.STT in client.calls, 3, "sent to speech to text")
     stop.set()
 
 
@@ -361,13 +411,15 @@ def test_ip_is_remixed_into_an_original():
     booth, client, stop = make()
     client.text, client.ip = "a man in a red and blue spider suit swinging between skyscrapers", "spider"
     lift_and_say(booth, talk())  # described, not named: the name list misses it, the model doesn't
-    wait(lambda: booth.view["said"] == B.REMIXING, 5, "on hold, making an original")
+    wait(lambda: booth.view.get("stage") == "remix", 5, "on hold, making an original")
     wait(lambda: booth.state == "ready", 10, "ready")
     assert client.prompts == [client.remix + B.ORIGINAL_ONLY], client.prompts  # their words never reach the model
     assert booth.take["prompt"] == client.remix and booth.take["you_said"] == client.text
     bill = {(label, model): round(usd, 4) for label, model, usd in booth.take["costs"]}
     # two checks (their words, then the original) on one line, and the remix on its own
-    assert bill[("IP CHECK", "Claude Haiku 4.5")] == 0.0006 and bill[("MADE ORIGINAL", "Claude Haiku 4.5")] == 0.0003, bill
+    # both checkers race on each check; GPT-6 Luna makes the original
+    assert bill[("IP CHECK", "Gemini 3.1 Flash Lite")] == 0.0006 and bill[("IP CHECK", "GPT-6 Luna")] == 0.0006, bill
+    assert bill[("MADE ORIGINAL", "GPT-6 Luna")] == 0.0003, bill
     img = B.receipt_image(booth.take, booth.cfg, "/nonexistent.mp4")
     assert img.height > 600
     stop.set()
@@ -387,11 +439,33 @@ def test_ip_that_cant_be_remixed_asks_again():
     client.text = "SpongeBob dancing on the beach"
     client.remix = "SpongeBob in a top hat dancing on the beach"  # still borrowed, from both models
     lift_and_say(booth, talk())
-    wait(lambda: booth.view["center"] == B.ASK_AGAIN, 10, "asked for another idea")
+    wait(lambda: booth.view.get("head") == "Let's try one of yours.", 10, "asked for another idea")
     assert booth.state in ("greeting", "listening") and booth.state != "busy"
     wait(lambda: booth.state == "listening", 5, "listening again after the beep")
     assert not any("text-to-video" in c for c in client.calls), client.calls
     stop.set()
+
+
+def test_ip_check_race_one_down():
+    client = Client()
+    client.ip = "spider"
+    client.models["google/gemini-3.1-flash-lite"] = 500
+    fal = B.Fal(B.load_config(), client)
+    assert fal.check_ip("a man in a spider suit") == "spider"  # GPT-6 Luna decides on its own
+    assert fal.check_ip("a cat on the moon") is None
+
+
+def test_ip_check_hang_gives_up_in_time():
+    client = Client()
+    for m in B.Fal.IP_CHECK_MODELS:
+        client.models[m] = "hang"
+    t = time.monotonic()
+    try:
+        B.Fal(B.load_config(), client).check_ip("a cat on the moon")
+        raise AssertionError("a check that never answered let the prompt through")
+    except TimeoutError:
+        pass
+    assert time.monotonic() - t < B.Fal.IP_CHECK_DEADLINE + 0.5
 
 
 def test_ip_check_down_makes_nothing():
@@ -408,7 +482,7 @@ def test_off_hook_too_long():
     lift_and_say(booth, talk())
     wait(lambda: booth.state == "ready", 10, "ready")
     wait(lambda: booth.state == "busy", 12, "busy")
-    assert "hang up" in booth.view["center"]
+    assert "hang up" in booth.view["sub"].lower()
     stop.set()
 
 
@@ -428,14 +502,16 @@ def test_slideshow_after_four_plays():
     lift_and_say(booth, talk())
     wait(lambda: booth.state == "ready", 10, "ready")
     booth.cfg["secs"] = 0.3  # 4 plays of a 0.3 s clip; the render itself was asked for 10 s
+    booth.cfg["attract_after"] = 10  # their clip stays up long enough to turn into stills
+    booth.post(("file_loaded",))
+    time.sleep(2)
+    assert not booth.screen.calls("slides"), "never other callers' stills under this caller's video"
+    booth.post(("hook", False))  # once they've hung up, it can turn into stills
     booth.post(("file_loaded",))
     wait(lambda: booth.screen.calls("slides"), 25, "slideshow")
     images, secs = booth.screen.calls("slides")[-1][1:3]
     assert len(images) == 3 and secs == 2.5, (len(images), secs)  # 3 stills from the one video so far
     assert all(Path(i).exists() for i in images)
-    booth.post(("key", "2"))  # sound on: back to the video, from the start
-    wait(lambda: booth.screen.calls("video")[-1][2] is False, 3, "video with sound")
-    assert booth.take["sound"] and not booth.take["slides"]
     stop.set()
 
 
@@ -465,7 +541,7 @@ def test_reset_code_clears_the_feed():
     for k in "*123#":  # dialed with the handset on the hook
         booth.post(("key", k))
     wait(lambda: not booth.cache.recent() and not booth.cache.slides(), 3, "feed empty")
-    wait(lambda: booth.view.get("center") == "Pick up the phone.", 3, "blank screen")
+    wait(lambda: booth.view.get("scene") == "attract" and not booth.attract, 3, "blank screen")
     assert list((booth.cache.root / "archive").glob("*/*.mp4")), "videos archived, not deleted"
     stop.set()
 
@@ -486,7 +562,7 @@ def test_ringer_rings_only_while_idle():
     booth, client, stop = make(ring_every=1.0)
     booth.post(("ringer", True))
     wait(lambda: "ring" in booth.line.playing(), 6, "first ring, a few seconds after the switch")
-    assert booth.ringing and "Incoming call" in booth.screen.last_text
+    assert booth.ringing and "PICK UP." in booth.screen.last_text
     booth.post(("hook", True))
     wait(lambda: booth.state == "greeting", 3, "picked up")
     assert "ring" not in booth.line.playing() and not booth.ringing
@@ -521,6 +597,95 @@ def test_receipt():
     img.save(TMP / "receipt.png")
     data = B.escpos(img)
     assert len(data) > img.height * B.DOTS // 8
+
+
+def test_sticker():
+    import sticker
+    cfg = B.load_config(Path("/nonexistent"))
+    costs = [("VIDEO", "H3 Max · 10 s", 0.56), ("WORDS", "Scribe v2 · 6 s", 0.0008)]
+    long = " ".join(["a skateboarder jumping a burning ramp at sunset in downtown Miami"] * 4)
+    for take in ({"prompt": "orchid", "model": "H3 Max", "secs": 9.6, "url": URL, "costs": costs},
+                 {"prompt": long, "you_said": long, "model": "H3 Max", "secs": 9.6, "url": URL, "costs": costs}):
+        img = sticker.sticker_image(take, cfg, str(CLIP), B)
+        assert img.size == (sticker.W, sticker.H), img.size  # always exactly one 3 x 6 label
+    img.save(TMP / "sticker.png")
+    data = sticker.zpl(img)
+    assert data.startswith(b"^XA") and data.endswith(b"^XZ") and f"^LL{sticker.H}".encode() in data
+    data = sticker.epl(img)
+    assert data.startswith(b"\r\nN\r\n") and data.endswith(b"P1\r\n")
+    assert b"Q%d,%d\r\n" % (sticker.H, sticker.LABEL_GAP) in data
+    assert len(data) > sticker.H * sticker.W // 8
+    assert not sticker.speaks_zpl("/dev/usb/lp9") and not sticker.in_epl("/dev/usb/lp9")
+
+
+def test_long_prompt_gets_mmhm():
+    """Someone talking for a long time hears a soft "mm-hm" now and then (never in a pause, at most three); a short
+    prompt hears none. The listening screen never counts down."""
+    booth, client, stop = make(silence=2.0, listen_max=40.0)
+    played = []
+    real = booth.line.play
+    booth.line.play = lambda name, *a, **k: (played.append(name), real(name, *a, **k))[1]
+    assert booth.line.mmhms == 2
+    lift_and_say(booth, talk(secs=25))
+    wait(lambda: booth.state == "hold", 15, "hold after the long prompt")
+    nods = [n for n in played if n.startswith("mmhm")]
+    assert 2 <= len(nods) <= 3, played
+    stop.set()
+    booth, client, stop = make()
+    played = []
+    real = booth.line.play
+    booth.line.play = lambda name, *a, **k: (played.append(name), real(name, *a, **k))[1]
+    lift_and_say(booth, talk(secs=3))
+    booth.set_view("listening")
+    assert "SENDING" not in booth.screen.last_text
+    wait(lambda: booth.state == "hold", 10, "hold")
+    assert not [n for n in played if n.startswith("mmhm")], played
+    stop.set()
+
+
+def test_dashboard_controls():
+    """The staff dashboard's socket: status, out of order (a lift gets the busy note), back open, the model order,
+    and hiding a video from the feed."""
+    import socket as so
+    booth, client, stop = make()
+    sock = str(TMP / f"ctl{time.monotonic_ns()}.sock")
+    B.serve_control(booth, sock)
+
+    def ask(cmd, **args):
+        with so.socket(so.AF_UNIX, so.SOCK_STREAM) as s:
+            s.settimeout(6)
+            s.connect(sock)
+            s.sendall((json.dumps({"cmd": cmd, "args": args}) + "\n").encode())
+            return json.loads(s.makefile().readline())
+
+    st = ask("status")["status"]
+    assert st["state"] == "idle" and st["paused"] is None and st["first_model"] == "H3 Max", st
+    assert ask("pause", note="Please try Line 2")["ok"]
+    assert "OUT OF ORDER" in booth.screen.last_text and "PLEASE TRY LINE 2" in booth.screen.last_text
+    booth.post(("hook", True))
+    wait(lambda: booth.state == "busy" and booth.view.get("head") == "Line out of order.", 3, "out-of-order call")
+    assert "busy" in booth.line.playing() and booth.stats["calls"] == 0
+    booth.post(("hook", False))
+    wait(lambda: booth.state == "idle", 3, "idle")
+    assert ask("resume")["ok"] and booth.paused is None and "OUT OF ORDER" not in booth.screen.last_text
+    assert ask("model", first="flux")["first_model"] == "FLUX 3 Max"
+    assert ask("model", first="h3")["first_model"] == "H3 Max"
+    assert not ask("reprint")["ok"]  # nothing made yet
+    (booth.cache.root / "a.mp4").write_bytes(b"x")
+    booth.cache.items = [{"file": "a.mp4", "prompt": "a red phone", "stills": []}]
+    assert ask("feed")["feed"][0]["prompt"] == "a red phone"
+    assert ask("hide", file="a.mp4")["ok"] and booth.cache.items == []
+    assert (booth.cache.root / "archive" / "hidden" / "a.mp4").exists()
+    assert not ask("nonsense")["ok"]
+    # the kill switch mid-call: the render is called off, nothing is shown or kept, the caller is asked to hang up
+    lift_and_say(booth, talk())
+    wait(lambda: booth.state == "hold", 8, "on hold")
+    assert ask("pull")["what"] == "Call ended"
+    assert booth.state == "busy" and booth.view["head"] == "Thanks for calling." and booth.pending is None
+    time.sleep(3)
+    assert booth.state == "busy" and booth.take is None, "the video never comes up"
+    assert ask("status")["status"]["stats"]["pulled"] == 1
+    stop.set()
 
 
 def main():

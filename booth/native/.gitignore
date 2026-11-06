@@ -2,5 +2,7 @@ fal.key
 cache/
 venv/
 booth.log*
+control.log
 __pycache__/
 brand/fonts/
+staff.pin

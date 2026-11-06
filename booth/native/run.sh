@@ -63,6 +63,10 @@ watch_audio() {
 
 LOG="$HERE/booth.log"
 watch_audio &
+
+# The control API for Lizzie's dashboard (port 8080, PIN-protected, no page), restarted if it ever exits. It runs
+# beside the app, so restart, reboot and the log still work when the app is down.
+( while true; do "$HERE/venv/bin/python" "$HERE/control.py" >> "$HERE/control.log" 2>&1; sleep 3; done ) &
 while true; do
   [ -f "$LOG" ] && [ "$(stat -c %s "$LOG")" -gt 5000000 ] && mv "$LOG" "$LOG.old"
   pkill -x mpv 2>/dev/null   # a window left over from a hard crash

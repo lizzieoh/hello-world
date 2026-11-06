@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#E5ECE7">
+<title>Booth Control</title>
+<style>
+  /* fal UI system (fal-ui-system-v1): Light Sage ground, White cards (4px), 2px controls, dotted rules,
+     Focal for UI, HAL Timezone Mono for labels and numbers. Model Purple = a call in progress. */
+  @font-face { font-family: "Focal Web"; src: url(/fonts/Focal-Upright-VF_wght.ttf); font-weight: 100 900; }
+  @font-face { font-family: "Focal Text"; src: url(/fonts/FocalText-Regular.otf); font-weight: 400; }
+  @font-face { font-family: "Focal Text"; src: url(/fonts/FocalText-Medium.otf); font-weight: 500; }
+  @font-face { font-family: "HAL Mono"; src: url(/fonts/HALTimezone-MonoRegular.otf); }
+  :root {
+    --black: #000000; --white: #FFFFFF; --light-sage: #E5ECE7; --sage: #96AFAC; --neon: #ADFF00;
+    --dark-bronze: #403700; --model-purple: #AB77FF; --light-purple: #D5BBFF; --yellow: #FFFF00; --red: #EC0648;
+    --light-brown: #D9D7CC;
+    --heading: "Focal Web", Arial, sans-serif; --body: "Focal Text", Arial, sans-serif;
+    --mono: "HAL Mono", "SF Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; }
+  body { background: var(--light-sage); color: var(--black); font: 15px/1.35 var(--body); -webkit-font-smoothing: antialiased; }
+  button, input { font: inherit; color: inherit; }
+  .mono { font-family: var(--mono); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; }
+
+  header { display: flex; align-items: center; gap: 12px; padding: 16px; flex-wrap: wrap; }
+  .logo { display: block; height: 22px; aspect-ratio: 209 / 33; background: currentColor;
+          -webkit-mask: url(/logo.svg) no-repeat left center / contain; mask: url(/logo.svg) no-repeat left center / contain; }
+  .brand { background: var(--white); border-radius: 4px; padding: 10px 12px; }
+  header .title { margin-right: auto; }
+  header .clock { font-family: var(--mono); font-size: 13px; }
+
+  main { display: grid; gap: 16px; padding: 0 16px 48px; grid-template-columns: 1fr; }
+  @media (min-width: 1100px) { main { grid-template-columns: repeat(auto-fit, minmax(520px, 1fr)); padding: 0 32px 64px; }
+                               header { padding: 24px 32px; } }
+
+  .card { background: var(--white); border-radius: 4px; padding: 16px; display: grid; gap: 14px; align-content: start; container-type: inline-size; }
+  .cols, .col { display: grid; gap: 14px; align-content: start; }
+  @container (min-width: 880px) { .cols { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 0 32px; }
+                                  .col + .col > .group:first-child { border-top: 0; padding-top: 0; } }
+  .top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .top h2 { margin: 0; font: 500 28px/1 var(--heading); letter-spacing: -.03em; }
+  .host { margin-left: auto; }
+  .ago { font-family: var(--mono); font-size: 12px; }
+  .ago.stale { background: var(--yellow); padding: 2px 4px; border-radius: 2px; }
+  .state { padding: 4px 8px; border-radius: 2px; font-family: var(--mono); font-size: 12px; letter-spacing: .1em; }
+  .s-free { background: var(--light-sage); }
+  .s-call { background: var(--model-purple); }
+  .s-hold { background: var(--light-purple); }
+  .s-out { background: var(--yellow); }
+  .s-down { background: var(--red); color: var(--white); }
+  .s-off { background: var(--light-brown); }
+
+  .screen { position: relative; aspect-ratio: 16 / 9; background: var(--light-sage); border-radius: 2px; overflow: hidden; }
+  .screen img:not([src]) { visibility: hidden; }
+  .screen img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .screen .dark { position: absolute; inset: 0; display: grid; place-items: center; color: var(--black); background: var(--light-sage); }
+  .said { font: 400 17px/1.25 var(--heading); min-height: 1.25em; }
+
+  .vitals { display: flex; flex-wrap: wrap; gap: 6px; }
+  .v { padding: 4px 6px; border-radius: 2px; background: var(--light-sage); font-family: var(--mono); font-size: 12px; letter-spacing: .04em; }
+  .v.bad { background: var(--red); color: var(--white); }
+  .v.warn { background: var(--yellow); }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px dotted var(--black); }
+  .stat { padding: 10px 0; }
+  .stat b { display: block; font: 500 24px/1 var(--heading); letter-spacing: -.02em; }
+  .stat span { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+  .err { background: var(--red); color: var(--white); padding: 8px 10px; border-radius: 2px; font-size: 13px; }
+
+  .group { display: grid; grid-template-columns: 96px 1fr; gap: 8px 12px; align-items: center; padding-top: 12px; border-top: 1px dotted var(--black); }
+  .group > .mono { align-self: start; padding-top: 10px; }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .btn { min-height: 44px; padding: 8px 12px; border: 1px solid var(--black); border-radius: 2px; background: var(--white);
+         font: 500 13px/1 var(--heading); letter-spacing: .04em; text-transform: uppercase; cursor: pointer;
+         transition: background-color .1s, color .1s; }
+  .btn:hover { background: var(--light-sage); }
+  .btn.on { background: var(--light-sage); border-width: 2px; }
+  .btn.on::before { content: "● "; }
+  .btn.primary { background: var(--neon); border-color: var(--neon); color: var(--dark-bronze); }
+  .btn.primary:hover { background: #71A600; border-color: #71A600; color: var(--white); }
+  .btn.warn { border-color: var(--red); color: var(--red); }
+  .btn.warn:hover { background: var(--red); color: var(--white); }
+  .btn:disabled { opacity: .4; pointer-events: none; }
+  .card[aria-busy="true"] .btn { opacity: .6; pointer-events: none; }
+  .btn.kill { width: 100%; background: var(--red); border-color: var(--red); color: var(--white); min-height: 52px; font-size: 15px; }
+  .btn.kill:hover { background: var(--white); color: var(--red); }
+  details.danger > summary { cursor: pointer; padding: 12px 0 0; border-top: 1px dotted var(--black); list-style: none; }
+  details.danger > summary::before { content: "+ "; }
+  details.danger[open] > summary::before { content: "– "; }
+  details.danger .row { padding-top: 10px; }
+  .strip { position: sticky; top: 0; z-index: 5; display: flex; gap: 6px; flex-wrap: wrap; padding: 10px 16px; background: var(--light-sage); }
+  .strip a { text-decoration: none; color: inherit; }
+  @media (min-width: 1100px) { .strip { padding: 10px 32px; } }
+  .note { flex: 1 1 180px; min-height: 40px; padding: 8px 10px; border: 1px solid var(--black); border-radius: 2px; background: var(--white); }
+  .slider { display: grid; grid-template-columns: 72px 1fr 44px; gap: 8px; align-items: center; width: 100%; }
+  input[type=range] { width: 100%; accent-color: var(--black); }
+  .feed { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; width: 100%; }
+  .item { display: grid; gap: 4px; font-size: 13px; }
+  .item img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; background: var(--light-sage); border-radius: 2px; }
+  .item .btn { min-height: 44px; padding: 6px 8px; font-size: 12px; }
+  details.log summary { cursor: pointer; }
+  details.log pre { margin: 8px 0 0; max-height: 260px; overflow: auto; font: 12px/1.4 var(--mono); white-space: pre-wrap; background: var(--light-sage); padding: 8px; border-radius: 2px; }
+
+  .gate { min-height: 70vh; display: grid; place-items: center; }
+  .gate form { background: var(--white); border-radius: 4px; padding: 24px; display: grid; gap: 12px; width: min(340px, 90vw); }
+  .gate h1 { margin: 0; font: 500 32px/1 var(--heading); letter-spacing: -.04em; }
+  .toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--white); color: var(--black); border: 1px solid var(--black);
+           padding: 10px 14px; border-radius: 2px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 90vw; }
+  .toast.show { opacity: 1; }
+  @media (max-width: 520px) { .group { grid-template-columns: 1fr; } .group > .mono { padding-top: 0; } }
+</style>
+</head>
+<body>
+<header>
+  <span class="brand"><span class="logo" aria-label="fal CALL-A-FAL"></span></span>
+  <span class="mono title">Booth control</span>
+  <span class="clock" id="clock"></span>
+</header>
+<nav class="strip" id="strip" aria-label="All lines"></nav>
+<main id="main"></main>
+<div class="toast" id="toast" role="status"></div>
+
+<template id="card">
+  <section class="card">
+    <div class="top"><h2 class="name"></h2><span class="state"></span><span class="ago"></span><span class="mono host"></span></div>
+    <div class="cols"><div class="col">
+    <div class="screen"><img alt="What this booth's TV shows now"><div class="dark mono" hidden>Screen off</div></div>
+    <div class="said"></div>
+    <button class="btn kill" data-cmd="pull">Take it off the screen</button>
+    <div class="vitals"></div>
+    <div class="stats">
+      <div class="stat"><b data-k="calls">–</b><span>Calls</span></div>
+      <div class="stat"><b data-k="videos">–</b><span>Videos</span></div>
+      <div class="stat"><b data-k="avg">–</b><span>Avg render</span></div>
+      <div class="stat"><b data-k="prints">–</b><span>Prints</span></div>
+    </div>
+    <div class="err" hidden></div>
+    </div><div class="col">
+
+    <div class="group"><span class="mono">Line</span>
+      <div class="row">
+        <input class="note" maxlength="80" placeholder="Note on screen, e.g. Please try Line 2" enterkeyhint="done">
+        <button class="btn" data-cmd="pause">Out of order</button>
+        <button class="btn" data-cmd="resume">Open</button>
+      </div></div>
+    <div class="group"><span class="mono">Screen</span>
+      <div class="row">
+        <button class="btn" data-cmd="screen-on">On</button>
+        <button class="btn" data-cmd="screen-off">Off</button>
+        <button class="btn" data-cmd="next_clip">Next clip</button>
+        <button class="btn" data-cmd="ring">Ring now</button>
+      </div></div>
+    <div class="group"><span class="mono">Video model</span>
+      <div class="row">
+        <button class="btn" data-cmd="model-h3">H3 Max first</button>
+        <button class="btn" data-cmd="model-flux">FLUX 3 Max first</button>
+      </div></div>
+    <div class="group"><span class="mono">Sound</span>
+      <div class="row">
+        <label class="slider"><span>Earpiece</span><input type="range" min="0" max="100" step="5" data-vol="speaker"><b class="mono"></b></label>
+        <label class="slider"><span>Mic</span><input type="range" min="0" max="100" step="5" data-vol="mic"><b class="mono"></b></label>
+      </div></div>
+    <div class="group"><span class="mono">Printer</span>
+      <div class="row">
+        <button class="btn" data-cmd="reprint">Reprint last</button>
+        <button class="btn" data-cmd="test_print">Test print</button>
+      </div></div>
+    <div class="group"><span class="mono">Feed</span>
+      <div class="row">
+        <button class="btn" data-cmd="feed">Review videos</button>
+        <button class="btn warn" data-cmd="clear_feed">Clear feed</button>
+        <div class="feed" hidden></div>
+      </div></div>
+    <details class="danger"><summary class="mono">Power</summary>
+      <div class="row">
+        <button class="btn" data-cmd="restart_app">Restart app</button>
+        <button class="btn warn" data-cmd="reboot">Reboot Pi</button>
+        <button class="btn warn" data-cmd="shutdown">Shut down</button>
+      </div></details>
+    <details class="log"><summary class="mono">Log</summary><pre></pre></details>
+    </div></div>
+  </section>
+</template>
+
+<script>
+(() => {
+  const $ = (s, el = document) => el.querySelector(s);
+  const main = $("#main");
+  let pin = "";
+  try { pin = localStorage.getItem("booth-pin") || ""; } catch {}
+
+  const toast = (msg) => { const t = $("#toast"); t.textContent = msg; t.classList.add("show");
+    clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), 2600); };
+  setInterval(() => { $("#clock").textContent = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); }, 1000);
+
+  let port = 8080, gen = 0;  // gen: bumped whenever the cards are rebuilt, so old timers stop
+  const base = (host) => `http://${host}:${port}`;
+  const api = async (host, path, opts = {}) => {
+    const r = await fetch(base(host) + path, { ...opts, headers: { "X-Pin": pin, "Content-Type": "application/json" },
+                                              signal: AbortSignal.timeout(8000) });
+    if (r.status === 401) { gate("Wrong PIN"); throw new Error("pin"); }
+    return r;
+  };
+
+  function gate(msg) {
+    gen++; cards.clear(); $("#strip").innerHTML = "";
+    main.innerHTML = `<div class="gate"><form><h1>Booth control.</h1><span class="mono">${msg || "Enter the PIN"}</span>
+      <input class="note" inputmode="numeric" autocomplete="off" aria-label="PIN"><button class="btn primary">Open dashboard</button></form></div>`;
+    const f = $("form", main);
+    f.onsubmit = (e) => { e.preventDefault(); pin = $("input", f).value.trim();
+      try { localStorage.setItem("booth-pin", pin); } catch {} start(); };
+    $("input", f).focus();
+  }
+
+  const cards = new Map();  // host -> {label, cls, alerts, el}
+  function strip() {
+    const box = $("#strip"); box.innerHTML = "";
+    let alerts = 0;
+    for (const c of cards.values()) {
+      alerts += c.alerts;
+      const a = document.createElement("a"); a.href = "#" + c.el.id; a.className = "state " + c.cls;
+      a.textContent = `L${c.line} ${c.label}${c.alerts ? " · " + c.alerts + "!" : ""}`.toUpperCase();
+      box.append(a);
+    }
+    if (alerts) { const x = document.createElement("span"); x.className = "state s-down"; x.textContent = `${alerts} ALERT${alerts > 1 ? "S" : ""}`; box.append(x); }
+  }
+  const hhmm = (t) => new Date(t * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const fmtUp = (s) => s == null ? "–" : s < 3600 ? `${Math.round(s / 60)}m` : `${Math.floor(s / 3600)}h ${Math.round(s % 3600 / 60)}m`;
+  const STATE = {
+    idle: ["Free", "s-free"], greeting: ["On a call", "s-call"], listening: ["Listening", "s-call"],
+    hold: ["Rendering", "s-hold"], ready: ["Watching", "s-call"], busy: ["Hanging up", "s-free"],
+  };
+
+  function card(host) {
+    const el = $("#card").content.firstElementChild.cloneNode(true);
+    const img = $(".screen img", el);
+    const guessLine = (host.match(/booth-(\d+)/) || [])[1] || "?";
+    let st = null, shotUrl = null, busy = false;
+
+    const send = async (cmd, args = {}) => {
+      if (busy) return toast("Still working on the last one…"); busy = true;
+      el.setAttribute("aria-busy", "true");
+      try {
+        const r = await (await api(host, "/api/cmd", { method: "POST", body: JSON.stringify({ cmd, args }) })).json();
+        toast(r.ok ? (r.note || r.what || "Done") : (r.error || "Didn’t work"));
+        refresh();
+        return r;
+      } catch (e) { if (e.message !== "pin") toast("Can't reach " + host); }
+      finally { busy = false; el.removeAttribute("aria-busy"); }
+    };
+
+    el.addEventListener("click", async (e) => {
+      const b = e.target.closest("[data-cmd]"); if (!b) return;
+      const c = b.dataset.cmd, line = st?.system?.line || "?", onCall = !!st?.booth?.off_hook;
+      if (c === "pull" && !confirm(onCall ? `End the call on Line ${line} and take the video off the screen? The caller is asked to hang up; nothing is kept.`
+                                          : `Take the video on Line ${line}'s screen out of the loop?`)) return;
+      if (c === "restart_app" && !confirm(onCall ? `Line ${line} is on a call. Restart anyway? The caller loses their video.` : `Restart Line ${line}'s app? Back in about 5 seconds.`)) return;
+      if (c === "pause") return send("pause", { note: $(".note", el).value.trim() });
+      if (c === "screen-on" || c === "screen-off") return send("screen", { on: c === "screen-on" });
+      if (c === "model-h3" || c === "model-flux") return send("model", { first: c === "model-flux" ? "flux" : "h3" });
+      if (c === "feed") return showFeed();
+      if (c === "clear_feed" && !confirm(`Clear every video from Line ${line}'s screen? They're kept in the archive.`)) return;
+      if (c === "reboot" && !confirm(`${onCall ? `Line ${line} is on a call. ` : ""}Reboot Line ${line}? It's back in about a minute.`)) return;
+      if (c === "shutdown" && (prompt(`Shut down Line ${line}? Someone has to unplug and replug it to start it again. Type ${line} to confirm.`) || "").trim() !== String(line)) return;
+      if (c === "hide") { if (!confirm("Take this video off the screen?")) return;
+        const r = await send("hide", { file: b.dataset.file }); if (r?.ok) b.closest(".item").remove(); return; }
+      send(c);
+    });
+    $(".note", el).addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); if (st?.booth?.paused != null) send("pause", { note: e.target.value.trim() }); else e.target.blur(); }
+    });
+    el.addEventListener("change", (e) => {
+      const r = e.target.closest("[data-vol]"); if (r) send(r.dataset.vol, { value: +r.value });
+    });
+    el.addEventListener("input", (e) => {
+      const r = e.target.closest("[data-vol]"); if (r) r.nextElementSibling.textContent = r.value + "%";
+    });
+
+    async function showFeed() {
+      const box = $(".feed", el);
+      try {
+        const r = await (await api(host, "/api/feed")).json();
+        if (!r.ok) return toast(r.error || "No feed");
+        box.hidden = false; box.innerHTML = r.feed.length ? "" : "<span>Nothing in the feed yet.</span>";
+        for (const it of r.feed) {
+          const d = document.createElement("div"); d.className = "item";
+          const im = document.createElement("img"); im.alt = it.prompt;
+          if (it.still) api(host, "/api/still?f=" + encodeURIComponent(it.still)).then(x => x.blob()).then(b => im.src = URL.createObjectURL(b)).catch(() => {});
+          const p = document.createElement("span"); p.textContent = it.prompt;
+          const h = document.createElement("button"); h.className = "btn warn"; h.dataset.cmd = "hide"; h.dataset.file = it.file; h.textContent = "Hide";
+          d.append(im, p, h); box.append(d);
+        }
+      } catch (e) { if (e.message !== "pin") toast("Can't reach " + host); }
+    }
+
+    async function refresh() {
+      try {
+        st = await (await api(host, "/api/status")).json();
+      } catch (e) {
+        if (e.message === "pin") return;
+        st = null;
+      }
+      paint();
+    }
+
+    function paint() {
+      const sys = st?.system, b = st?.booth;
+      $(".name", el).textContent = `Line ${sys?.line || guessLine}`;
+      $(".host", el).textContent = sys ? `${sys.host} · ${sys.ip || ""}` : host;
+      const s = $(".state", el);
+      let label, cls;
+      if (!st) [label, cls] = ["Offline", "s-off"];
+      else if (!b) [label, cls] = [sys.app_running ? "Starting" : "App down", sys.app_running ? "s-off" : "s-down"];
+      else if (b.paused !== null && !b.off_hook) [label, cls] = ["Out of order", "s-out"];
+      else [label, cls] = STATE[b.state] || [b.state, "s-free"];
+      s.textContent = label.toUpperCase(); s.className = "state " + cls;
+      const ago = $(".ago", el), age = st ? Math.round(Date.now() / 1000 - st.at) : null;
+      ago.textContent = st ? (age < 5 ? "live" : `${age}s ago`) : "";
+      ago.classList.toggle("stale", st && age >= 10);
+
+      $(".screen .dark", el).hidden = !(sys && sys.screen_on === false);
+      $(".said", el).textContent = b?.prompt ? `“${b.prompt}”` : "";
+
+      const v = [];
+      if (sys) {
+        const w = sys.wifi || {};
+        v.push([`Wi-Fi ${w.ssid ? (w.quality ?? "?") + "%" : "none"}`, !w.ssid ? "bad" : w.quality < 40 ? "warn" : ""]);
+        if (b) v.push([b.online ? "fal ✓" : "fal unreachable", b.online ? "" : "bad"]);
+        v.push([`${sys.temp ?? "?"}°C`, sys.throttled ? "bad" : sys.temp > 70 ? "warn" : ""]);
+        if (sys.undervolt) v.push(["Under-voltage", "bad"]);
+        v.push([sys.handset ? "Handset ✓" : "Handset missing", sys.handset ? "" : "bad"]);
+        v.push([sys.printer ? "Printer ✓" + (b?.stats.last_print ? " · last " + hhmm(b.stats.last_print) : "") : "No printer", sys.printer ? "" : "bad"]);
+        if (b?.stats.print_fails) v.push([`${b.stats.print_fails} print fail${b.stats.print_fails > 1 ? "s" : ""}`, "warn"]);
+        if (b?.stats.failed) v.push([`${b.stats.failed} render fail${b.stats.failed > 1 ? "s" : ""}`, "warn"]);
+        if (b?.stats.fallbacks) v.push([`Backup model ×${b.stats.fallbacks}`, "warn"]);
+        v.push([`Disk ${sys.disk_free_gb} GB`, sys.disk_free_gb < 2 ? "warn" : ""]);
+        if (b) v.push([`${b.first_model} first`, ""], [`App up ${fmtUp(b.app_up)}`, ""]);
+      }
+      $(".vitals", el).innerHTML = "";
+      for (const [t, c] of v) { const x = document.createElement("span"); x.className = "v " + c; x.textContent = t; $(".vitals", el).append(x); }
+
+      const k = (n, val) => $(`[data-k=${n}]`, el).textContent = val ?? "–";
+      k("calls", b?.call_no || b?.stats.calls); k("videos", b?.stats.videos);
+      k("avg", b?.render_avg != null ? b.render_avg + "s" : null); k("prints", b?.stats.prints);
+
+      const err = $(".err", el), le = b?.last_error;
+      err.hidden = !(le && Date.now() / 1000 - le.at < 600);
+      if (!err.hidden) err.textContent = `${new Date(le.at * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} · ${le.what}`;
+
+      for (const [c, on] of [["resume", b && b.paused === null], ["pause", b && b.paused !== null],
+                             ["screen-on", sys?.screen_on === true], ["screen-off", sys?.screen_on === false],
+                             ["model-h3", b?.first_model === "H3 Max"], ["model-flux", b?.first_model === "FLUX 3 Max"]])
+        $(`[data-cmd="${c}"]`, el).classList.toggle("on", !!on);
+      for (const btn of el.querySelectorAll("[data-cmd]")) {
+        const c = btn.dataset.cmd, sysCmd = ["screen-on", "screen-off", "restart_app", "reboot", "shutdown"].includes(c);
+        btn.disabled = !st || (!b && !sysCmd);
+      }
+      $('[data-cmd="reprint"]', el).disabled ||= !b?.can_reprint;
+      for (const r of el.querySelectorAll("[data-vol]")) {
+        const val = sys?.[r.dataset.vol];
+        if (val != null && document.activeElement !== r) { r.value = val; r.nextElementSibling.textContent = val + "%"; }
+        r.disabled = !sys;
+      }
+      const alerts = el.querySelectorAll(".v.bad").length + (err.hidden ? 0 : 1) + (cls === "s-down" || cls === "s-off" ? 1 : 0);
+      cards.set(host, { line: sys?.line || guessLine, label, cls, alerts, el });
+      el.id = "line-" + (sys?.line || host.replace(/\W/g, ""));
+      strip();
+      $('[data-cmd="pull"]', el).textContent = b?.off_hook ? "End call + take it off the screen" : "Take it off the screen";
+      $('[data-cmd="pull"]', el).disabled = !b;
+      if (st?.log && $("details.log", el).open) $("details.log pre", el).textContent = st.log.join("\n");
+    }
+
+    async function shot() {
+      if (document.hidden || !st || st.system?.screen_on === false) return;
+      try {
+        const r = await api(host, "/api/screen.jpg");
+        if (!r.ok) return;
+        const url = URL.createObjectURL(await r.blob());
+        img.src = url; if (shotUrl) URL.revokeObjectURL(shotUrl); shotUrl = url;
+      } catch {}
+    }
+
+    $("details.log", el).addEventListener("toggle", paint);
+    const mine = gen;
+    refresh().then(shot);
+    const t1 = setInterval(() => mine === gen ? refresh() : clearInterval(t1), 3000);
+    const t2 = setInterval(() => mine === gen ? shot() : clearInterval(t2), 3000);
+    return el;
+  }
+
+  async function start() {
+    gen++; main.innerHTML = ""; cards.clear();
+    let booths = ["fal-booth-1.local", "fal-booth-2.local"];
+    try {
+      const c = await (await fetch("/config.json")).json();
+      booths = c.booths; port = c.port || 8080;
+      if (c.pin && !pin) pin = c.pin;
+    } catch {}
+    for (const h of booths) main.append(card(h));
+  }
+
+  start();  // the PIN comes from this Mac's staff.pin; a 401 from any booth asks for it
+})();
+</script>
+</body>
+</html>
