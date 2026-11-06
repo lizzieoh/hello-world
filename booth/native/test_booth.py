@@ -185,7 +185,9 @@ def test_full_call():
     wait(lambda: booth.view["said"] == "“a red phone ringing on the moon”", 5, "prompt on screen")
     wait(lambda: booth.state == "ready", 8, "video ready")
     # speech to text, both IP checkers at once, then the video
-    assert client.calls[:4] == [B.Fal.STT, B.Fal.IP_CHECK, B.Fal.IP_CHECK, "minimax/h3-max/text-to-video"], client.calls
+    # speech to text, then the video starts alongside both IP checkers (it waits on their verdict to be shown)
+    assert client.calls[0] == B.Fal.STT and sorted(client.calls[1:4]) == sorted(
+        [B.Fal.IP_CHECK, B.Fal.IP_CHECK, "minimax/h3-max/text-to-video"]), client.calls
     url = booth.screen.calls("video")[-1][1]
     assert url == URL and booth.screen.calls("video")[-1][2] is True  # muted
     wait(lambda: booth.view["scene"] == "ready" and "ANOTHER TAKE" in booth.screen.last_text, 2, "ready screen")
@@ -413,8 +415,11 @@ def test_ip_is_remixed_into_an_original():
     lift_and_say(booth, talk())  # described, not named: the name list misses it, the model doesn't
     wait(lambda: booth.view.get("stage") == "remix", 5, "on hold, making an original")
     wait(lambda: booth.state == "ready", 10, "ready")
-    assert client.prompts == [client.remix + B.ORIGINAL_ONLY], client.prompts  # their words never reach the model
+    # described, not named: the video got a head start on their words, called off when the check flagged it; only the
+    # original is ever shown
+    assert client.prompts == [client.text + B.ORIGINAL_ONLY, client.remix + B.ORIGINAL_ONLY], client.prompts
     assert booth.take["prompt"] == client.remix and booth.take["you_said"] == client.text
+    assert booth.take["url"] == booth.screen.calls("video")[-1][1] and len(booth.screen.calls("video")) == 1
     bill = {(label, model): round(usd, 4) for label, model, usd in booth.take["costs"]}
     # two checks (their words, then the original) on one line, and the remix on its own
     # both checkers race on each check; GPT-6 Luna makes the original
@@ -473,7 +478,9 @@ def test_ip_check_down_makes_nothing():
     client.plan[B.Fal.IP_CHECK] = 500
     lift_and_say(booth, talk())
     wait(lambda: booth.state == "busy", 10, "busy")
-    assert not any("text-to-video" in c for c in client.calls), client.calls
+    # the video's head start is called off when no checker answers: nothing is shown, kept or printed
+    time.sleep(1.5)
+    assert booth.state == "busy" and booth.take is None and not booth.screen.calls("video"), booth.screen.log
     stop.set()
 
 
@@ -607,14 +614,17 @@ def test_sticker():
     for take in ({"prompt": "orchid", "model": "H3 Max", "secs": 9.6, "url": URL, "costs": costs},
                  {"prompt": long, "you_said": long, "model": "H3 Max", "secs": 9.6, "url": URL, "costs": costs}):
         img = sticker.sticker_image(take, cfg, str(CLIP), B)
-        assert img.size == (sticker.W, sticker.H), img.size  # always exactly one 3 x 6 label
+        assert img.width == sticker.W and 1000 < img.height < 1900, img.size  # as long as it needs, never a scroll
+        narrow = sticker.sticker_image(take, cfg, str(CLIP), B, width=B.DOTS)  # the receipt printer's
+        assert narrow.width == B.DOTS and len(B.escpos(narrow)) > narrow.height * B.DOTS // 8
     img.save(TMP / "sticker.png")
+    h = img.height
     data = sticker.zpl(img)
-    assert data.startswith(b"^XA") and data.endswith(b"^XZ") and f"^LL{sticker.H}".encode() in data
+    assert data.startswith(b"^XA") and data.endswith(b"^XZ") and f"^LL{h}".encode() in data
     data = sticker.epl(img)
     assert data.startswith(b"\r\nN\r\n") and data.endswith(b"P1\r\n")
-    assert b"Q%d,%d\r\n" % (sticker.H, sticker.LABEL_GAP) in data
-    assert len(data) > sticker.H * sticker.W // 8
+    assert b"Q%d,%d\r\n" % (h, sticker.LABEL_GAP) in data
+    assert len(data) > h * sticker.W // 8
     assert not sticker.speaks_zpl("/dev/usb/lp9") and not sticker.in_epl("/dev/usb/lp9")
 
 

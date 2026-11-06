@@ -1472,11 +1472,13 @@ def share_url(take, cfg, words=True):
     parts = urlsplit(url)
     if not base or parts.scheme != "https" or not parts.netloc.endswith("fal.media"):
         return url
-    said = take.get("prompt") or ""
-    if not words and len(said) > 70:  # the receipt: a short version (the full words are printed right there)
-        said = said[:68].rsplit(" ", 1)[0].rstrip(",.;:-") + "…"
+    def short(text, most):  # the receipt: a short version (the full words are printed right there)
+        return text if words or len(text) <= most else text[:most - 2].rsplit(" ", 1)[0].rstrip(",.;:-") + "…"
+    asked = take.get("you_said") or ""
+    said = short(take.get("prompt") or "", 44 if asked else 70)  # both fit, and the QR stays coarse
     q = {"m": parts.netloc + parts.path, "p": said[:140],
-         "o": (take.get("you_said") or "")[:100] if words else "", "l": str(cfg.get("line", "")),
+         "o": short(asked, 44)[:100],  # what they asked for, so the page quotes them right after an IP swap
+         "l": str(cfg.get("line", "")),
          "s": f"{take.get('gen_secs', take.get('secs', 0)):.1f}", "t": str(int(take.get("at") or time.time())),
          "mo": "flux" if "flux" in str(take.get("model", "")).lower() else "h3"}
     return base + "#" + "&".join(f"{k}={quote(v, safe='/.,').replace('%20', '+')}" for k, v in q.items() if v)
@@ -1675,9 +1677,6 @@ def receipt_image(take, cfg, src):
         y += max(q.height, 190) + 26
         dots(30)
 
-    text(["$100 IN fal CREDITS: TAP THE TWO fal", "TAGS AT OUR FRONT DESK."], small, 28)
-    y += 14
-    dots(30)
     row("Your creative direct line.", "fal.ai", font=brand_font("display", 26, 500), gap=40)
     return img.crop((0, 0, W, y)).point(lambda v: 255 if v > 200 else 0).convert("1")
 
@@ -1704,10 +1703,11 @@ class Printer:
         src = take.get("file") or take["url"]
         path = printer_path(self.cfg)
         import sticker
+        B = sys.modules[__name__]
         if sticker.speaks_zpl(path):  # a Zebra label printer: the receipt as one sticker, in its language
-            data = sticker.label(path, sticker.sticker_image(take, self.cfg, src, sys.modules[__name__]))
-        else:
-            data = escpos(receipt_image(take, self.cfg, src))
+            data = sticker.label(path, sticker.sticker_image(take, self.cfg, src, B))
+        else:  # an 80 mm receipt printer: the same design, 576 dots across
+            data = escpos(sticker.sticker_image(take, self.cfg, src, B, width=DOTS))
         if "/" not in path:
             # a printer queue name (e.g. on a Mac): the same bytes, passed through untouched
             subprocess.run(["lp", "-d", path, "-o", "raw"], input=data, check=True, capture_output=True, timeout=30)
@@ -2053,16 +2053,28 @@ class Booth:
         if heard_nothing(prompt) or BLOCKED.search(prompt) or rid in self.cancelled:
             return
         self.llm_bill[rid] = bill = []
+        # The video starts now, alongside the IP check, so a clean prompt doesn't wait for the verdict (~1.7 s). The
+        # check still decides: a flag calls the render off at fal before anything is shown, kept or printed.
+        # A name on the list (SpongeBob, Marvel...) is flagged for free, so it never gets a head start.
+        spec = None if IP_NAMES.search(prompt) else self._start_render(cid, rid, prompt)
+
+        def call_off():
+            if spec:
+                spec["stop"] = True
         try:
             borrowed = self.fal.check_ip(prompt, bill)
         except Exception:
+            call_off()
             return self.post(("failed", cid, rid, BUSY))
         if rid in self.cancelled:
-            return
+            return call_off()
         if not borrowed:
             winner = next((m for label, m, _ in bill if label == "IP CHECK"), "")
             self.post(("stage", cid, rid, "checked", winner))
+            if spec:
+                return self._finish_render(cid, rid, prompt, t0, spec)
             return self._render(cid, rid, prompt, t0)
+        call_off()  # flagged: the head start is called off at fal and never shown, kept or printed
         # Someone else's IP: never made. The agent makes them an original with the same energy instead.
         log.info("someone else's IP (%s): %r", borrowed, prompt)
         self.post(("remixing", cid, rid))
@@ -2165,6 +2177,48 @@ class Booth:
         self.pending = rid = next(self.seq)
         threading.Thread(target=self._render, args=(self.cid, rid, idea, time.monotonic(), 0, None, True),
                          daemon=True).start()
+
+    def _start_render(self, cid, rid, prompt):
+        """The video for `prompt`, started in the background before it's cleared. Nothing reaches the screen until
+        _finish_render says so; spec["stop"] = True calls it off at fal."""
+        spec = {"stop": False, "passed": False, "model": None, "out": None, "t": time.monotonic(),
+                "done": threading.Event()}
+
+        def trying(name):
+            spec["model"] = name
+            if spec["passed"]:
+                self.post(("stage", cid, rid, "render", name))
+
+        def go():
+            try:
+                spec["out"] = self.fal.render(prompt, stop=lambda: spec["stop"] or rid in self.cancelled, trying=trying)
+                log.info("rendered in %.1f s (started beside the IP check)", time.monotonic() - spec["t"])
+            except Exception as e:
+                spec["out"] = e
+            finally:
+                spec["done"].set()
+
+        threading.Thread(target=go, daemon=True).start()
+        return spec
+
+    def _finish_render(self, cid, rid, prompt, t0, spec):
+        """The check passed: the head-start video is theirs once it lands."""
+        spec["passed"] = True
+        if spec["model"]:
+            self.post(("stage", cid, rid, "render", spec["model"]))
+        spec["done"].wait()
+        out = spec["out"]
+        if isinstance(out, Cancelled):
+            return log.info("render called off at fal")
+        if isinstance(out, Refused):
+            return self.post(("failed", cid, rid, REFUSED))
+        if isinstance(out, Exception) or out is None:
+            return self.post(("failed", cid, rid, BUSY))
+        url, model = out
+        now = time.monotonic()
+        self.post(("rendered", cid, rid, {"prompt": prompt, "you_said": None, "take": 0, "url": url, "model": model,
+                                          "secs": now - t0, "gen_secs": now - spec["t"], "at": time.time(),
+                                          "printed": False, "answered": False, "sound": False, "surprise": False}))
 
     def _render(self, cid, rid, prompt, t0, take=0, you_said=None, surprise=False):
         t = time.monotonic()
