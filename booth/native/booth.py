@@ -787,6 +787,7 @@ TYPE = {"H1": ("mono", 260, 0.0), "H2": ("mono", 132, 0.0), "H3": ("mono", 84, 0
         "D4": ("display", 72, -0.02), "B": ("label", 64, -0.01), "S": ("body", 48, -0.01), "M": ("mono", 44, 0.04),
         "MS": ("mono", 34, 0.06)}
 SCREEN_W, SCREEN_H, MARGIN = 1920, 1080, 72
+PAD_X = 56                        # floating keys and chips sit this far in from the picture's edges
 HEADER, STRIP = 96, 174           # the header's height, the key strip's height
 FRAME = (0, 0, SCREEN_W, SCREEN_H)  # the video on the ready screen: the whole screen, the key strip across its foot
 KEY_ORDER = "123456789*0#"        # the strip lists keys in the order they sit on the phone
@@ -910,6 +911,35 @@ class Look:
         out.append(self.text(x + 60, y + 60, key, "H3", BLACK, an=5, alpha=0x99 if dim else 0))
         out.append(self.text(x + 144, y + 60, label.upper(), "K", ink, an=4, alpha=0x99 if dim else 0))
         return out, 144 + self.width(label.upper(), "K") + 80
+
+    def pill(self, x, y, key, label, primary=False, dim=False, h=88):
+        """A floating key: the digit on a square (Model Purple for the one to press, Light Purple, the keypad's own
+        colour, otherwise), its
+        label beside it on White. Reads on the video and on Light Sage alike. Returns (drawing, width)."""
+        a = 0x99 if dim else 0
+        lw = self.width(label.upper(), "M")
+        w = h + 24 + lw + 28
+        out = [self.rect(x, y, w, h, WHITE, a), self.rect(x, y, h, h, MODEL_PURPLE if primary else LIGHT_PURPLE, a),
+               self.text(x + h / 2, y + h / 2, key, "H3", BLACK, an=5, alpha=a),
+               self.text(x + h + 24, y + h / 2, label.upper(), "M", BLACK, an=4, alpha=a)]
+        return out, w
+
+    def keys(self, keys, x=PAD_X, y=SCREEN_H - PAD_X - 88):
+        """Only the keys that do something now, floating bottom left, in phone order. keys = {key: (label, primary,
+        dim)}. No tray: the picture runs to the edges under them."""
+        out = []
+        for k in sorted(keys, key=KEY_ORDER.index):
+            label, primary, dim = keys[k]
+            cap, w = self.pill(x, y, k, label, primary, dim)
+            out += cap
+            x += w + 16
+        return out
+
+    def chip(self, x, y, text, tok="MS", colour=WHITE, an=1, h=60, pad=22):
+        """A White chip of mono caps over the picture. an=1 anchors its bottom left at (x, y), an=3 bottom right."""
+        w = self.width(text, tok) + 2 * pad + 12  # a little extra: the curly quotes measure narrow
+        x0 = x - w if an == 3 else x
+        return [self.rect(x0, y - h, w, h, colour), self.text(x0 + pad, y - h / 2, text, tok, BLACK, an=4)], w
 
     def strip(self, keys, tray=SAGE):
         """The key strip: only the keys that do something now, in phone order. keys = {key: (label, primary, dim)}."""
@@ -2646,38 +2676,49 @@ class Booth:
         self.screen.text("\n".join(out))
 
     def _plaque(self, L, head, sub="", tok="H2", y=None):
-        """The booth plaque: Light Sage, and the words big and centred in mono caps."""
+        """No video yet: Light Sage, the words big and centred in mono caps, nothing else."""
         out = [L.mat(SAGE)]
         lines = L.wrap(head.upper(), tok, SCREEN_W - 480, lines=3, balance=True)
         size = TYPE[tok][1]
-        block = size * len(lines) + (40 + 64 if sub else 0)
-        y = (SCREEN_H - STRIP - block) / 2 if y is None else y
+        block = size * len(lines) + (40 + 56 if sub else 0)
+        y = (SCREEN_H - 200 - block) / 2 + 40 if y is None else y
         out += L.lines(SCREEN_W / 2, y, lines, tok, gap=size, an=8)
         if sub:
-            out += L.lines(SCREEN_W / 2, y + size * len(lines) + 40, L.wrap(sub.upper(), "K", SCREEN_W - 480, lines=2),
-                           "K", gap=64, an=8)
+            out += L.lines(SCREEN_W / 2, y + size * len(lines) + 40, L.wrap(sub.upper(), "M", SCREEN_W - 480, lines=2),
+                           "M", gap=56, an=8)
         return out
+
+    def _pick_up(self, L, label="PICK UP"):
+        """The one thing to do on a free line: a Model Purple key, bottom right."""
+        tok = "H3" if len(label) < 12 else "K"
+        h, pad = (128, 48) if tok == "H3" else (96, 36)
+        w = L.width(label, tok) + 2 * pad
+        x, y = SCREEN_W - PAD_X - w, SCREEN_H - PAD_X - h
+        return [L.rect(x, y, w, h, MODEL_PURPLE), L.text(x + w / 2, y + h / 2, label, tok, an=5)]
+
+    def _said(self, L, said, room):
+        """What was said, as one quiet White chip bottom left, cut to fit."""
+        said = (said or "").upper()
+        if not said:
+            return []
+        lines = L.wrap(said, "M", room, lines=2, balance=True)
+        w = max(L.width(l, "M") for l in lines) + 2 * 24 + 12
+        h = 56 * len(lines) + 32
+        y = SCREEN_H - PAD_X - h
+        return [L.rect(PAD_X, y, w, h, WHITE)] + L.lines(PAD_X + 24, y + 16, lines, "M", gap=56)
 
     def _scene_attract(self, v, L):
-        """Free line: what this phone has made, full screen, with what was said under it and a block to pick up."""
-        band = 200
-        if self.attract:
-            out = [L.rect(0, SCREEN_H - band, SCREEN_W, band, SAGE)]
-            lines = L.wrap((v.get("said") or "").upper(), "K", SCREEN_W - 560 - 2 * MARGIN, lines=2, balance=True)
-            out += L.lines(MARGIN, SCREEN_H - band / 2 - 32 * len(lines), lines, "K", gap=64)
-        else:  # nothing made yet: the promise
-            out = self._plaque(L, "Pick up.", "Say an idea, get a 10-second video.", tok="H1")
-            band = STRIP
-        out.append(L.rect(SCREEN_W - 560, SCREEN_H - band, 560, band, MODEL_PURPLE))
-        out.append(L.text(SCREEN_W - 280, SCREEN_H - band / 2, "PICK UP", "H3", an=5))
-        return out
+        """Free line: what this phone has made, edge to edge, what was said in a small chip, and Pick up."""
+        if not self.attract:  # nothing made yet: the promise
+            return self._plaque(L, "Pick up.", "Say an idea, get a 10-second video.", tok="H1") + self._pick_up(L)
+        return self._said(L, v.get("said"), 980) + self._pick_up(L)
 
     def _scene_ringing(self, v, L):
-        return self._plaque(L, "Pick up.", "Incoming call", tok="H1")
+        return self._plaque(L, "Pick up.", "Incoming call", tok="H1") + self._pick_up(L)
 
     def _scene_greeting(self, v, L):
         out = self._plaque(L, v.get("head") or "Leave your prompt after the beep.", v.get("sub", ""))
-        out += L.strip({"1": ("Surprise me", False, False)}, tray=SAGE)
+        out += L.keys({"1": ("Surprise me", False, False)})
         return out
 
     def _scene_listening(self, v, L):
@@ -2705,57 +2746,44 @@ class Booth:
         out.append(L.rect(tx, mid - 3, x0 + span - tx, 6, MODEL_PURPLE, 0x99))  # the track still to fill
         ph = 20 if pause else 20 + 24 * (0.5 + 0.5 * math.sin(now * 3)) + tall * min(1.0, level * 1.4)
         out.append(L.rect(tx, mid - ph / 2, w, ph, MODEL_PURPLE, fade))  # the playhead, on the voice
-        out += L.strip({"1": ("Surprise me", False, False), "*": ("Start over", False, False),
-                        "#": ("Send", True, False)}, tray=SAGE)
+        out += L.keys({"1": ("Surprise me", False, False), "*": ("Start over", False, False),
+                       "#": ("Send", True, False)})
         return out
 
     def _scene_hold(self, v, L):
-        """On hold: their words, a giant clock, and one line saying which model has the call right now."""
+        """On hold: a giant clock, their words small above it, and one line saying which model has the call."""
         now = time.monotonic()
         secs = now - (self.hold_from or now)
         out = [L.mat(SAGE)]
         said = (v.get("said") or "Hearing you…").upper()
-        out += L.lines(SCREEN_W / 2, 330, L.wrap(said, "H3", SCREEN_W - 480, lines=2, balance=True), "H3", gap=84, an=8)
-        out.append(L.text(SCREEN_W / 2, 500, f"{secs:4.1f}s".strip(), "H1", an=8))  # mono: the digits never jitter
+        out += L.lines(SCREEN_W / 2, 230, L.wrap(said, "K", SCREEN_W - 560, lines=2, balance=True), "K", gap=68, an=8)
+        out.append(L.text(SCREEN_W / 2, 390, f"{secs:4.1f}s".strip(), "H1", an=8))  # mono: the digits never jitter
         stage, model = v.get("stage", "hear"), v.get("model") or ""
         doing = {"hear": "Hearing you", "check": "Checking it's original",
                  "remix": "Making it an original", "render": "Rendering"}[stage]
         if stage == "render" and model:
-            doing = f"{'Backup line' if v.get('backup') else 'Rendering'} · {model}"
-        out.append(L.text(SCREEN_W / 2, 790, (doing + "…").upper(), "K", an=8))
-        out += L.strip({"*": ("Start over", False, False)}, tray=SAGE)
+            doing = f"{'Backup line' if v.get('backup') else 'Rendering'} · {model_name(model)}"
+        out.append(L.text(SCREEN_W / 2, 690, (doing + "…").upper(), "M", an=8))
+        out += L.keys({"*": ("Start over", False, False)})
         return out
-
-    def _chip(self, L, x, y, model):
-        """fal's chip on generated video, naming the model: White, Black mono, 16 px in from the top left."""
-        if not model:
-            return []
-        label = model_name(model)
-        return [L.rect(x + 16, y + 16, L.width(label, "MS") + 24, 48, WHITE), L.text(x + 28, y + 40, label, "MS", an=4)]
 
     def _scene_ready(self, v, L):
-        t, keys = self.take, v.get("keys") or {}
-        out = self._chip(L, 0, 0, t.get("model"))
-        out += L.strip({"2": (keys.get("2") or "Sound", False, False),
-                        "3": (keys.get("3") or "Another take", False, keys.get("3") == "3 takes max"),
-                        "0": (keys.get("0") or "Print receipt", not keys.get("0"), keys.get("0") == "Printed ✓")},
-                       tray=SAGE)
-        return out
+        """Their video, edge to edge, nothing over it but the three keys that work."""
+        keys = v.get("keys") or {}
+        return L.keys({"2": (keys.get("2") or "Sound", False, False),
+                       "3": (keys.get("3") or "Another take", False, keys.get("3") == "3 takes max"),
+                       "0": (keys.get("0") or "Print", not keys.get("0"), keys.get("0") == "Printed ✓")})
 
     def _scene_after(self, v, L):
-        """Their caller hung up: their video stays a while before the feed comes back."""
-        t = self.take
-        if not t:
+        """Their caller hung up: their video stays a while, edge to edge, before the feed comes back."""
+        if not self.take:
             return self._scene_attract(v, L)
-        out = self._chip(L, 0, 0, t.get("model"))
-        out.append(L.rect(0, SCREEN_H - STRIP, SCREEN_W, STRIP, SAGE))
-        out.append(L.text(SCREEN_W / 2, SCREEN_H - STRIP / 2, "PICK UP TO MAKE YOUR OWN", "H3", an=5))
-        return out
+        return self._pick_up(L, "PICK UP TO MAKE YOUR OWN")
 
     def _scene_message(self, v, L):
         out = self._plaque(L, v.get("head", ""), v.get("sub", ""))
         if v.get("retry"):
-            out += L.strip({"*": ("Try again", True, False)}, tray=SAGE)
+            out += L.keys({"*": ("Try again", True, False)})
         return out
 
     def _scene_staff(self, v, L):
