@@ -628,28 +628,34 @@ def test_sticker():
     assert not sticker.speaks_zpl("/dev/usb/lp9") and not sticker.in_epl("/dev/usb/lp9")
 
 
-def test_long_prompt_gets_mmhm():
-    """Someone talking for a long time hears a soft "mm-hm" now and then (never in a pause, at most three); a short
-    prompt hears none. The listening screen never counts down."""
+def test_listening_is_quiet_and_says_so():
+    """No "mm-hm" in the earpiece, however long they talk: the screen says LISTENING and its meter moves instead."""
     booth, client, stop = make(silence=2.0, listen_max=40.0)
     played = []
     real = booth.line.play
     booth.line.play = lambda name, *a, **k: (played.append(name), real(name, *a, **k))[1]
-    assert booth.line.mmhms == 2
-    lift_and_say(booth, talk(secs=25))
-    wait(lambda: booth.state == "hold", 15, "hold after the long prompt")
-    nods = [n for n in played if n.startswith("mmhm")]
-    assert 2 <= len(nods) <= 3, played
-    stop.set()
-    booth, client, stop = make()
-    played = []
-    real = booth.line.play
-    booth.line.play = lambda name, *a, **k: (played.append(name), real(name, *a, **k))[1]
-    lift_and_say(booth, talk(secs=3))
-    booth.set_view("listening")
-    assert "SENDING" not in booth.screen.last_text
-    wait(lambda: booth.state == "hold", 10, "hold")
+    lift_and_say(booth, talk(secs=12))
+    wait(lambda: booth.state == "listening", 5, "listening")
+    assert "LISTENING" in booth.screen.last_text
+    wait(lambda: booth.state == "hold", 20, "hold after the long prompt")
     assert not [n for n in played if n.startswith("mmhm")], played
+    assert "mmhm0" not in booth.line.sounds
+    stop.set()
+
+
+def test_hang_up_before_an_ip_swap_still_makes_one():
+    """They asked for someone else's IP, it couldn't be made original, and they'd already hung up: nobody's there
+    to ask for another idea, so the booth makes one of its own and puts it up on the screen."""
+    booth, client, stop = make()
+    client.text = "SpongeBob dancing on the beach"
+    client.remix = "SpongeBob in a top hat dancing on the beach"  # still borrowed, from both models
+    lift_and_say(booth, talk())
+    wait(lambda: booth.state == "hold", 8, "hold")
+    booth.post(("hook", False))
+    wait(lambda: booth.state == "idle", 3, "idle")
+    wait(lambda: booth.screen.calls("video"), 15, "a video up on the screen anyway")
+    assert any("text-to-video" in c for c in client.calls), client.calls
+    assert booth.last_take and booth.last_take.get("surprise"), booth.last_take
     stop.set()
 
 

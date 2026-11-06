@@ -52,7 +52,7 @@ Only original ideas, and nobody walks away without a video. Before anything is g
 
 Every video prompt also asks for original characters and designs only. Rude words get the busy tone (`BLOCKED`).
 
-Hanging up doesn't lose the video. Hang up after **#**, or mid-sentence without pressing it, and the video is still made and goes up on the screen when it's ready. Only **\*** cancels.
+Hanging up doesn't lose the video. Hang up after **#**, mid-sentence without pressing it, or anywhere on hold, and the video is still made and goes up on the screen when it's ready. If they'd asked for someone else's IP and it couldn't be made original, nobody's there to ask for another idea, so the booth makes one of its own ideas instead. Only **\*** cancels.
 
 ## Settings: `native.conf`
 
@@ -130,7 +130,7 @@ line is doing from across the hall. The models, the bill and the links live on t
 |---|---|
 | Free | The last 12 videos, full screen and shuffled, with the prompt under each and a Neon **Pick up** block |
 | Ringing | All Neon: **Pick up.** |
-| Greeting / listening | **Leave your prompt after the beep.** (the voice adds "Press pound when you're done"), then **Go ahead.** with a meter of pixel squares. No countdown. A prompt still going after 7 s gets a soft "mm-hm" in the earpiece (at most three), so callers know the line is open. |
+| Greeting / listening | **Leave your prompt after the beep.** (the voice adds "Press pound when you're done"), then **LISTENING** over a tape of their voice: Model Purple bars laid down left to right across the 30 s track (so the track is the time limit), a breathing playhead before they speak, and the tape fading in a pause as the auto-send nears. No countdown, and nothing in the earpiece while they talk. |
 | On hold | Light Purple: their words, a giant clock, and one line naming the model on the call (**Backup line · FLUX 3 Max** if H3 fails) |
 | Ready | Their video, and the keys: **2** sound, **3** another take, **0** print the receipt (its QR is how they keep the video) |
 | After a hang-up | Their video stays up for 20 s, with **Pick up to make your own** |
@@ -159,7 +159,7 @@ line is doing from across the hall. The models, the bill and the links live on t
 | `dashboard.py`, `dashboard.html` | The control dashboard, on your Mac (above) |
 | `native.conf` | Settings |
 | `fal.key` | The fal API key (made by setup, never committed) |
-| `voice/` | The greeting, hold, menu and mm-hm lines (`phone-voice/4`: greeting and mm-hms re-voiced from the v3 voice) |
+| `voice/` | The greeting, hold and menu lines (`phone-voice/4`: greeting re-voiced from the v3 voice). The `mmhm*.wav` files are no longer played. |
 | `cache/` | Recent videos and the background image. Safe to delete. |
 | `booth.log` | What happened, including every fal failure and fallback |
 | `test_booth.py` | Whole calls with fake hardware (see below) |

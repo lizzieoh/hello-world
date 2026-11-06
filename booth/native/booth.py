@@ -530,8 +530,6 @@ DTMF = {k: (r, c) for r, row in zip([697, 770, 852, 941], ["123", "456", "789", 
         for c, k in zip([1209, 1336, 1477], row)}
 
 
-MMHM_AFTER = 7.0   # seconds into a prompt before the first "mm-hm"
-MMHM_EVERY = 8.0   # and then at most this often (three a prompt)
 
 
 class Clip:
@@ -581,8 +579,6 @@ class Line:
         self.meter = (0.0, False, 0.0)
         self.gain = 1.0  # the volume switch: 1 on loud, cfg["low_volume"] on low
         v = {name: phone_band(load_wav(voice_dir / f"{name}.wav")) for name in ("greeting", "hold", "menu")}
-        # "mm-hm": a soft nod in the earpiece while a long prompt is still coming, so they know the line is open
-        mmhm = [0.6 * phone_band(load_wav(f)) for f in sorted(voice_dir.glob("mmhm*.wav"))]
         click = (np.random.default_rng(1).uniform(-1, 1, int(0.03 * SR)) * 0.3
                  * np.exp(-np.arange(int(0.03 * SR)) / (0.005 * SR))).astype(np.float32)
         self.sounds = {
@@ -596,9 +592,7 @@ class Line:
             "ring": ring(),
             "beep": tone([1000], 0.4),
             "generating_audio": generating_audio(),
-            **{f"mmhm{i}": m for i, m in enumerate(mmhm)},
         }
-        self.mmhms = len(mmhm)
         self.out = self.inp = None
         threading.Thread(target=self._keep_open, daemon=True).start()
 
@@ -725,13 +719,7 @@ class Line:
             if rms > 1e-4:
                 r["floor"] = min(rms, r["floor"] * 1.005)
             if rms > max(0.015, r["floor"] * 3):
-                if not r["heard"]:
-                    r["talk_from"] = now
                 r["heard"], r["last_loud"] = True, now
-                # a long prompt, still going: "mm-hm" every so often (never in a pause, so it can't end the turn)
-                if now - r.get("talk_from", now) >= MMHM_AFTER and now >= r.get("next_mmhm", 0) and r.get("mmhms", 0) < 3:
-                    r["next_mmhm"], r["mmhms"] = now + MMHM_EVERY, r.get("mmhms", 0) + 1
-                    self.post(("mmhm", r["cid"], r["mmhms"]))
             self.meter = (min(1.0, rms / max(0.06, r["floor"] * 12)), r["heard"], now - (r["last_loud"] or now))
             c = self.cfg
             if ((r["heard"] and now - r["last_loud"] > c["silence"]) or (not r["heard"] and now > c["no_speech"])
@@ -783,14 +771,14 @@ def clip_words(s, n):
 # ---------- the screen's look ----------
 # fal's UI system at booth scale: one grid (header 96 px, stage, a key strip 174 px), a few type sizes big enough for
 # a 16" screen read from across the stand, dressed like the booth's plaques: Light Sage, the wall's Model Purple and
-# grey squares and dots around the edge, and the words in big HAL Timezone Mono capitals. Everything is one ASS overlay.
+# and the words in big HAL Timezone Mono capitals (no pixel squares or dots: Lizzie, Nov 6). Everything is one ASS overlay.
 def ass_colour(hex6):
     return f"&H{hex6[4:6]}{hex6[2:4]}{hex6[0:2]}&"
 
 
 WHITE, BLACK, NEON, BRONZE = ass_colour("FFFFFF"), ass_colour("000000"), ass_colour("ADFF00"), ass_colour("403700")
 SAGE, LIGHT_PURPLE = ass_colour("E5ECE7"), ass_colour("D5BBFF")
-MODEL_PURPLE, PIXEL_GREY = ass_colour("AB77FF"), ass_colour("CACED2")  # the wall's pixel squares and dots
+MODEL_PURPLE, RED = ass_colour("AB77FF"), ass_colour("EC0648")  # Red: a fault, for the staff only
 FACES = {"display": ("Focal Maxi Medium", "FocalMaxi-Medium.otf"), "body": ("Focal Text", "FocalText-Regular.otf"),
          "label": ("Focal Text Medium", "FocalText-Medium.otf"), "mono": ("HAL Timezone Mono", "HALTimezone-MonoRegular.otf")}
 # token: (face, size in px, tracking in em)
@@ -802,12 +790,6 @@ SCREEN_W, SCREEN_H, MARGIN = 1920, 1080, 72
 HEADER, STRIP = 96, 174           # the header's height, the key strip's height
 FRAME = (0, 0, SCREEN_W, SCREEN_H)  # the video on the ready screen: the whole screen, the key strip across its foot
 KEY_ORDER = "123456789*0#"        # the strip lists keys in the order they sit on the phone
-# (column, row, square or dot, colour) on a 30 x 17 grid of 64 px cells: the plaque's scatter, kept to the edges
-SCATTER = [(2, 1, "s", ass_colour("CACED2")), (4, 2, "o", ass_colour("AB77FF")), (2, 3, "s", ass_colour("CACED2")),
-           (2, 4, "o", ass_colour("AB77FF")), (7, 2, "s", ass_colour("CACED2")), (13, 0, "s", ass_colour("AB77FF")),
-           (21, 2, "s", ass_colour("AB77FF")), (20, 3, "s", ass_colour("CACED2")), (25, 2, "s", ass_colour("CACED2")),
-           (26, 2, "o", ass_colour("AB77FF")), (28, 4, "s", ass_colour("CACED2")), (1, 9, "s", ass_colour("AB77FF")),
-           (2, 9, "o", ass_colour("CACED2")), (27, 9, "o", ass_colour("AB77FF")), (28, 10, "s", ass_colour("CACED2"))]
 
 
 class Look:
@@ -902,14 +884,6 @@ class Look:
                 f"b {cx + r:.0f} {cy + k:.0f} {cx + k:.0f} {cy + r:.0f} {cx:.0f} {cy + r:.0f} "
                 f"b {cx - k:.0f} {cy + r:.0f} {cx - r:.0f} {cy + k:.0f} {cx - r:.0f} {cy:.0f} "
                 f"b {cx - r:.0f} {cy - k:.0f} {cx - k:.0f} {cy - r:.0f} {cx:.0f} {cy - r:.0f} ")
-
-    def scatter(self, cells=SCATTER, size=64):
-        """The booth wall's squares and dots, on a hidden 64 px grid, clear of the middle where the words go."""
-        paths = {}
-        for col, row, shape, colour in cells:
-            x, y = col * size, row * size
-            paths.setdefault(colour, []).append(self.dot(x, y, size) if shape == "o" else self.box(x, y, size, size))
-        return [self.shape("".join(p), c) for c, p in paths.items()]
 
     def mat(self, colour, hole=None):
         """The whole screen in one colour, with a hole where the video shows through."""
@@ -1461,27 +1435,6 @@ def brand_font(kind, size, weight=None):
     return ImageFont.truetype(find_font(bold=(weight or 400) >= 600 or kind == "display"), size)
 
 
-def pixel_corner(seed, cell=14):
-    """The booth wall's pixel squares for a corner of the receipt: a small L or staircase, solid black for the
-    wall's purple and a 2-dot checker for its grey (a 1-dot checker prints as mud)."""
-    from PIL import Image, ImageDraw
-    rnd = random.Random(seed)
-    img = Image.new("L", (cell * 4, cell * 3), 255)
-    d = ImageDraw.Draw(img)
-    shapes = [[(0, 0), (1, 0), (0, 1)], [(0, 0), (1, 1), (2, 2)], [(0, 0), (1, 0), (2, 0), (2, 1)],
-              [(0, 0), (0, 1), (1, 1), (2, 2)]]
-    for i, (cx, cy) in enumerate(rnd.choice(shapes)):
-        x, y = cx * cell, cy * cell
-        if (i + seed) % 3:
-            d.rectangle([x, y, x + cell - 1, y + cell - 1], fill=0)
-        else:
-            for yy in range(0, cell, 2):
-                for xx in range(0, cell, 2):
-                    if (xx + yy) // 2 % 2 == 0:
-                        d.rectangle([x + xx, y + yy, x + xx + 1, y + yy + 1], fill=0)
-    return img
-
-
 def share_url(take, cfg, words=True):
     """Where the QR on the receipt goes: the event page, with the video (and, `words`, what was
     said) in the part of the link after #, so the page needs no server and the words never reach its logs. The
@@ -1551,7 +1504,7 @@ def thermal_photo(f, gamma):
 
 
 def receipt_image(take, cfg, src):
-    """The receipt, set like a till slip in the booth's brand: the lockup, the wall's pixel squares, when and where,
+    """The receipt, set like a till slip in the booth's brand: the lockup, when and where,
     what they said, the video's clearest frame (chipped with its model, as fal shows every output) and a strip of
     three more, how fast it was made, the itemized call, and a big QR to keep the video."""
     from PIL import Image, ImageDraw
@@ -1619,10 +1572,6 @@ def receipt_image(take, cfg, src):
     lighten = cfg.get("print_lighten", 0)
     stills = iter(frames)
 
-    # the wall's pixel squares in the top corners, a different pattern each call
-    corner = pixel_corner(take.get("call", 0))
-    img.paste(corner, (12, 12))
-    img.paste(corner.transpose(Image.FLIP_LEFT_RIGHT), (W - 12 - corner.width, 12))
     y = 24
     # the lockup (the fal mark, "fal" and CALL-A-FAL in one line), then the line it came from
     if LOGO.exists():
@@ -2029,6 +1978,7 @@ class Booth:
         if what == "greeted" and self.state == "greeting":
             log.info("greeting done, listening (call %d, try %d)", self.cid, self.attempt + 1)
             self.state = "listening"
+            self.tape = {"from": time.monotonic(), "levels": {}}  # the listening screen's trace of their voice
             self.set_view("listening", idea=random.choice(SURPRISE))
             self.line.record(self.cid)
             self.on_tick()
@@ -2151,7 +2101,14 @@ class Booth:
             self.greet(head="Cancelled.", sub="New idea after the beep.")
 
     def on_ask_again(self, cid, rid):
-        """Couldn't make it original: no busy tone, just another go after the beep."""
+        """Couldn't make it original: no busy tone, just another go after the beep. If they've hung up there's no one
+        to ask, so the video is one of ours: whoever hangs up mid-call still gets one."""
+        if rid in self.orphans:
+            idea = random.choice(SURPRISE)
+            log.info("hung up and couldn't make it original: one of ours instead, %r", idea)
+            threading.Thread(target=self._render, args=(cid, rid, idea, time.monotonic(), 0, None, True),
+                             daemon=True).start()
+            return
         if cid != self.cid or rid != self.pending or not self.off_hook:
             return
         self.pending = None
@@ -2416,11 +2373,6 @@ class Booth:
             self.screen.restart_clip()
         self.view["keys"]["2"] = "Sound on"
         self.draw()
-
-    def on_mmhm(self, cid, n):
-        """A long prompt is still coming: a soft "mm-hm" in the earpiece, so they know someone's on the line."""
-        if cid == self.cid and self.state == "listening" and getattr(self.line, "mmhms", 0):
-            self.line.play(f"mmhm{(n - 1) % self.line.mmhms}")
 
     def _print(self, cid, take):
         try:
@@ -2687,13 +2639,15 @@ class Booth:
         else:
             out = getattr(self, "_scene_" + scene)(v, self.look)
         if not self.online:  # for the staff: this line can't reach fal
-            out.append(self.look.rect(SCREEN_W - 300, 0, 300, 56, BLACK))
-            out.append(self.look.text(SCREEN_W - 150, 28, "● OFFLINE", "MS", WHITE, an=5))
+            L = self.look  # fal's chip: White, Black mono, a Red dot for the fault
+            out.append(L.rect(SCREEN_W - 300, 0, 300, 56, WHITE))
+            out.append(L.shape(L.dot(SCREEN_W - 270, 18, 20), RED))
+            out.append(L.text(SCREEN_W - 136, 28, "OFFLINE", "MS", BLACK, an=5))
         self.screen.text("\n".join(out))
 
     def _plaque(self, L, head, sub="", tok="H2", y=None):
-        """The booth plaque: Light Sage, the wall's squares and dots, and the words big and centred in mono caps."""
-        out = [L.mat(SAGE)] + L.scatter()
+        """The booth plaque: Light Sage, and the words big and centred in mono caps."""
+        out = [L.mat(SAGE)]
         lines = L.wrap(head.upper(), tok, SCREEN_W - 480, lines=3, balance=True)
         size = TYPE[tok][1]
         block = size * len(lines) + (40 + 64 if sub else 0)
@@ -2727,14 +2681,30 @@ class Booth:
         return out
 
     def _scene_listening(self, v, L):
+        """Recording: LISTENING, big, over a tape of their voice, like the answering machine the greeting sets up. Each
+        bar is their loudest half second, laid down left to right across the LISTEN_MAX track, so the track filling is
+        also the time limit. Before they speak, an empty track and a breathing playhead; in a pause, the tape fades
+        toward the auto-send (END_PAUSE), and snaps back the moment they talk again."""
         level, heard, quiet = self.line.level() if self.line else (0.0, False, 0.0)
-        out = self._plaque(L, "Go ahead.", y=300)
-        n, size, gap = 16, 64, 16  # a row of the wall's squares, lit by how loud they are
-        x0 = (SCREEN_W - (n * size + (n - 1) * gap)) / 2
-        lit = round(level * n)
-        out.append(L.shape("".join(L.box(x0 + i * (size + gap), 540, size, size) for i in range(lit, n)), PIXEL_GREY))
-        if lit:
-            out.append(L.shape("".join(L.box(x0 + i * (size + gap), 540, size, size) for i in range(lit)), MODEL_PURPLE))
+        out = [L.mat(SAGE), L.text(SCREEN_W / 2, 150, "LISTENING", "H1", an=8)]
+        now = time.monotonic()
+        tape = getattr(self, "tape", None) or {"from": now, "levels": {}}
+        step, span, mid, tall = 0.5, 1200, 600, 260
+        n = max(1, round(self.cfg["listen_max"] / step))
+        x0, pitch = (SCREEN_W - span) / 2, span / n
+        w = max(4.0, pitch * 0.62)
+        k = min(n - 1, int((now - tape["from"]) / step))
+        tape["levels"][k] = max(tape["levels"].get(k, 0.0), level)
+        pause = heard and quiet > 1.0
+        fade = int(0xC0 * min(1.0, (quiet - 1.0) / max(0.1, self.cfg["silence"] - 1.0))) if pause else 0
+        bars = [12 + tall * min(1.0, tape["levels"].get(i, 0.0) * 1.4) for i in range(k)]
+        if bars:
+            out.append(L.shape("".join(L.box(x0 + i * pitch, mid - h / 2, w, h) for i, h in enumerate(bars)),
+                               MODEL_PURPLE, fade))
+        tx = x0 + k * pitch
+        out.append(L.rect(tx, mid - 3, x0 + span - tx, 6, MODEL_PURPLE, 0x99))  # the track still to fill
+        ph = 20 if pause else 20 + 24 * (0.5 + 0.5 * math.sin(now * 3)) + tall * min(1.0, level * 1.4)
+        out.append(L.rect(tx, mid - ph / 2, w, ph, MODEL_PURPLE, fade))  # the playhead, on the voice
         out += L.strip({"1": ("Surprise me", False, False), "*": ("Start over", False, False),
                         "#": ("Send", True, False)}, tray=SAGE)
         return out
@@ -2743,7 +2713,7 @@ class Booth:
         """On hold: their words, a giant clock, and one line saying which model has the call right now."""
         now = time.monotonic()
         secs = now - (self.hold_from or now)
-        out = [L.mat(SAGE)] + L.scatter()
+        out = [L.mat(SAGE)]
         said = (v.get("said") or "Hearing you…").upper()
         out += L.lines(SCREEN_W / 2, 330, L.wrap(said, "H3", SCREEN_W - 480, lines=2, balance=True), "H3", gap=84, an=8)
         out.append(L.text(SCREEN_W / 2, 500, f"{secs:4.1f}s".strip(), "H1", an=8))  # mono: the digits never jitter
