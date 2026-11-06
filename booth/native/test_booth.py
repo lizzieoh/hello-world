@@ -659,6 +659,13 @@ def test_hang_up_before_an_ip_swap_still_makes_one():
     stop.set()
 
 
+def test_swears_are_masked():
+    """Swearing and slurs are starred before anything shows them; ordinary words that contain them are left alone."""
+    assert B.mask_swears("Oh, shit. A fucking huge dog") == "Oh, s***. A f****** huge dog"
+    for fine in ("a cocktail party", "Dickens in Scunthorpe", "a classic glass", "a shiitake farm"):
+        assert B.mask_swears(fine) == fine, fine
+
+
 def test_dashboard_controls():
     """The staff dashboard's socket: status, out of order (a lift gets the busy note), back open, the model order,
     and hiding a video from the feed."""

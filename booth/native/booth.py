@@ -114,6 +114,18 @@ def heard_nothing(prompt):
 BLOCKED = re.compile(r"\b(nude|naked|nudity|porn\w*|sex\w*|nsfw|genital\w*|gore|gory|behead\w*|suicide|nazi\w*|hitler"
                      r"|rape\w*|terroris\w*)\b", re.I)
 
+# Swearing and slurs are made anyway but never shown in full: what was said is masked (f***) before it reaches the
+# screen, the receipt, the event page or the video model. The idea still gets made; the words under the fal logo
+# don't carry it.
+SWEARS = re.compile(r"\b(motherf\w*|f+u+c+k\w*|fck\w*|sh[i1]t\w*|bullshit\w*|b[i1]tch\w*|assholes?|bastards?|dicks?|"
+                    r"cocks?|puss(y|ies)|cunts?|twats?|wh[o0]res?|sluts?|piss\w*|damn\w*|"
+                    r"n[i1]gg\w*|fag\w*|retard\w*|spics?|chinks?|kikes?|trann(y|ies)|wetbacks?|gooks?|dykes?)\b", re.I)
+
+
+def mask_swears(text):
+    """f***: the first letter of each swear word or slur, the rest starred."""
+    return SWEARS.sub(lambda m: m.group(0)[0] + "*" * (len(m.group(0)) - 1), text)
+
 
 # Nobody else's intellectual property, ever: the booth only makes original ideas. These names are refused at once;
 # everything else is read by a language model first (Fal.check_ip), which also catches characters that are
@@ -2043,6 +2055,7 @@ class Booth:
         t = time.monotonic()
         try:
             prompt, endpoint = self.fal.transcribe(wav)
+            prompt = mask_swears(prompt)  # shown, printed and shared masked
             secs = time.monotonic() - t
             self.stt_secs[rid] = (secs, endpoint, max(0, len(wav) - 44) / (2 * MIC_SR))
             log.info("transcribed in %.1f s by %s (%d KB of audio)", secs, endpoint.split("/")[-1], len(wav) // 1024)
@@ -2755,7 +2768,7 @@ class Booth:
         now = time.monotonic()
         secs = now - (self.hold_from or now)
         out = [L.mat(SAGE)]
-        said = (v.get("said") or "Hearing you…").upper()
+        said = (v.get("said") or "").upper()  # nothing until the words are in: the status line says "Hearing you"
         out += L.lines(SCREEN_W / 2, 230, L.wrap(said, "K", SCREEN_W - 560, lines=2, balance=True), "K", gap=68, an=8)
         out.append(L.text(SCREEN_W / 2, 390, f"{secs:4.1f}s".strip(), "H1", an=8))  # mono: the digits never jitter
         stage, model = v.get("stage", "hear"), v.get("model") or ""
