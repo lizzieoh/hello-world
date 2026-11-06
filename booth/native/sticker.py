@@ -84,9 +84,32 @@ def local_time(at, tz):
     return time.localtime(at)
 
 
+def receipt_link(take, cfg, B):
+    """The QR's link, as short as it can be so the code is as small as it can be: the event page with just the video
+    (its CDN and path under /files/), the line and the seconds after #, about 100 characters (a 37-module code where
+    the full link, words and all, made 57). The words are printed right above it, so the page doesn't need them. A
+    video that isn't on fal's CDN, or a booth without an event page, gets booth.share_url's link."""
+    import re
+    from urllib.parse import quote
+    base, url = cfg.get("share_base", ""), take.get("url") or ""
+    m = re.match(r"https://([a-z0-9-]+)\.fal\.media/files/([\w./-]+\.(?:mp4|webm|mov))$", url)
+    if not base or not m:
+        share = getattr(B, "share_url", None)
+        return share(take, cfg, words=False) if share else url
+    q = f"v={m[1]}/{quote(m[2], safe='/._-')}"
+    secs = take.get("gen_secs", take.get("secs"))
+    if secs:
+        q += f"&s={secs:.1f}"
+    if str(cfg.get("line", "")).strip():
+        q += f"&l={cfg['line']}"
+    if "flux" in str(take.get("model", "")).lower():
+        q += "&mo=flux"
+    return base + "#" + q
+
+
 def small_qr(data, k=3):
-    """The receipt's QR, `k` dots a module: 3 (0.375 mm) on the Zebra, which prints crisp dots, 4 (0.5 mm) on the
-    receipt printer, whose dots spread (booth.qr_image's floor). A 2-module quiet zone. None without qrcode."""
+    """The receipt's QR, `k` dots a module: 3 (0.375 mm), the smallest a phone reads off thermal paper at arm's length
+    on a code this coarse. A 2-module quiet zone (the paper around it is white too). None without qrcode."""
     try:
         import qrcode
     except ImportError:
@@ -183,8 +206,8 @@ def sticker_image(take, cfg, src, B, width=W):
     sign_f = B.brand_font("display", 26, 600)     # thermal drops Focal's 500 strokes; 600 holds
     mono = B.brand_font("mono", 24, 700)
     small = B.brand_font("mono", 20, 700)
-    try:  # what they said, and the QR's line, in Focal Text Medium
-        said_f = ImageFont.truetype(str(B.BRAND / "fonts" / "FocalText-Medium.otf"), 32)
+    try:  # what they said in Focal Text Regular (Lizzie, Nov 6), the QR's line in Medium
+        said_f = ImageFont.truetype(str(B.BRAND / "fonts" / "FocalText-Regular.otf"), 32)
         note_f = ImageFont.truetype(str(B.BRAND / "fonts" / "FocalText-Medium.otf"), 24)
     except OSError:
         said_f, note_f = B.brand_font("display", 32, 600), B.brand_font("display", 24, 600)
@@ -307,9 +330,8 @@ def sticker_image(take, cfg, src, B, width=W):
     y += 30
 
     # ---- the way back: a QR to their video's page, made for this call
-    share = getattr(B, "share_url", None)  # the event page when this booth has one, else the video's own link
-    k = 3 if width > 576 else 4
-    q = small_qr(share(take, cfg, words=False) if share else take["url"], k) if take.get("url") else None
+    k = 3  # dots a module
+    q = small_qr(receipt_link(take, cfg, B), k) if take.get("url") else None
     if q is not None:
         qh = q.height - 4 * k  # the code itself, inside its 2-module quiet zone
         img.paste(q, (M - 2 * k, y - 2 * k))
