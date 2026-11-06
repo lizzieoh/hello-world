@@ -206,19 +206,19 @@ def sticker_image(take, cfg, src, B, width=W):
     sign_f = B.brand_font("display", 26, 600)     # thermal drops Focal's 500 strokes; 600 holds
     mono = B.brand_font("mono", 24, 700)
     small = B.brand_font("mono", 20, 700)
-    try:  # what they said in Focal Text Regular (Lizzie, Nov 6), the QR's line in Medium
-        said_f = ImageFont.truetype(str(B.BRAND / "fonts" / "FocalText-Regular.otf"), 32)
-        note_f = ImageFont.truetype(str(B.BRAND / "fonts" / "FocalText-Medium.otf"), 24)
+    note_f = B.brand_font("mono", 16)  # the QR's two lines, small, as in the design
+    try:  # what they said, in Focal Text Regular
+        said_f = ImageFont.truetype(str(B.BRAND / "fonts" / "FocalText-Regular.otf"), 23)
     except OSError:
-        said_f, note_f = B.brand_font("display", 32, 600), B.brand_font("display", 24, 600)
+        said_f = B.brand_font("display", 23, 500)
     probe = ImageDraw.Draw(Image.new("L", (1, 1)))
     img = Image.new("L", (width, 5000), 255)  # cropped to what was drawn
     d = ImageDraw.Draw(img)
 
-    def ink(xy, text, font, **kw):
-        """Text; mono is struck twice a dot apart (HAL Timezone has one weight, and single strokes print grey)."""
+    def ink(xy, text, font, strong=False, **kw):
+        """Text, struck once as in Lizzie's design; `strong` strikes it twice a dot apart (the timecode chips)."""
         d.text(xy, text, font=font, fill=0, **kw)
-        if font in (mono, small):
+        if strong:
             d.text((xy[0] + 1, xy[1]), text, font=font, fill=0, **kw)
 
     def lr(yy, left, right, font):
@@ -278,19 +278,19 @@ def sticker_image(take, cfg, src, B, width=W):
     def said(head, words):
         nonlocal y
         ink((M, y), head, small)
-        y += 31
+        y += 47
         words = words.strip()
         for line in wrap(f"“{words[:1].upper() + words[1:]}”", said_f, width - 2 * M):
             hang = probe.textlength("“", font=said_f) if line.startswith("“") else 0  # the quote mark hangs
             d.text((M - hang, y), line, font=said_f, fill=0)
-            y += 36
+            y += 29
     if take.get("you_said"):  # they asked for someone else's IP
         said("YOU SAID", take["you_said"])
-        y += 32
+        y += 26
         said("WE MADE YOU AN ORIGINAL", take.get("prompt") or "")
     elif take.get("prompt"):
         said("ONE OF OURS" if take.get("surprise") else "YOU SAID", take["prompt"])
-    y += 40
+    y += 44
 
     # ---- two key frames, edge to edge (the Zebra's a little in, so a label a dot off never shows a sliver)
     inset = 0 if width <= 576 else 12
@@ -305,42 +305,46 @@ def sticker_image(take, cfg, src, B, width=W):
         tc = f"{int(t // 60)}:{t % 60:04.1f}"
         cw = int(probe.textlength(tc, font=small)) + 22
         d.rectangle([inset + 8, y + 8, inset + 8 + cw, y + 36], fill=255, outline=0, width=2)
-        ink((inset + 19, y + 13), tc, small)
+        ink((inset + 19, y + 13), tc, small, strong=True)
         y += fh + 7
     y += 31
 
     # ---- how fast, then the itemized call and the total
     lr(y, "Generated in", f"{take.get('gen_secs', take['secs']):.1f} s", big)
-    y += 80
+    y += 82
     dots(y)
-    y += 28
-    ink((M, y), "ITEMIZED CALL", small)
-    y += 39
+    y += 30
+    cw = int(probe.textlength("ITEMIZED CALL", font=small)) + 22  # in a chip, like the timecodes
+    d.rectangle([M, y, M + cw, y + 28], fill=255, outline=0, width=2)
+    ink((M + 11, y + 2), "ITEMIZED CALL", small)
+    y += 42
     bill = [(item, B.model_name(model), round(cost, 4)) for item, model, cost in take.get("costs") or []]
     for item, model, cost in bill:
         lr(y, item, f"${cost:.4f}", mono)
-        y += 28
+        y += 32
         if model:
             ink((M + 16, y), model, small)
-        y += 36
+        y += 30
     y += 16
     lr(y, "Total", f"${sum(c for _, _, c in bill):.4f}", total_f)  # what's printed, so it adds up
-    y += 65
+    y += 56
     dots(y)
-    y += 30
+    y += 37
 
     # ---- the way back: a QR to their video's page, made for this call
     k = 3  # dots a module
     q = small_qr(receipt_link(take, cfg, B), k) if take.get("url") else None
     if q is not None:
         qh = q.height - 4 * k  # the code itself, inside its 2-module quiet zone
-        img.paste(q, (M - 2 * k, y - 2 * k))
-        x = M + qh + 16
-        yy = y
-        for line in wrap("Scan to keep your video and try fal Agent inside Photoshop", note_f, width - M - x, most=4):
-            d.text((x, yy), line, font=note_f, fill=0)  # a sentence, so Focal Text, not mono
-            yy += 30
-        y += max(qh, yy - y) + 28
+        lines = ["Scan for your video and", "try fal Agent inside Photoshop."]
+        tw = max(probe.textlength(l, font=note_f) for l in lines)
+        gap = 14
+        x0 = round((width - (qh + gap + tw)) / 2)  # the code and its words centred as one block
+        img.paste(q, (x0 - 2 * k, y - 2 * k))
+        ty = y + (qh - 2 * 20) // 2  # the two lines centred on the code
+        for i, line in enumerate(lines):
+            ink((x0 + qh + gap, ty + i * 20), line, note_f)
+        y += qh + 30
         dots(y)
         y += 16
     d.text((M, y), "Your creative direct line.", font=sign_f, fill=0)
