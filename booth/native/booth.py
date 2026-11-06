@@ -149,6 +149,20 @@ REMIX_PROMPT = (
     "caller's own words for everything else: the same places (a swamp stays a swamp), action, time of day and mood; "
     "add no new places or times. Make it fun and easy to picture. Reply with the new prompt only: one sentence, "
     "under 30 words.")
+# The remix tried first: keeps what made them want it (the genre, tone, joke, camera, look), so the original isn't
+# bland. In a side-by-side on 6 real flagged calls (Nov 6) it held the caller's idea far better than REMIX_PROMPT,
+# and 5 of 6 passed the re-check; when it doesn't, REMIX_PROMPT (6 of 6) is the fallback.
+REMIX_PUNCHY = (
+    "You write prompts for a video booth that only makes original ideas. The caller's idea borrows someone else's "
+    "intellectual property ({what}). Keep what made them want it: the genre, the tone, the joke, the stakes, the kind "
+    "of camera and the look. Replace every borrowed character, brand, logo or real person with an original one of a "
+    "different kind altogether (never its colours, shape, outfit, powers, signature items, catchphrases or name), and "
+    "turn a named studio's, show's or artist's style into a plain description of how that style looks and moves "
+    "(only if they asked for one; a sitcom becomes a handheld office documentary, an anime studio becomes soft "
+    "hand-painted animation). Otherwise pick the camera and light that suit their idea. Keep the caller's "
+    "own places and action. Write it like a director's one-line shot: a specific subject doing something specific, "
+    "where, with camera and light. No signs, screens, text or lettering in the shot. Vivid, funny or epic, never "
+    "bland. Reply with the prompt only: one sentence, under 35 words.")
 # 1 (surprise me): one of ours, for anyone stuck for an idea (and for a second silence). Originals only, Miami and
 # making things, each worth trying on H3 Max before the show; none goes through the IP check.
 SURPRISE = [
@@ -349,9 +363,9 @@ class Fal:
     def remix(self, prompt, borrowed, bill=None):
         """The prompt turned into an original idea with the same energy, checked again before it's used. Raises
         if it can't be made original (the caller is then asked for another idea)."""
-        def ask(model):
-            out = self._llm(model, REMIX_PROMPT.format(what=borrowed), prompt, bill, "MADE ORIGINAL",
-                            timeout=self.REMIX_DEADLINE, temperature=0.7, max_tokens=80)
+        def ask(model, brief, temperature):
+            out = self._llm(model, brief.format(what=borrowed), prompt, bill, "MADE ORIGINAL",
+                            timeout=self.REMIX_DEADLINE, temperature=temperature, max_tokens=100)
             original = " ".join(out.strip().strip('"“”').split())
             if not original:
                 raise RuntimeError("empty remix")
@@ -360,8 +374,14 @@ class Fal:
                 raise RuntimeError(f"the remix still borrows {still}: {original!r}")
             return original
 
-        return self._first([(m, lambda m=m: ask(m)) for m in self.REMIX_MODELS], self.REMIX_DEADLINE,
-                           self.REMIX_BACKUP_AFTER)[1]
+        def race(brief, temperature):
+            return self._first([(m, lambda m=m: ask(m, brief, temperature)) for m in self.REMIX_MODELS],
+                               self.REMIX_DEADLINE, self.REMIX_BACKUP_AFTER)[1]
+        try:
+            return race(REMIX_PUNCHY, 0.8)  # the punchier original first
+        except Exception as e:
+            log.info("punchy remix didn't clear (%s); trying the plain one", e)
+            return race(REMIX_PROMPT, 0.7)
 
     def render(self, prompt, stop=None, trying=None):
         """Each model gets one go, in order. Returns (url, model name). `stop()` true (the caller pressed *) calls the
