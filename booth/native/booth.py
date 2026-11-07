@@ -952,12 +952,12 @@ class Look:
                self.text(x + h + 24, y + h / 2, label.upper(), tok, BLACK, an=4, alpha=a)]
         return out, w
 
-    def keys(self, keys, x=PAD_X, y=SCREEN_H - PAD_X - 88):
+    def keys(self, keys, x=PAD_X, y=SCREEN_H - PAD_X - 88, first=None):
         """Only the keys that do something now, floating bottom left, in phone order. keys = {key: (label, primary,
         dim)}. No tray: the picture runs to the edges under them."""
         out = []
         tall = any(len(v) > 3 and v[3] for v in keys.values())  # one big key: the rest sit on its baseline
-        for k in sorted(keys, key=lambda k: (not (len(keys[k]) > 3 and keys[k][3]), KEY_ORDER.index(k))):
+        for k in sorted(keys, key=lambda k: (not (len(keys[k]) > 3 and keys[k][3]), k != first, KEY_ORDER.index(k))):
             label, primary, dim, *big = keys[k]
             big = bool(big and big[0])
             cap, w = self.pill(x, y - (40 if big else 0) if tall else y, k, label, primary, dim, big=big)
@@ -2901,12 +2901,13 @@ class Booth:
         if phase == "adding":
             return self._pick_up(L, "ADDING SOUND…")
         if phase == "sound":
-            return L.keys({"0": ("Print", False, False), "3": more})
+            return L.keys({"0": ("Print", False, False), "3": more}, first="0")
         if phase == "prompt":
             return L.keys({"0": (keys.get("0") or "Print your video", True, False, True), "3": more})
         if phase == "printing":
             return self._pick_up(L, "PRINTING…")
-        return self._pick_up(L, "TAKE YOUR RECEIPT") + L.chip(PAD_X, SCREEN_H - PAD_X - 34, "SCAN IT TO KEEP YOUR VIDEO")[0]
+        return self._pick_up(L, "TAKE YOUR RECEIPT") + L.chip(PAD_X, SCREEN_H - PAD_X, "SCAN IT TO KEEP YOUR VIDEO", "M", h=96,
+                                                                pad=32)[0]
 
     def _scene_after(self, v, L):
         """Their caller hung up: their video stays a while, edge to edge, before the feed comes back."""
