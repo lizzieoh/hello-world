@@ -544,6 +544,12 @@ DTMF = {k: (r, c) for r, row in zip([697, 770, 852, 941], ["123", "456", "789", 
 
 
 
+# After the video: hear it once, then print. (Nov 6: callers pressed 2, replayed the sound and never printed.)
+AUTO_SOUND_AFTER = 5.0   # s after "Press 2 to hear it": the sound comes in on its own
+AUTO_PRINT_AFTER = 6.0   # s after "Press 0 to print your video": it prints on its own
+DONE_BUSY_AFTER = 10.0   # s after the receipt: the busy tone, so the next caller can step up
+
+
 class Clip:
     def __init__(self, data, tag=None, loop=False, delay=0.0, fade_in=0.0):
         self.data, self.tag, self.loop = data, tag, loop
@@ -591,6 +597,11 @@ class Line:
         self.meter = (0.0, False, 0.0)
         self.gain = 1.0  # the volume switch: 1 on loud, cfg["low_volume"] on low
         v = {name: phone_band(load_wav(voice_dir / f"{name}.wav")) for name in ("greeting", "hold", "menu")}
+        # after the video: "Your video is ready. Press 2 to hear it." / "Press 0 to print your video." /
+        # "Printing your video now." / "Take your receipt. Thanks for calling fal." (phone-voice/5)
+        for name in ("ready", "print_prompt", "printing", "receipt"):
+            f = voice_dir / f"{name}.wav"
+            v[name] = phone_band(load_wav(f)) if f.exists() else silence(0.5)
         click = (np.random.default_rng(1).uniform(-1, 1, int(0.03 * SR)) * 0.3
                  * np.exp(-np.arange(int(0.03 * SR)) / (0.005 * SR))).astype(np.float32)
         self.sounds = {
@@ -599,6 +610,7 @@ class Line:
                                         silence(0.25), tone([1000], 0.4)]),
             "hold": v["hold"],
             "menu": v["menu"],
+            **{name: v[name] for name in ("ready", "print_prompt", "printing", "receipt")},
             "busy": np.concatenate([np.concatenate([tone([480, 620], 0.25), silence(0.25)])] * 12),
             "music": elevator_loop(),
             "ring": ring(),
@@ -925,25 +937,30 @@ class Look:
         out.append(self.text(x + 144, y + 60, label.upper(), "K", ink, an=4, alpha=0x99 if dim else 0))
         return out, 144 + self.width(label.upper(), "K") + 80
 
-    def pill(self, x, y, key, label, primary=False, dim=False, h=88):
+    def pill(self, x, y, key, label, primary=False, dim=False, h=88, big=False):
         """A floating key: the digit on a square (Model Purple for the one to press, Light Purple, the keypad's own
         colour, otherwise), its
         label beside it on White. Reads on the video and on Light Sage alike. Returns (drawing, width)."""
         a = 0x99 if dim else 0
-        lw = self.width(label.upper(), "M")
+        tok = "K" if big else "M"
+        if big:
+            h = 128
+        lw = self.width(label.upper(), tok)
         w = h + 24 + lw + 28
         out = [self.rect(x, y, w, h, WHITE, a), self.rect(x, y, h, h, MODEL_PURPLE if primary else LIGHT_PURPLE, a),
                self.text(x + h / 2, y + h / 2, key, "H3", BLACK, an=5, alpha=a),
-               self.text(x + h + 24, y + h / 2, label.upper(), "M", BLACK, an=4, alpha=a)]
+               self.text(x + h + 24, y + h / 2, label.upper(), tok, BLACK, an=4, alpha=a)]
         return out, w
 
     def keys(self, keys, x=PAD_X, y=SCREEN_H - PAD_X - 88):
         """Only the keys that do something now, floating bottom left, in phone order. keys = {key: (label, primary,
         dim)}. No tray: the picture runs to the edges under them."""
         out = []
-        for k in sorted(keys, key=KEY_ORDER.index):
-            label, primary, dim = keys[k]
-            cap, w = self.pill(x, y, k, label, primary, dim)
+        tall = any(len(v) > 3 and v[3] for v in keys.values())  # one big key: the rest sit on its baseline
+        for k in sorted(keys, key=lambda k: (not (len(keys[k]) > 3 and keys[k][3]), KEY_ORDER.index(k))):
+            label, primary, dim, *big = keys[k]
+            big = bool(big and big[0])
+            cap, w = self.pill(x, y - (40 if big else 0) if tall else y, k, label, primary, dim, big=big)
             out += cap
             x += w + 16
         return out
@@ -1989,6 +2006,11 @@ class Booth:
         if self.state == "listening" and self.line.finish_if_heard():  # hung up instead of pressing #: what they
             self.hung_up_cid = self.cid                                  # said is still made
         was = self.state
+        t = self.take
+        if was == "ready" and t and not t["printed"]:  # they saw it: the receipt prints anyway, nobody leaves empty-handed
+            t["printed"] = True
+            log.info("hung up before printing: printing anyway")
+            threading.Thread(target=self._print, args=(-1, t), daemon=True).start()
         if self.pending is not None:   # hung up on hold: the video still comes, and goes up on the screen
             self.orphans.add(self.pending)
         self.cid += 1
@@ -2293,7 +2315,8 @@ class Booth:
             self.stt_secs.pop(rid, None)
             self.llm_bill.pop(rid, None)
             if self.state == "idle" and not self.off_hook and self.lingering:  # their caller hung up: it goes up
-                self.take = take                                              # now, and stays until * or a pick-up
+                take["rid"] = rid                                             # now, and stays until * or a pick-up
+                self.take = take
                 self.hold_from = None
                 self.screen.frame(FRAME)
                 self.screen.video(take["url"], mute=True)
@@ -2312,6 +2335,7 @@ class Booth:
         self.line.stop()
         self.screen.frame(FRAME)
         self.screen.video(take["url"], mute=True)
+        take["phase"] = "silent"  # silent -> adding -> sound -> prompt -> printing -> done
         self.set_view("ready", keys={})
         self.after(8, "menu", cid, rid)  # in case the clip never reports it's playing
         self.bump_idle()
@@ -2379,11 +2403,13 @@ class Booth:
             self.after(0.5, "next_clip")
 
     def on_menu(self, cid, rid):
+        """The video's up: "Your video is ready. Press 2 to hear it." If they don't, the sound comes in anyway."""
         t = self.take
         if cid != self.cid or self.state != "ready" or not t or t["rid"] != rid or t["answered"] or t.get("menu"):
             return
         t["menu"] = True
-        self.play("menu", "menu")
+        self.play("ready", "menu")
+        self.after(len(self.line.sounds["ready"]) / SR + AUTO_SOUND_AFTER, "auto_sound", cid, t)
 
     def on_failed(self, cid, rid, message):
         if rid in self.orphans:  # their caller had hung up and it didn't come: the line is free again
@@ -2397,34 +2423,66 @@ class Booth:
 
     # ----- the menu -----
     def act(self, k):
+        """The keys after the video. 2 brings the sound in once (then it's gone), 0 prints, 3 makes another take. Once
+        it's printing or printed, nothing: one receipt a call."""
         t = self.take
+        phase = t.get("phase", "silent")
+        if phase in ("printing", "done"):
+            return
         t["answered"] = True
-        self.line.stop()  # cuts the menu off
+        self.line.stop()  # cuts the voice off
         self.line.key(k)
         keys = self.view["keys"]
-        if k == "2":
-            t["sound"] = not t["sound"]
-            if t["sound"]:  # a moment of "making the sound" in the earpiece, then the video comes back with it
-                keys["2"] = "Generating audio…"
-                self.line.play("generating_audio")
-                self.after(len(self.line.sounds["generating_audio"]) / SR, "sound_on", self.cid, t)
-            elif t.get("slides"):
-                keys["2"] = None
-            else:
-                self.screen.mute(True)
-                keys["2"] = None
-        elif k == "3":
+        if k == "2" and phase == "silent":
+            return self.add_sound(t)
+        if k == "3":
             if t.get("take", 0) >= 2:  # three takes a call, so the next caller gets a turn
                 keys["3"] = "3 takes max"
                 return self.draw()
             self.screen.mute(True)
             self.take = None
             return self.regenerate(t["prompt"], t.get("take", 0) + 1, t.get("you_said"))
-        elif k == "0" and not t["printed"]:
-            t["printed"] = True
-            keys["0"] = "Printing…"
-            threading.Thread(target=self._print, args=(self.cid, t), daemon=True).start()
+        if k == "0":
+            return self.print_now(t)
         self.draw()
+
+    def add_sound(self, t):
+        """A moment of "making the sound" in the earpiece, then the video comes back with it, once."""
+        t["phase"], t["sound"] = "adding", True
+        self.line.play("generating_audio")
+        self.after(len(self.line.sounds["generating_audio"]) / SR, "sound_on", self.cid, t)
+        self.draw()
+
+    def on_auto_sound(self, cid, t):
+        if cid == self.cid and self.take is t and self.state == "ready" and t.get("phase") == "silent":
+            self.add_sound(t)
+
+    def on_sound_done(self, cid, t):
+        """One play with sound: then quiet again, and the one thing left to do."""
+        if cid != self.cid or self.take is not t or self.state != "ready" or t.get("phase") != "sound":
+            return
+        t["phase"], t["sound"] = "prompt", False
+        self.screen.mute(True)
+        self.play("print_prompt", "prompt")
+        self.after(len(self.line.sounds["print_prompt"]) / SR + AUTO_PRINT_AFTER, "auto_print", cid, t)
+        self.draw()
+
+    def on_auto_print(self, cid, t):
+        if cid == self.cid and self.take is t and self.state == "ready" and t.get("phase") == "prompt":
+            self.print_now(t, say=True)
+
+    def print_now(self, t, say=False):
+        if t["printed"]:
+            return
+        t["printed"], t["phase"] = True, "printing"
+        if say:
+            self.line.play("printing")
+        threading.Thread(target=self._print, args=(self.cid, t), daemon=True).start()
+        self.draw()
+
+    def on_done_busy(self, cid):
+        if cid == self.cid and self.off_hook and self.state == "ready" and self.take and self.take.get("phase") == "done":
+            self.busy("Thanks for calling.", "Please hang up the phone.", retry=False)
 
     def on_sound_on(self, cid, t):
         if cid != self.cid or self.take is not t or not t["sound"] or self.state != "ready":
@@ -2436,7 +2494,8 @@ class Booth:
         else:
             self.screen.mute(False)
             self.screen.restart_clip()
-        self.view["keys"]["2"] = "Sound on"
+        t["phase"] = "sound"
+        self.after(self.cfg["secs"] + 0.3, "sound_done", cid, t)
         self.draw()
 
     def _print(self, cid, take):
@@ -2451,12 +2510,17 @@ class Booth:
         self.stats["prints" if ok else "print_fails"] += 1
         if ok:
             self.stats["last_print"] = time.time()
-        if not ok:
+        else:
             self.last_error = {"at": time.time(), "what": "Print failed"}
-        if not ok:
             take["printed"] = False  # 0 again tries again
         if cid == self.cid and self.take is take and self.state == "ready":
-            self.view["keys"]["0"] = "Printed ✓" if ok else "Printer's out"
+            if ok:
+                take["phase"] = "done"
+                self.line.play("receipt")
+                self.after(DONE_BUSY_AFTER, "done_busy", cid)
+            else:
+                take["phase"] = "prompt"
+                self.view["keys"]["0"] = "Printer's out"
             self.draw()
 
     # ----- busy, idle -----
@@ -2824,11 +2888,25 @@ class Booth:
         return out
 
     def _scene_ready(self, v, L):
-        """Their video, edge to edge, nothing over it but the three keys that work."""
-        keys = v.get("keys") or {}
-        return L.keys({"2": (keys.get("2") or "Sound", False, False),
-                       "3": (keys.get("3") or "Another take", False, keys.get("3") == "3 takes max"),
-                       "0": (keys.get("0") or "Print", not keys.get("0"), keys.get("0") == "Printed ✓")})
+        """Their video, edge to edge, and only what to do now: 2 to hear it, then (once heard) 0 to print, big; then
+        what's happening. Every voice line is also on the screen, for a noisy hall."""
+        t = self.take or {}
+        keys, phase = v.get("keys") or {}, t.get("phase", "silent")
+        left = 2 - t.get("take", 0)
+        more = ("Another take" + (f" · {left} left" if left else ""), False, not left)
+        if keys.get("3") == "3 takes max":
+            more = ("3 takes max", False, True)
+        if phase == "silent":
+            return L.keys({"2": ("Hear it", True, False), "3": more})
+        if phase == "adding":
+            return self._pick_up(L, "ADDING SOUND…")
+        if phase == "sound":
+            return L.keys({"0": ("Print", False, False), "3": more})
+        if phase == "prompt":
+            return L.keys({"0": (keys.get("0") or "Print your video", True, False, True), "3": more})
+        if phase == "printing":
+            return self._pick_up(L, "PRINTING…")
+        return self._pick_up(L, "TAKE YOUR RECEIPT") + L.chip(PAD_X, SCREEN_H - PAD_X - 34, "SCAN IT TO KEEP YOUR VIDEO")[0]
 
     def _scene_after(self, v, L):
         """Their caller hung up: their video stays a while, edge to edge, before the feed comes back."""

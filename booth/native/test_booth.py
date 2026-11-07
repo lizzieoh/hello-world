@@ -142,6 +142,9 @@ def talk(secs=1.0, start=0.3):
 
 
 # ---------- harness ----------
+B.AUTO_SOUND_AFTER, B.AUTO_PRINT_AFTER = 0.3, 0.3  # the after-video timers, quick for the tests
+
+
 def make(**over):
     cfg = B.load_config(Path("/nonexistent"))
     (TMP / "printer.bin").touch()  # exists, so the booth prints here and never to a real printer on this machine
@@ -193,22 +196,39 @@ def test_full_call():
     wait(lambda: booth.view["scene"] == "ready" and "ANOTHER TAKE" in booth.screen.last_text, 2, "ready screen")
     assert ("frame", B.FRAME) in booth.screen.log
     booth.post(("file_loaded",))
-    wait(lambda: "menu" in booth.line.playing(), 6, "menu read")
+    wait(lambda: "ready" in booth.line.playing(), 6, "Your video is ready. Press 2 to hear it.")
+    assert "HEAR IT" in booth.screen.last_text and "PRINT" not in booth.screen.last_text
     booth.post(("key", "2"))
     wait(lambda: "generating_audio" in booth.line.playing(), 1, "the generating-audio cue first")
-    assert ("mute", False) not in booth.screen.log and booth.view["keys"]["2"] == "Generating audio…"
+    assert ("mute", False) not in booth.screen.log and "ADDING SOUND" in booth.screen.last_text
     wait(lambda: ("mute", False) in booth.screen.log and booth.screen.calls("restart_clip"), 3, "sound on")
-    assert booth.view["keys"]["2"] == "Sound on"
-    wait(lambda: "menu" not in booth.line.playing(), 1, "a key cuts the menu off (after a short fade)")
-    booth.post(("key", "0"))
-    wait(lambda: booth.view["keys"].get("0") == "Printed ✓", 25, "printed")
-    data = (TMP / "printer.bin").read_bytes()
-    assert data.startswith(b"\x1b@") and data.endswith(b"\x1dV\x42\x00") and b"\x1dv0\x00" in data
-    booth.post(("key", "3"))
+    assert booth.take["phase"] == "sound" and "HEAR IT" not in booth.screen.last_text, "2 is gone once heard"
+    booth.post(("key", "2"))  # does nothing now
+    time.sleep(0.3)
+    assert booth.take["phase"] == "sound"
+    booth.post(("key", "3"))  # another take: the new one starts silent, with 2 again
     wait(lambda: booth.state == "hold", 3, "regenerating")
     assert ("mute", True) in booth.screen.log
     wait(lambda: booth.state == "ready", 8, "second video")
     assert client.calls.count("minimax/h3-max/text-to-video") == 2
+    assert booth.take["phase"] == "silent" and "1 LEFT" in booth.screen.last_text
+    booth.cfg["secs"] = 1.0  # one play with sound, quickly
+    played = []
+    real_play = booth.line.play
+    booth.line.play = lambda name, *a, **k: (played.append(name), real_play(name, *a, **k))[1]
+    booth.post(("file_loaded",))
+    # nobody presses anything: the sound comes in on its own, plays once, then "Press 0", then it prints itself
+    wait(lambda: booth.take["phase"] == "sound", 8, "the sound on its own")
+    wait(lambda: booth.take["phase"] == "prompt" and "print_prompt" in booth.line.playing(), 14, "Press 0 to print")
+    assert ("mute", True) == booth.screen.calls("mute")[-1][:2], "quiet again after one play with sound"
+    wait(lambda: "printing" in played, 4, "Printing your video now (on its own)")
+    wait(lambda: booth.take["phase"] == "done" and "receipt" in played, 25, "Take your receipt")
+    assert "TAKE YOUR RECEIPT" in booth.screen.last_text
+    data = (TMP / "printer.bin").read_bytes()
+    assert data.startswith(b"\x1b@") and data.endswith(b"\x1dV\x42\x00") and b"\x1dv0\x00" in data
+    booth.post(("key", "3"))  # one receipt a call: nothing works once it's printed
+    time.sleep(0.3)
+    assert booth.state == "ready" and booth.take["phase"] == "done"
     booth.post(("hook", False))
     wait(lambda: booth.state == "idle", 3, "idle")
     # hung up: their video stays, with * to start over, and no feed of anyone else's
@@ -685,6 +705,18 @@ def test_hang_up_on_hold_keeps_their_call_on_screen():
     booth.post(("hook", True))  # the next caller
     wait(lambda: booth.state == "greeting", 3, "a new call")
     assert not booth.lingering
+    stop.set()
+
+
+def test_hang_up_before_printing_still_prints():
+    """They saw their video and hung up without pressing 0: the receipt prints anyway."""
+    booth, client, stop = make()
+    lift_and_say(booth, talk())
+    wait(lambda: booth.state == "ready", 10, "ready")
+    (TMP / "printer.bin").write_bytes(b"")
+    booth.post(("hook", False))
+    wait(lambda: (TMP / "printer.bin").stat().st_size > 1000, 25, "printed after the hang-up")
+    assert booth.take and booth.take["printed"]
     stop.set()
 
 
