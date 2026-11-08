@@ -6,6 +6,9 @@ black on white, with the type fixes from the fal-ui check: the lockup, ZERO LATE
 when and where (the place found from the network unless LOCATION names one), YOU SAID (and WE MADE YOU AN ORIGINAL
 after an IP swap), two key frames edge to edge with their timecodes, "Generated in", the itemized call, the total, a
 QR to their video's page, the sign-off. One divider everywhere: the big-dot rule (3-dot dots, 10 apart).
+
+On 3x6 in die-cut labels (the Zebra's default, ZEBRA_PAPER=LABEL) the same receipt is re-laid out to fit one label:
+see label_image.
 """
 import json
 import threading
@@ -319,12 +322,13 @@ def sticker_image(take, cfg, src, B, width=W):
     ink((M + 11, y + 2), "ITEMIZED CALL", small)
     y += 42
     bill = [(item, B.model_name(model), round(cost, 4)) for item, model, cost in take.get("costs") or []]
-    for item, model, cost in bill:
+    for item, models, cost in steps(bill):
         lr(y, item, f"${cost:.4f}", mono)
         y += 32
-        if model:
+        for model in models:
             ink((M + 16, y), model, small)
-        y += 30
+            y += 26
+        y += 4 if models else 30
     y += 16
     lr(y, "Total", f"${sum(c for _, _, c in bill):.4f}", total_f)  # what's printed, so it adds up
     y += 56
@@ -351,6 +355,216 @@ def sticker_image(take, cfg, src, B, width=W):
     d.text((width - M, y), "fal.ai", font=sign_f, fill=0, anchor="ra")
     y += 33 + PAD_FOOT
     return img.crop((0, 0, width, y)).point(lambda v: 255 if v > 200 else 0).convert("1")
+
+
+def steps(bill):
+    """The bill as one row per step: repeated steps (the two IP checks) become one item with its models listed and
+    their costs added, so the receipt reads one IP CHECK. [(item, [models], cost)]."""
+    out = []
+    for item, model, cost in bill:
+        if out and out[-1][0] == item:
+            out[-1][1].append(model)
+            out[-1][2] = round(out[-1][2] + cost, 4)
+        else:
+            out.append([item, [model], cost])
+    return [(item, [m for m in models if m], cost) for item, models, cost in out]
+
+
+# ---- the 3x6 in die-cut label: 608 x 1218 dots at 203 dpi, one label a call
+LABEL_W, LABEL_H = 608, 1218
+LABEL_SAFE = LABEL_H - 14   # white before the die-cut gap, for feed tolerance
+LABEL_MIN_PHOTO = 240
+QUOTE_INDENT = 28           # the quotes sit in from their labels
+HEAD = 832                  # the GK420d's head, in dots
+
+
+def label_image(take, cfg, src, B, photo_h=None, most=4):
+    """The receipt on one 3x6 label, as Lizzie approved it on paper (Nov 7): the lockup and the event; the date,
+    time and place on one line; YOU SAID (and CALL # on its row) with the quotes set in; one key frame, as tall as
+    the label allows; Generated in; the itemized call as a table (step | model | price, repeated steps as one);
+    the total; the QR, its two lines and the sign-off side by side."""
+    from PIL import Image, ImageDraw, ImageFont
+    big = B.brand_font("display", 46, 700)
+    total_f = B.brand_font("display", 32, 700)
+    sign_f = B.brand_font("display", 26, 600)
+    mono = B.brand_font("mono", 24, 700)
+    small = B.brand_font("mono", 20, 700)
+    note_f = B.brand_font("mono", 18)   # the QR's lines and the model column
+    try:
+        said_f = ImageFont.truetype(str(B.BRAND / "fonts" / "FocalText-Regular.otf"), 23)
+    except OSError:
+        said_f = B.brand_font("display", 23, 500)
+    W = LABEL_W
+    probe = ImageDraw.Draw(Image.new("L", (1, 1)))
+    img = Image.new("L", (W, 3000), 255)
+    d = ImageDraw.Draw(img)
+
+    def ink(xy, text, font, strong=False, **kw):
+        d.text(xy, text, font=font, fill=0, **kw)
+        if strong:
+            d.text((xy[0] + 1, xy[1]), text, font=font, fill=0, **kw)
+
+    def lr(yy, left, right, font):
+        ink((M, yy), left, font)
+        ink((W - M, yy), right, font, anchor="ra")
+
+    def dots(yy):
+        for x in range(M, W - M - 2, 10):
+            d.rectangle([x, yy, x + 2, yy + 2], fill=0)
+
+    def chip(x, yy, h, text, strong=False):
+        """Text in an outlined box, its ink centred in the box."""
+        bb = probe.textbbox((0, 0), text, font=small)
+        d.rectangle([x, yy, x + bb[2] - bb[0] + 22, yy + h], fill=255, outline=0, width=2)
+        ink((x + 11 - bb[0], yy + h // 2 - (bb[1] + bb[3]) // 2), text, small, strong)
+
+    def wrap(text, font, room):
+        lines, cur = [], ""
+        for word in text.split():
+            trial = f"{cur} {word}".strip()
+            if probe.textlength(trial, font=font) <= room or not cur:
+                cur = trial
+            else:
+                lines.append(cur)
+                cur = word
+        lines += [cur] if cur else []
+        if len(lines) > most:
+            lines = lines[:most]
+            while probe.textlength(lines[-1] + "…”", font=font) > room and " " in lines[-1]:
+                lines[-1] = lines[-1].rsplit(" ", 1)[0]
+            lines[-1] = lines[-1].rstrip(",.;:-“") + "…”"
+        return lines
+
+    # the lockup and the event, then when and where on one line
+    y = 24
+    if B.LOGO.exists():
+        mark = B.logo_image(400)
+        img.paste(0, ((W - mark.width) // 2, y), mark)
+        y += mark.height + 22
+    else:
+        d.text((W // 2, y), "CALL-A-FAL", font=B.brand_font("display", 54, 900), fill=0, anchor="mt")
+        y += 80
+    ink((W // 2, y), EVENT, small, anchor="ma")
+    y += 34
+    dots(y)
+    y += 18
+    city, tz = place(cfg)
+    at = local_time(take.get("at") or time.time(), tz)
+    date, clock = time.strftime("%b %d %Y", at).upper(), time.strftime("%I:%M %p", at).lstrip("0")
+
+    def when(c):
+        return " · ".join(p for p in (date, clock, c.rstrip()) if p)
+    while city and probe.textlength(when(city), font=mono) > W - 2 * M:  # a long city name gives way
+        city = city[:-1]
+    ink((W // 2, y), when(city), mono, anchor="ma")
+    y += 32
+    dots(y)
+    y += 24
+
+    # what they said; the call number on the first label's row
+    call_no = [f"CALL #{take.get('call', 0):04d}"]
+
+    def said(head, words):
+        nonlocal y
+        ink((M, y), head, small)
+        if call_no:
+            ink((W - M, y), call_no.pop(), small, anchor="ra")
+        y += 34
+        words = words.strip()
+        for line in wrap(f"“{words[:1].upper() + words[1:]}”", said_f, W - 2 * M - QUOTE_INDENT):
+            hang = probe.textlength("“", font=said_f) if line.startswith("“") else 0  # the quote mark hangs
+            d.text((M + QUOTE_INDENT - hang, y), line, font=said_f, fill=0)
+            y += 29
+    if take.get("you_said"):
+        said("YOU SAID", take["you_said"])
+        y += 12
+        said("WE MADE YOU AN ORIGINAL", take.get("prompt") or "")
+    elif take.get("prompt"):
+        said("ONE OF OURS" if take.get("surprise") else "YOU SAID", take["prompt"])
+    y += 22
+
+    # one key frame, 12 in from the edges
+    inset = 12
+    fw = W - 2 * inset
+    fh = photo_h or round(fw / PHOTO)
+    try:
+        frames = key_frames(src, cfg["secs"], (fw, fh), 1)
+    except FileNotFoundError:  # no ffmpeg (a laptop test): no photo
+        frames = []
+    for t, f in frames:
+        img.paste(B.thermal_photo(f, 1 + cfg.get("print_lighten", 0) / 120), (inset, y))
+        chip(inset + 8, y + 8, 28, f"{int(t // 60)}:{t % 60:04.1f}", strong=True)
+        y += fh
+    y += 22
+
+    # how fast, then the itemized call as a table
+    lr(y, "Generated in", f"{take.get('gen_secs', take['secs']):.1f} s", big)
+    y += 54
+    dots(y)
+    y += 20
+    chip(M, y, 28, "ITEMIZED CALL")
+    y += 40
+    bill = [(item, B.model_name(model), round(cost, 4)) for item, model, cost in take.get("costs") or []]
+    rows = steps(bill)
+    mx = M + int(max([probe.textlength(i, font=small) for i, _, _ in rows] + [0])) + 24  # the model column
+    for item, models, cost in rows:
+        price = f"${cost:.4f}"
+        room = W - M - probe.textlength(price, font=small) - 14 - mx
+        ink((M, y), item, small)
+        ink((W - M, y), price, small, anchor="ra")
+        for i, model in enumerate(models):
+            while model and probe.textlength(model, font=note_f) > room:
+                model = model[:-1]
+            ink((mx, y + 2 + i * 24), model, note_f)
+        y += 30 + 24 * max(0, len(models) - 1)
+    y += 16
+    lr(y, "Total", f"${sum(c for _, _, c in bill):.4f}", total_f)  # what's printed, so it adds up
+    y += 44
+    dots(y)
+    y += 22
+
+    # the foot: the QR, then its two lines and the sign-off, bottom-aligned with it
+    k = 3
+    q = small_qr(receipt_link(take, cfg, B), k) if take.get("url") else None
+    x, qh = M, 80
+    if q is not None:
+        qh = q.height - 4 * k
+        img.paste(q, (M - 2 * k, y - 2 * k))
+        x = M + qh + 18
+    sy = y + qh - 26
+    ink((x, sy - 62), "Scan for your video and", note_f)
+    ink((x, sy - 38), "try fal Agent inside Photoshop.", note_f)
+    d.text((x, sy), "Your creative direct line.", font=sign_f, fill=0)
+    d.text((W - M, sy), "fal.ai", font=sign_f, fill=0, anchor="ra")
+    y += qh + 8
+    return img.crop((0, 0, W, y)).point(lambda v: 255 if v > 200 else 0).convert("1")
+
+
+def label_3x6(take, cfg, src, B):
+    """The whole label, 608 x 1218: the photo as tall as the label allows. If it doesn't fit, very long quotes go to
+    3 lines and the photo gives way (never under LABEL_MIN_PHOTO), then the quotes go to 2 lines, then, only for the
+    very longest, the photo goes down to 180."""
+    from PIL import Image
+    nominal = round((LABEL_W - 24) / PHOTO)
+    im = label_image(take, cfg, src, B, nominal)
+    for most, floor in ((4, LABEL_MIN_PHOTO), (3, LABEL_MIN_PHOTO), (2, LABEL_MIN_PHOTO), (2, 180)):
+        if im.height <= LABEL_SAFE:
+            break
+        full = label_image(take, cfg, src, B, nominal, most)
+        im = label_image(take, cfg, src, B, max(floor, nominal - (full.height - LABEL_SAFE)), most)
+    out = Image.new("1", (LABEL_W, LABEL_H), 1)
+    out.paste(im.crop((0, 0, LABEL_W, min(im.height, LABEL_H))), (0, 0))
+    return out
+
+
+def label_zpl(img, x):
+    """ZPL for one die-cut label: gap sensing, direct thermal, the art at head dot `x`. The GK420d centres a narrower
+    print width on its head, so print the whole head (^PW832) and place the art by its position on it (LABEL_X:
+    where the label sits, from the head-ruler test, minus half the art)."""
+    rows = np.packbits(~np.array(img, dtype=bool), axis=1)
+    h, per_row = rows.shape
+    return (f"^XA^MNY^MTD^MMT^PR3^PW{HEAD}^LL{h}^LH{x},0"
+            f"^FO0,0^GFA,{rows.size},{rows.size},{per_row},{rows.tobytes().hex().upper()}^FS^XZ").encode()
 
 
 def zpl(img, darkness=None):

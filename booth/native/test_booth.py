@@ -659,6 +659,28 @@ def test_sticker():
     assert not sticker.speaks_zpl("/dev/usb/lp9") and not sticker.in_epl("/dev/usb/lp9")
 
 
+def test_label_3x6():
+    """The receipt on one 3x6 label: exactly a label long whatever they said, one IP CHECK row however many checks
+    ran, and ZPL that senses the gap and places the art on the head."""
+    import sticker
+    cfg = B.load_config(Path("/nonexistent"))
+    assert cfg["zebra_paper"] == "label" and cfg["label_x"] == 131
+    costs = [("SPEECH TO TEXT", "ElevenLabs Scribe v2", 0.0025), ("IP CHECK", "Gemini 3.1 Flash Lite", 0.0001),
+             ("IP CHECK", "GPT-6 Luna", 0.0), ("MADE ORIGINAL", "Gemini 3.1 Flash Lite", 0.0002),
+             ("VIDEO 10 s", "H3 Max", 0.56)]
+    assert [s[0] for s in sticker.steps(costs)] == ["SPEECH TO TEXT", "IP CHECK", "MADE ORIGINAL", "VIDEO 10 s"]
+    assert sticker.steps(costs)[1][1] == ["Gemini 3.1 Flash Lite", "GPT-6 Luna"]
+    long = " ".join(["a skateboarder jumping a burning ramp at sunset in downtown Miami"] * 4)
+    for take in ({"prompt": "orchid", "secs": 9.6, "url": URL, "costs": costs[:1] + costs[-1:]},
+                 {"prompt": long, "you_said": long, "secs": 9.6, "url": URL, "costs": costs}):
+        img = sticker.label_3x6(take, cfg, str(CLIP), B)
+        assert img.size == (sticker.LABEL_W, sticker.LABEL_H), img.size
+        assert sticker.label_image(take, cfg, str(CLIP), B, 180, 2).height <= sticker.LABEL_SAFE
+    img.save(TMP / "label3x6.png")
+    data = sticker.label_zpl(img, cfg["label_x"])
+    assert data.startswith(b"^XA^MNY") and b"^PW832" in data and b"^LH131,0" in data and data.endswith(b"^XZ")
+
+
 def test_listening_is_quiet_and_says_so():
     """No "mm-hm" in the earpiece, however long they talk: the screen says LISTENING and its meter moves instead."""
     booth, client, stop = make(silence=2.0, listen_max=40.0)

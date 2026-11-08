@@ -49,7 +49,8 @@ def load_config(path=HERE / "native.conf"):
     cfg = {"LINE": "1", "SECS": "10", "MODEL": "h3", "LANGUAGE": "en", "PRINTER": "/dev/usb/lp0", "GRAB": "1",
            "PLAYS_BEFORE_SLIDES": "4", "SLIDES": "6", "SLIDE_SECS": "2.5", "PRINT_LIGHTEN": "35",
            "OUT_DEVICE": "", "IN_DEVICE": "", "LOW_VOLUME": "40", "RING_EVERY": "120", "LOCATION": "MIAMI BEACH",
-           "END_PAUSE": "5", "LISTEN_MAX": "30", "SHARE_BASE": "https://fal-adobe-max.vercel.app/v"}
+           "END_PAUSE": "5", "LISTEN_MAX": "30", "SHARE_BASE": "https://fal-adobe-max.vercel.app/v",
+           "ZEBRA_PAPER": "LABEL", "LABEL_X": "131"}
     if path.exists():
         for raw in path.read_text().splitlines():
             line = raw.split("#", 1)[0].strip()
@@ -65,6 +66,10 @@ def load_config(path=HERE / "native.conf"):
         "printer": cfg["PRINTER"],
         "share_base": cfg["SHARE_BASE"].strip(),  # the event page the QR codes open; empty = the video's own link
         "location": cfg["LOCATION"],  # printed on the receipt, next to the line number
+        # The Zebra's paper: LABEL = 3x6 in die-cut labels, one a call; ROLL = continuous paper, the long receipt.
+        "zebra_paper": "roll" if cfg["ZEBRA_PAPER"].strip().lower() == "roll" else "label",
+        # Where the 3x6 art starts on the Zebra's head, in dots (centres it on the label; see sticker.label_zpl).
+        "label_x": max(0, min(224, int(cfg["LABEL_X"]))),
         # How much lighter the receipt's pictures print, 0-100 (0 = as filmed). Thermal paper prints dark.
         "print_lighten": min(100, max(0, int(cfg["PRINT_LIGHTEN"]))),
         "grab": cfg["GRAB"] != "0",
@@ -1733,7 +1738,9 @@ class Printer:
         path = printer_path(self.cfg)
         import sticker
         B = sys.modules[__name__]
-        if sticker.speaks_zpl(path):  # a Zebra label printer: the receipt as one sticker, in its language
+        if sticker.speaks_zpl(path) and self.cfg.get("zebra_paper", "label") == "label":  # 3x6 die-cut labels
+            data = sticker.label_zpl(sticker.label_3x6(take, self.cfg, src, B), self.cfg.get("label_x", 131))
+        elif sticker.speaks_zpl(path):  # a Zebra on continuous paper: the long receipt, in its language
             data = sticker.label(path, sticker.sticker_image(take, self.cfg, src, B))
         else:  # an 80 mm receipt printer: the same design, 576 dots across
             data = escpos(sticker.sticker_image(take, self.cfg, src, B, width=DOTS))

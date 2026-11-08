@@ -65,6 +65,8 @@ Hanging up doesn't lose the video. Hang up after **#**, mid-sentence without pre
 | `END_PAUSE`, `LISTEN_MAX` | `5`, `30` | Listening ends when the caller presses **\#**; for callers who never do, after this many seconds of quiet once they've spoken, or this long in all |
 | `PRINTER` | `/dev/usb/lp0` | The receipt printer |
 | `LOCATION` | `AUTO` | The place on the receipt. `AUTO` looks up the city this Pi is in from its internet address (once an hour); any other value, e.g. `MIAMI BEACH`, is printed as is |
+| `ZEBRA_PAPER` | `LABEL` | The Zebra's paper. `LABEL` = 3×6 in die-cut labels, one per call (the receipt re-laid out to fit: one key frame, the itemized call as a table); `ROLL` = continuous paper, the long receipt |
+| `LABEL_X` | `131` | Where the label art starts on the Zebra's 832-dot head. Raise it to move the print right (8 dots = 1 mm). Measured with a full-width head ruler; the GK420d centres a narrower print width, so `^PW` is always the whole head |
 | `ROTATE`, `SPEAKER_VOLUME`, `MIC_VOLUME` | | Same as the browser version |
 | `LOW_VOLUME` | `40` | The phone's volume switch on low: the handset and the video sound play at this percent of loud |
 | `RING_EVERY` | `120` | The phone's ringer switch on: while nobody's on the phone, it rings this often (seconds) |
@@ -138,6 +140,7 @@ line is doing from across the hall. The models, the bill and the links live on t
 | Staff | Light Sage |
 
 - **OFFLINE** (top right, black) means this Pi can't reach fal: check the router.
+- **On 3×6 labels** (`ZEBRA_PAPER=LABEL`, the default) the receipt fits one label (`sticker.label_3x6`), its photo as tall as the label allows; repeated steps on the bill (the two IP checks) print as one row on both layouts.
 - **The receipt** (`sticker.py`) is the same design on both printers: 608 dots wide on the Zebra, 576 on an 80 mm
   receipt printer, as long as it needs. Lockup, when and where, YOU SAID (and WE MADE YOU AN ORIGINAL after an IP
   swap), the video's clearest frame with its timecode, "Generated in", the bill, the total, the QR, the sign-off.
