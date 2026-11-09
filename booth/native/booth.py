@@ -219,6 +219,13 @@ STT_NAMES = {"fal-ai/elevenlabs/speech-to-text/scribe-v2": "ElevenLabs Scribe v2
 MODEL_NAMES = {}  # a model's name as the screen and receipt show it, when it differs: H3 Max is just "H3 Max" (Lizzie, Nov 6)
 
 
+def won(bill, label):
+    """The model whose answer was used for this step of the bill (the first marked), else the first one billed."""
+    marked = [m for lab, m, c in bill if lab == label and c is None]
+    billed = [m for lab, m, c in bill if lab == label]
+    return (marked or billed or [""])[0]
+
+
 def model_name(name):
     return MODEL_NAMES.get(name, name or "")
 
@@ -258,6 +265,12 @@ class Fal:
     REMIX_BACKUP_AFTER = 1.5  # s
     REMIX_DEADLINE = 12       # s, including the re-check
     LLM_NAMES = {"google/gemini-3.1-flash-lite": "Gemini 3.1 Flash Lite", "openai/gpt-6-luna": "GPT-6 Luna"}
+
+    def _won(self, bill, label, model):
+        """Marks whose answer was used for this step (USD None): the receipt names that model alone, with the
+        step's whole cost (both models in a race are billed)."""
+        if bill is not None:
+            bill.append((label, self.LLM_NAMES.get(model, model), None))
 
     def _llm(self, model, system, prompt, bill, label, timeout=8, **kw):
         """One language-model call through fal. Its cost (fal reports it) goes on the receipt's bill."""
@@ -375,7 +388,9 @@ class Fal:
             verdict = json.loads(re.search(r"\{.*?\}", out, re.S).group(0))  # no verdict: the other one decides
             return None if verdict.get("ok") is True else str(verdict.get("what") or "someone else's IP")
 
-        return self._first([(m, lambda m=m: ask(m)) for m in self.IP_CHECK_MODELS], self.IP_CHECK_DEADLINE)[1]
+        name, borrowed = self._first([(m, lambda m=m: ask(m)) for m in self.IP_CHECK_MODELS], self.IP_CHECK_DEADLINE)
+        self._won(bill, "IP CHECK", name)
+        return borrowed
 
     def remix(self, prompt, borrowed, bill=None):
         """The prompt turned into an original idea with the same energy, checked again before it's used. Raises
@@ -392,8 +407,10 @@ class Fal:
             return original
 
         def race(brief, temperature):
-            return self._first([(m, lambda m=m: ask(m, brief, temperature)) for m in self.REMIX_MODELS],
-                               self.REMIX_DEADLINE, self.REMIX_BACKUP_AFTER)[1]
+            name, original = self._first([(m, lambda m=m: ask(m, brief, temperature)) for m in self.REMIX_MODELS],
+                                         self.REMIX_DEADLINE, self.REMIX_BACKUP_AFTER)
+            self._won(bill, "MADE ORIGINAL", name)
+            return original
         try:
             return race(REMIX_PUNCHY, 0.8)  # the punchier original first
         except Exception as e:
@@ -2128,7 +2145,7 @@ class Booth:
         if rid in self.cancelled:
             return call_off()
         if not borrowed:
-            winner = next((m for label, m, _ in bill if label == "IP CHECK"), "")
+            winner = won(bill, "IP CHECK")
             self.post(("stage", cid, rid, "checked", winner))
             if spec:
                 return self._finish_render(cid, rid, prompt, t0, spec)
@@ -2142,7 +2159,7 @@ class Booth:
         except Exception:
             return self.post(("ask_again", cid, rid))
         log.info("made an original instead: %r", original)
-        self.post(("stage", cid, rid, "remixed", next((m for label, m, _ in bill if label == "MADE ORIGINAL"), ""),
+        self.post(("stage", cid, rid, "remixed", won(bill, "MADE ORIGINAL"),
                    original))
         if rid not in self.cancelled:
             self._render(cid, rid, original, t0, you_said=prompt)
@@ -2353,12 +2370,13 @@ class Booth:
         if rid in self.stt_secs:
             secs, endpoint, audio_secs = self.stt_secs.pop(rid)  # both speech models bill by the second of audio
             items.append(("SPEECH TO TEXT", STT_NAMES.get(endpoint, endpoint), audio_secs * PRICES.get(endpoint, 0)))
-        # the IP check (and the original made instead, if it borrowed), one line per kind and model
-        merged = {}
-        for label, model, usd in self.llm_bill.pop(rid, []):
-            merged[(label, model)] = merged.get((label, model), 0.0) + usd
-        items += sorted(((label, model, usd) for (label, model), usd in merged.items()),
-                        key=lambda i: i[0] != "IP CHECK")  # the check first, then the original it made
+        # the IP check (and the original made instead, if it borrowed): one line each, named for the model whose
+        # answer was used, costing all it took (both models in a race are billed, and the original is checked again)
+        bill = self.llm_bill.pop(rid, [])
+        for label in ("IP CHECK", "MADE ORIGINAL"):
+            usd = [c for lab, _, c in bill if lab == label and c is not None]
+            if usd:
+                items.append((label, won(bill, label), sum(usd)))
         try:
             endpoint = self.fal.endpoint(take["model"])
         except (StopIteration, AttributeError):

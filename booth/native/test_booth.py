@@ -445,11 +445,13 @@ def test_ip_is_remixed_into_an_original():
     assert client.prompts == [client.text + B.ORIGINAL_ONLY, client.remix + B.ORIGINAL_ONLY], client.prompts
     assert booth.take["prompt"] == client.remix and booth.take["you_said"] == client.text
     assert booth.take["url"] == booth.screen.calls("video")[-1][1] and len(booth.screen.calls("video")) == 1
-    bill = {(label, model): round(usd, 4) for label, model, usd in booth.take["costs"]}
-    # two checks (their words, then the original) on one line, and the remix on its own
-    # both checkers race on each check; GPT-6 Luna makes the original
-    assert bill[("IP CHECK", "Gemini 3.1 Flash Lite")] == 0.0006 and bill[("IP CHECK", "GPT-6 Luna")] == 0.0006, bill
-    assert bill[("MADE ORIGINAL", "GPT-6 Luna")] == 0.0003, bill
+    labels = [label for label, _, _ in booth.take["costs"]]
+    bill = {label: (model, round(usd, 4)) for label, model, usd in booth.take["costs"]}
+    # one line a step, named for the model whose answer was used, costing all it took: both checkers race on each
+    # check (their words, then the original), so the check line carries all four calls; GPT-6 Luna makes the original
+    assert labels.count("IP CHECK") == 1 and labels.count("MADE ORIGINAL") == 1, labels
+    assert bill["IP CHECK"][0] in ("Gemini 3.1 Flash Lite", "GPT-6 Luna") and bill["IP CHECK"][1] == 0.0012, bill
+    assert bill["MADE ORIGINAL"] == ("GPT-6 Luna", 0.0003), bill
     img = B.receipt_image(booth.take, booth.cfg, "/nonexistent.mp4")
     assert img.height > 600
     stop.set()
