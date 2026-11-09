@@ -201,6 +201,23 @@ def key_frames(src, secs, size, count, candidates=18):
     return sorted(((t, f) for t, f, _ in picked), key=lambda p: p[0])
 
 
+def ink_chip(img, d, x, y, h, text, font, strong=False, pad=11):
+    """An outlined box h tall with `text` in it, centred on the ink the text actually leaves: drawn on its own first
+    and measured in pixels, so no font metric (they differ between Pillow builds: the Pi's print sat to the left on
+    Nov 9 though the Mac's render was centred) can move it. Returns the box's right edge."""
+    from PIL import Image, ImageDraw
+    tmp = Image.new("L", (int(d.textlength(text, font=font)) + 4 * h, 3 * h), 0)
+    t = ImageDraw.Draw(tmp)
+    t.text((h, h), text, font=font, fill=255)
+    if strong:
+        t.text((h + 1, h), text, font=font, fill=255)
+    glyphs = tmp.crop(tmp.getbbox())
+    right = x + 3 + glyphs.width + 2 * pad   # inside the 2-dot outline: exactly `pad` either side of the ink
+    d.rectangle([x, y, right, y + h], fill=255, outline=0, width=2)
+    img.paste(0, (x + 2 + pad, y + 2 + (h - 3 - glyphs.height) // 2), glyphs)
+    return right
+
+
 def sticker_image(take, cfg, src, B, width=W):
     """The receipt, as a 1-bit image `width` dots wide and as long as it needs. B is booth's module: its fonts, logo,
     photo treatment, model names and share link."""
@@ -226,11 +243,9 @@ def sticker_image(take, cfg, src, B, width=W):
         if strong:
             d.text((xy[0] + 1, xy[1]), text, font=font, fill=0, **kw)
 
-    def chip(x, yy, h, text):
-        """Text in an outlined box, its ink (not its line box) centred in the box both ways."""
-        bb = probe.textbbox((0, 0), text, font=small)
-        d.rectangle([x, yy, x + bb[2] - bb[0] + 23, yy + h], fill=255, outline=0, width=2)  # +1: the second strike
-        ink((x + 11 - bb[0], yy + h // 2 - (bb[1] + bb[3]) // 2), text, small)
+    def chip(x, yy, h, text, strong=True):
+        """Text in an outlined box, centred on its actual ink both ways (see ink_chip)."""
+        ink_chip(img, d, x, yy, h, text, small, strong)
 
     def lr(yy, left, right, font):
         ink((M, yy), left, font)
@@ -421,10 +436,8 @@ def label_image(take, cfg, src, B, photo_h=None, most=4):
             d.rectangle([x, yy, x + 2, yy + 2], fill=0)
 
     def chip(x, yy, h, text, strong=False):
-        """Text in an outlined box, its ink centred in the box."""
-        bb = probe.textbbox((0, 0), text, font=small)
-        d.rectangle([x, yy, x + bb[2] - bb[0] + 22, yy + h], fill=255, outline=0, width=2)
-        ink((x + 11 - bb[0], yy + h // 2 - (bb[1] + bb[3]) // 2), text, small, strong)
+        """Text in an outlined box, centred on its actual ink both ways (see ink_chip)."""
+        ink_chip(img, d, x, yy, h, text, small, strong)
 
     def wrap(text, font, room):
         lines, cur = [], ""
