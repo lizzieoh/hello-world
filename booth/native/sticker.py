@@ -26,7 +26,7 @@ EVENT = "ADOBE MAX 2026 · BOOTH 423"
 # The gap between labels, in dots: 0 for continuous receipt paper (what the booths use), 24 for die-cut labels with a
 # 3 mm gap. Continuous paper with a gap set makes the Zebra hunt for a gap and stop, blinking red.
 LABEL_GAP = 0
-PAD = 40       # white above the lockup
+PAD = 24       # white above the lockup (as on the 3x6 label)
 PAD_FOOT = 40  # and below the sign-off, so the tear never comes near the print
 _place = {"name": "", "tz": "", "at": 0.0, "busy": False}
 _place_lock = threading.Lock()
@@ -212,9 +212,9 @@ def sticker_image(take, cfg, src, B, width=W):
     small = B.brand_font("mono", 20, 700)
     note_f = B.brand_font("mono", 18)  # the QR's two lines (16 printed faint on the Rongta)
     try:  # what they said, in Focal Text Regular
-        said_f = ImageFont.truetype(str(B.BRAND / "fonts" / "FocalText-Regular.otf"), 24)
+        said_f = ImageFont.truetype(str(B.BRAND / "fonts" / "FocalText-Regular.otf"), 23)
     except OSError:
-        said_f = B.brand_font("display", 24, 500)
+        said_f = B.brand_font("display", 23, 500)
     probe = ImageDraw.Draw(Image.new("L", (1, 1)))
     img = Image.new("L", (width, 5000), 255)  # cropped to what was drawn
     d = ImageDraw.Draw(img)
@@ -258,19 +258,20 @@ def sticker_image(take, cfg, src, B, width=W):
             lines[-1] = lines[-1].rstrip(",.;:-“") + "…”"
         return lines
 
-    # ---- the top: the lockup, the line and the event, then the call and when and where
+    # ---- the top, set exactly as on the 3x6 label Lizzie approved (her Nov 9 note): the lockup and the event, then
+    # the date, time and place on one line; struck once, as there
     y = PAD
     if B.LOGO.exists():
-        mark = B.logo_image(424)
+        mark = B.logo_image(400)
         img.paste(0, ((width - mark.width) // 2, y), mark)
-        y += mark.height + 30
+        y += mark.height + 22
     else:
         d.text((width // 2, y), "CALL-A-FAL", font=B.brand_font("display", 54, 900), fill=0, anchor="mt")
-        y += 90
-    ink((width // 2, y), EVENT, small, anchor="ma")
-    y += 44
+        y += 80
+    ink((width // 2, y), EVENT, small, strong=False, anchor="ma")
+    y += 34
     dots(y)
-    y += 22
+    y += 18
     # date, time and place on one line (as on the 3x6 label Lizzie approved); a long city name gives way
     city, tz = place(cfg)
     at = local_time(take.get("at") or time.time(), tz)
@@ -280,32 +281,32 @@ def sticker_image(take, cfg, src, B, width=W):
         return " · ".join(p for p in (date, clock, c.rstrip()) if p)
     while city and probe.textlength(when(city), font=mono) > width - 2 * M:
         city = city[:-1]
-    ink((width // 2, y), when(city), mono, anchor="ma")
-    y += 38
+    ink((width // 2, y), when(city), mono, strong=False, anchor="ma")
+    y += 32
     dots(y)
-    y += 30
+    y += 24
 
     # ---- what they said, and the original we made when it was someone else's
     call_no = [f"CALL #{take.get('call', 0):04d}"]  # on the first label's row
 
     def said(head, words):
         nonlocal y
-        ink((M, y), head, small)
+        ink((M, y), head, small, strong=False)
         if call_no:
-            ink((width - M, y), call_no.pop(), small, anchor="ra")
-        y += 44
+            ink((width - M, y), call_no.pop(), small, strong=False, anchor="ra")
+        y += 34
         words = words.strip()
         for line in wrap(f"“{words[:1].upper() + words[1:]}”", said_f, width - 2 * M - QUOTE_INDENT):
             hang = probe.textlength("“", font=said_f) if line.startswith("“") else 0  # the quote mark hangs
             d.text((M + QUOTE_INDENT - hang, y), line, font=said_f, fill=0)
-            y += 30
+            y += 29
     if take.get("you_said"):  # they asked for someone else's IP
         said("YOU SAID", take["you_said"])
-        y += 26
+        y += 12
         said("WE MADE YOU AN ORIGINAL", take.get("prompt") or "")
     elif take.get("prompt"):
         said("ONE OF OURS" if take.get("surprise") else "YOU SAID", take["prompt"])
-    y += 44
+    y += 30
 
     # ---- two key frames, edge to edge (the Zebra's a little in, so a label a dot off never shows a sliver)
     inset = 0 if width <= 576 else 12
