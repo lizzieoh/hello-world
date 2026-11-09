@@ -1370,7 +1370,10 @@ class Cache:
                 return
             stills = self._pull_stills(name)
             with self.lock:
-                self.items = [{"file": name, "prompt": take["prompt"], "stills": stills}] + self.items
+                self.items = [{"file": name, "prompt": take["prompt"], "stills": stills,
+                               # for staff favorites on the event page: fal's link, the receipt's share link, the model
+                               "url": take.get("url") or "", "share": take.get("share") or "",
+                               "model": take.get("model") or "", "at": int(time.time())}] + self.items
                 for old in self.items[self.keep:]:
                     (self.root / old["file"]).unlink(missing_ok=True)
                     for f in self._stills_dir(old["file"]).glob("*"):
@@ -1419,7 +1422,8 @@ class Cache:
 
     def listing(self):
         with self.lock:
-            return [{"file": h["file"], "prompt": h["prompt"], "still": (h.get("stills") or [None])[0]}
+            return [{"file": h["file"], "prompt": h["prompt"], "still": (h.get("stills") or [None])[0],
+                     "url": h.get("url", ""), "share": h.get("share", ""), "model": h.get("model", ""), "at": h.get("at", 0)}
                     for h in self.items]
 
     def recent(self):
@@ -2063,6 +2067,8 @@ class Booth:
             return self.start_over()
         if not self.off_hook:
             return
+        if k == "0" and self.state in ("greeting", "listening") and self.reprint_source():
+            return self.reprint_last()  # 0 before saying anything: the last video, printed again
         if k == "1" and self.state in ("greeting", "listening"):
             return self.surprise()
         if k == "*" and self.state == "busy" and self.view.get("retry"):
@@ -2332,7 +2338,11 @@ class Booth:
         if self.fal and take.get("model") != self.fal.models[0][0]:
             self.stats["fallbacks"] += 1
         self.stats["render_secs"] = (self.stats["render_secs"] + [round(take["secs"], 1)])[-50:]
+        take["call"] = self.call_no
+        take["costs"] = self.costs(take, rid)  # the bill now, on every path: a reprint (even from disk) has it
         self.last_take = take
+        take.setdefault("share", share_url(take, self.cfg))  # saved with the copy, for staff favorites on the page
+        self._save_last_take(take)
         self.cache.add(take)  # kept for the screen between calls, even if they hung up while it rendered
         if rid in self.orphans:
             self.orphans.discard(rid)
@@ -2351,8 +2361,6 @@ class Booth:
             return
         self.pending = None
         take["rid"] = rid
-        take["call"] = self.call_no
-        take["costs"] = self.costs(take, rid)
         self.take = take
         self.state = "ready"
         self.hold_from = None
@@ -2522,6 +2530,74 @@ class Booth:
         t["phase"] = "sound"
         self.after(self.cfg["secs"] + 0.3, "sound_done", cid, t)
         self.draw()
+
+    def _last_take_path(self):
+        return Path(getattr(self.cache, "root", HERE / "cache")) / "last_take.json"
+
+    def _save_last_take(self, take):
+        """The latest video, on disk too, so 0 can still reprint it after the booth restarts."""
+        try:
+            keep = {k: v for k, v in take.items() if isinstance(v, (str, int, float, bool, list, dict, type(None)))}
+            self._last_take_path().write_text(json.dumps(keep, default=str))
+        except Exception as e:
+            log.warning("couldn't save the last video for reprints: %s", e)
+
+    def reprint_source(self):
+        """The video 0 reprints: the latest made on this line, from memory or (after a restart) from disk."""
+        if not self.last_take:
+            try:
+                t = json.loads(self._last_take_path().read_text())
+                if t.get("url") or t.get("file"):
+                    self.last_take = t
+            except (OSError, ValueError):
+                pass
+        return self.last_take
+
+    def reprint_last(self):
+        """0 pressed before a prompt: the last video made on this line prints again (it plays, muted, meanwhile).
+        No new video is made; the call ends like any other, with the receipt line and then the busy tone."""
+        t = self.reprint_source()
+        log.info("0 before a prompt: reprinting the last video")
+        self.cid += 1  # whatever they started saying is dropped
+        cid = self.cid
+        self.state = "reprint"
+        self.pending = None
+        self.line.cancel_recording()
+        self.line.stop(fade=False)
+        self.line.play("printing")
+        try:
+            self.screen.video(t.get("file") or t["url"], mute=True)
+        except Exception as e:
+            log.warning("couldn't show the last video: %s", e)
+        self.set_view("message", head="Printing the last video.", sub="Take your receipt from the printer.",
+                      retry=False)
+        threading.Thread(target=self._reprint, args=(cid, t), daemon=True).start()
+
+    def _reprint(self, cid, take):
+        try:
+            self.printer.print(take)
+            self.post(("reprinted", cid, True))
+        except Exception as e:
+            log.error("reprint failed: %s", e)
+            self.post(("reprinted", cid, False))
+
+    def on_reprinted(self, cid, ok):
+        self.stats["prints" if ok else "print_fails"] += 1
+        if ok:
+            self.stats["last_print"] = time.time()
+        else:
+            self.last_error = {"at": time.time(), "what": "Print failed"}
+        if cid != self.cid or not self.off_hook or self.state != "reprint":
+            return
+        if ok:
+            self.line.play("receipt")
+            self.after(DONE_BUSY_AFTER, "reprint_done", cid)
+        else:
+            self.busy("Printer's out.", "Please try again in a moment.", retry=True)
+
+    def on_reprint_done(self, cid):
+        if cid == self.cid and self.off_hook and self.state == "reprint":
+            self.busy("Thanks for calling.", "Please hang up the phone.", retry=False)
 
     def _print(self, cid, take):
         try:

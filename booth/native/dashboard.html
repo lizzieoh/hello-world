@@ -111,6 +111,16 @@
            padding: 10px 14px; border-radius: 2px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 90vw; }
   .toast.show { opacity: 1; }
   @media (max-width: 520px) { .group { grid-template-columns: 1fr; } .group > .mono { padding-top: 0; } }
+
+  /* Favorites: picked here, shown on the event page after "Push to site" */
+  .favs { margin: 0 16px 16px; }
+  @media (min-width: 1100px) { .favs { margin: 0 32px 16px; } }
+  .favs .top a { color: inherit; }
+  .favs .empty { font-size: 14px; }
+  .item .btn.fav.on { background: var(--neon); border-color: var(--neon); color: var(--dark-bronze); border-width: 1px; }
+  .item .btn.fav.on::before { content: none; }
+  .item .line-tag { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+  .pending { background: var(--yellow); padding: 4px 6px; border-radius: 2px; }
 </style>
 </head>
 <body>
@@ -120,6 +130,14 @@
   <span class="clock" id="clock"></span>
 </header>
 <nav class="strip" id="strip" aria-label="All lines"></nav>
+<section class="card favs" id="favs" aria-labelledby="favs-title">
+  <div class="top"><h2 id="favs-title">Favorites</h2><span class="state s-free" id="fav-count">0</span>
+    <span class="mono" id="fav-pushed"></span>
+    <a class="mono host" id="fav-page" href="https://fal-adobe-max.vercel.app/#made" target="_blank" rel="noopener">Event page ↗</a></div>
+  <div class="feed" id="fav-list"></div>
+  <div class="row"><button class="btn primary" id="fav-push">Push to site</button>
+    <span class="mono" id="fav-note">Star videos under Review videos on any line.</span></div>
+</section>
 <main id="main"></main>
 <div class="toast" id="toast" role="status"></div>
 
@@ -194,6 +212,58 @@
 
   const toast = (msg) => { const t = $("#toast"); t.textContent = msg; t.classList.add("show");
     clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), 2600); };
+  // ---------- favorites (kept by dashboard.py on this Mac; "Push to site" publishes them) ----------
+  let favs = { items: [], pushed_at: 0, pushed_ids: [] };
+  const favKey = (url) => url;
+  const isFav = (url) => favs.items.some((f) => f.url === url);
+  async function loadFavs() {
+    try { favs = await (await fetch("/favorites")).json(); } catch {}
+    renderFavs();
+  }
+  async function saveFavs() {
+    const r = await (await fetch("/favorites", { method: "POST", headers: { "Content-Type": "application/json" },
+                                                body: JSON.stringify({ items: favs.items }) })).json();
+    if (r.ok) favs = r; else toast(r.error || "Couldn't save");
+    renderFavs();
+  }
+  function renderFavs() {
+    const list = $("#fav-list"); list.innerHTML = "";
+    const pushed = new Set(favs.pushed_ids || []);
+    const dirty = favs.items.length !== pushed.size || favs.items.some((f) => !pushed.has(f.id));
+    $("#fav-count").textContent = favs.items.length;
+    $("#fav-pushed").textContent = favs.pushed_at ? "Live since " + hhmm(favs.pushed_at) : "Not on the page yet";
+    $("#fav-pushed").className = "mono" + (dirty && favs.pushed_at ? " pending" : "");
+    if (dirty && favs.pushed_at) $("#fav-pushed").textContent += " · changes not pushed";
+    if (!favs.items.length) list.innerHTML = '<span class="empty">No favorites yet.</span>';
+    for (const f of favs.items) {
+      const d = document.createElement("div"); d.className = "item";
+      const im = document.createElement("img"); im.alt = f.prompt; if (f.poster) im.src = f.poster;
+      const tag = document.createElement("span"); tag.className = "line-tag"; tag.textContent = "Line " + (f.line || "?");
+      const p = document.createElement("span"); p.textContent = f.prompt;
+      const x = document.createElement("button"); x.className = "btn warn"; x.textContent = "Remove";
+      x.onclick = () => { favs.items = favs.items.filter((g) => g.url !== f.url); saveFavs(); document.querySelectorAll(".btn.fav").forEach(paintStar); };
+      d.append(im, tag, p, x); list.append(d);
+    }
+  }
+  function paintStar(b) {
+    const on = isFav(b.dataset.url); b.classList.toggle("on", on); b.textContent = on ? "★ Favorite" : "☆ Favorite";
+  }
+  function posterOf(img) {  // the still, small, so the page has a poster before the video loads
+    try { const c = document.createElement("canvas"); const w = 480; c.width = w; c.height = Math.round(w * (img.naturalHeight || 9) / (img.naturalWidth || 16));
+          c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); return c.toDataURL("image/jpeg", .8); } catch { return ""; }
+  }
+  $("#fav-push").onclick = async (e) => {
+    const b = e.currentTarget;
+    if (!favs.items.length && !confirm("No favorites: push an empty list and clear the page's gallery?")) return;
+    if (favs.items.length && !confirm(`Put ${favs.items.length} favorite${favs.items.length > 1 ? "s" : ""} on the public event page? Anyone with the link sees them and their prompts.`)) return;
+    b.disabled = true; $("#fav-note").textContent = "Pushing… (copying each new video once)";
+    try {
+      const r = await (await fetch("/favorites/push", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })).json();
+      if (r.ok) { favs = r; toast(`${r.items.length} on the event page`); $("#fav-note").textContent = "Live. The page picks them up within a minute."; }
+      else { toast(r.error || "Push failed"); $("#fav-note").textContent = r.error || "Push failed"; }
+    } catch { toast("Push failed"); } finally { b.disabled = false; renderFavs(); }
+  };
+
   setInterval(() => { $("#clock").textContent = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); }, 1000);
 
   let port = 8080, gen = 0;  // gen: bumped whenever the cards are rebuilt, so old timers stop
@@ -291,7 +361,15 @@
           if (it.still) api(host, "/api/still?f=" + encodeURIComponent(it.still)).then(x => x.blob()).then(b => im.src = URL.createObjectURL(b)).catch(() => {});
           const p = document.createElement("span"); p.textContent = it.prompt;
           const h = document.createElement("button"); h.className = "btn warn"; h.dataset.cmd = "hide"; h.dataset.file = it.file; h.textContent = "Hide";
-          d.append(im, p, h); box.append(d);
+          const s = document.createElement("button"); s.className = "btn fav"; s.dataset.url = it.url || "";
+          if (!it.url) { s.disabled = true; s.textContent = "☆ Favorite"; s.title = "Made before favorites were added"; }
+          else { paintStar(s); s.onclick = () => {
+            if (isFav(it.url)) favs.items = favs.items.filter((g) => g.url !== it.url);
+            else favs.items.unshift({ url: it.url, share: it.share, prompt: it.prompt, model: it.model, at: it.at,
+                                      line: st?.system?.line || guessLine, poster: im.complete ? posterOf(im) : "" });
+            paintStar(s); saveFavs();
+          }; }
+          d.append(im, p, s, h); box.append(d);
         }
       } catch (e) { if (e.message !== "pin") toast("Can't reach " + host); }
     }
@@ -402,6 +480,7 @@
     for (const h of booths) main.append(card(h));
   }
 
+  loadFavs();
   start();  // the PIN comes from this Mac's staff.pin; a 401 from any booth asks for it
 })();
 </script>

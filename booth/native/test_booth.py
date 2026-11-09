@@ -744,6 +744,54 @@ def test_hang_up_before_printing_still_prints():
     stop.set()
 
 
+def test_zero_before_a_prompt_reprints_the_last_video():
+    """0 before saying anything prints the line's last video again: nothing new is made, and the call ends."""
+    booth, client, stop = make()
+    booth.post(("hook", True))
+    wait(lambda: booth.state == "greeting", 3, "greeting")
+    booth.post(("key", "0"))  # nothing made yet on this line: 0 does nothing
+    time.sleep(0.3)
+    assert booth.state in ("greeting", "listening")
+    booth.post(("hook", False))
+    wait(lambda: booth.state == "idle", 3, "idle")
+
+    lift_and_say(booth, talk())
+    wait(lambda: booth.state == "ready", 10, "ready")
+    first = booth.take
+    (TMP / "printer.bin").write_bytes(b"")
+    booth.post(("hook", False))
+    wait(lambda: (TMP / "printer.bin").stat().st_size > 1000, 25, "first receipt")
+    wait(lambda: booth.state == "idle", 5, "idle")
+    calls = len(client.calls)
+
+    (TMP / "printer.bin").write_bytes(b"")
+    done_busy, B.DONE_BUSY_AFTER = B.DONE_BUSY_AFTER, 0.3
+    try:
+        booth.post(("hook", True))
+        wait(lambda: booth.state == "greeting", 3, "greeting")
+        booth.post(("key", "0"))
+        wait(lambda: booth.state == "reprint", 3, "reprinting")
+        wait(lambda: (TMP / "printer.bin").stat().st_size > 1000, 25, "the reprint")
+        wait(lambda: booth.state == "busy", 5, "the call ends after the reprint")
+    finally:
+        B.DONE_BUSY_AFTER = done_busy
+    assert booth.last_take is first and len(client.calls) == calls  # nothing new was made
+    booth.post(("hook", False))
+    wait(lambda: booth.state == "idle", 3, "idle")
+
+    booth.last_take = None  # as after a restart: the last video comes back from disk
+    (TMP / "printer.bin").write_bytes(b"")
+    booth.post(("hook", True))
+    wait(lambda: booth.state == "greeting", 3, "greeting")
+    booth.post(("key", "0"))
+    wait(lambda: booth.state == "reprint", 3, "reprinting after a restart")
+    wait(lambda: (TMP / "printer.bin").stat().st_size > 1000, 25, "the reprint after a restart")
+    assert booth.last_take["prompt"] == first["prompt"] and len(client.calls) == calls
+    assert booth.last_take.get("call") and booth.last_take.get("costs"), "the disk copy keeps the call number and bill"
+    booth.post(("hook", False))
+    stop.set()
+
+
 def test_swears_are_masked():
     """Swearing and slurs are starred before anything shows them; ordinary words that contain them are left alone."""
     assert B.mask_swears("Oh, shit. A fucking huge dog") == "Oh, s***. A f****** huge dog"
@@ -793,6 +841,18 @@ def test_dashboard_controls():
     time.sleep(3)
     assert booth.state == "busy" and booth.take is None, "the video never comes up"
     assert ask("status")["status"]["stats"]["pulled"] == 1
+    stop.set()
+
+
+def test_feed_keeps_the_link_for_favorites():
+    """Each saved video keeps fal's link, the receipt's share link and the model, so staff can star it in the
+    dashboard and push it to the event page."""
+    booth, client, stop = make()
+    lift_and_say(booth, talk())
+    wait(lambda: booth.cache.items, 20, "the video saved for the screen")
+    it = booth.cache.listing()[0]
+    assert it["url"] and it["url"] == booth.last_take["url"], it
+    assert it["share"] == B.share_url(booth.last_take, booth.cfg) and it["model"] and it["at"] > 0, it
     stop.set()
 
 
