@@ -2,8 +2,9 @@
 an 80 mm ESC/POS receipt printer (576 dots, cut). booth.py picks the language; the design is the same.
 
 Lizzie's layout (the "CALL-A-FAL receipt · Nov 6 AM" frame in "(CURRENT) presentation R3" on the adobe max board), in
-black on white, with the type fixes from the fal-ui check: the lockup, ZERO LATENCY LINE and the event, the call and
-when and where (the place found from the network unless LOCATION names one), YOU SAID (and WE MADE YOU AN ORIGINAL
+black on white, with the type fixes from the fal-ui check and Lizzie's Nov 7-9 paper notes: the lockup and the event,
+the date, time and place on one line (the place found from the network unless LOCATION names one), YOU SAID (CALL # on
+its row) (and WE MADE YOU AN ORIGINAL
 after an IP swap), two key frames edge to edge with their timecodes, "Generated in", the itemized call, the total, a
 QR to their video's page, the sign-off. One divider everywhere: the big-dot rule (3-dot dots, 10 apart).
 
@@ -209,20 +210,27 @@ def sticker_image(take, cfg, src, B, width=W):
     sign_f = B.brand_font("display", 26, 600)     # thermal drops Focal's 500 strokes; 600 holds
     mono = B.brand_font("mono", 24, 700)
     small = B.brand_font("mono", 20, 700)
-    note_f = B.brand_font("mono", 16)  # the QR's two lines, small, as in the design
+    note_f = B.brand_font("mono", 18)  # the QR's two lines (16 printed faint on the Rongta)
     try:  # what they said, in Focal Text Regular
-        said_f = ImageFont.truetype(str(B.BRAND / "fonts" / "FocalText-Regular.otf"), 23)
+        said_f = ImageFont.truetype(str(B.BRAND / "fonts" / "FocalText-Regular.otf"), 24)
     except OSError:
-        said_f = B.brand_font("display", 23, 500)
+        said_f = B.brand_font("display", 24, 500)
     probe = ImageDraw.Draw(Image.new("L", (1, 1)))
     img = Image.new("L", (width, 5000), 255)  # cropped to what was drawn
     d = ImageDraw.Draw(img)
 
-    def ink(xy, text, font, strong=False, **kw):
-        """Text, struck once as in Lizzie's design; `strong` strikes it twice a dot apart (the timecode chips)."""
+    def ink(xy, text, font, strong=True, **kw):
+        """Text struck twice a dot apart: HAL Mono has one thin weight, and struck once it printed faint on the
+        Rongta (Nov 9). strong=False strikes it once."""
         d.text(xy, text, font=font, fill=0, **kw)
         if strong:
             d.text((xy[0] + 1, xy[1]), text, font=font, fill=0, **kw)
+
+    def chip(x, yy, h, text):
+        """Text in an outlined box, its ink (not its line box) centred in the box both ways."""
+        bb = probe.textbbox((0, 0), text, font=small)
+        d.rectangle([x, yy, x + bb[2] - bb[0] + 23, yy + h], fill=255, outline=0, width=2)  # +1: the second strike
+        ink((x + 11 - bb[0], yy + h // 2 - (bb[1] + bb[3]) // 2), text, small)
 
     def lr(yy, left, right, font):
         ink((M, yy), left, font)
@@ -259,34 +267,38 @@ def sticker_image(take, cfg, src, B, width=W):
     else:
         d.text((width // 2, y), "CALL-A-FAL", font=B.brand_font("display", 54, 900), fill=0, anchor="mt")
         y += 90
-    ink((width // 2, y), f"ZERO LATENCY LINE {str(cfg.get('line', '')).zfill(2)}", mono, anchor="ma")
-    y += 38
     ink((width // 2, y), EVENT, small, anchor="ma")
-    y += 50
+    y += 44
     dots(y)
     y += 22
+    # date, time and place on one line (as on the 3x6 label Lizzie approved); a long city name gives way
     city, tz = place(cfg)
     at = local_time(take.get("at") or time.time(), tz)
-    lr(y, f"CALL #{take.get('call', 0):04d}", time.strftime("%I:%M %p", at).lstrip("0"), mono)
-    y += 40
-    date = time.strftime("%b %d %Y", at).upper()
-    while city and probe.textlength(f"{date}  {city}", font=mono) > width - 2 * M:  # a long city never hits the date
+    date, clock = time.strftime("%b %d %Y", at).upper(), time.strftime("%I:%M %p", at).lstrip("0")
+
+    def when(c):
+        return " · ".join(p for p in (date, clock, c.rstrip()) if p)
+    while city and probe.textlength(when(city), font=mono) > width - 2 * M:
         city = city[:-1]
-    lr(y, date, city.rstrip(), mono)
-    y += 40
+    ink((width // 2, y), when(city), mono, anchor="ma")
+    y += 38
     dots(y)
     y += 30
 
     # ---- what they said, and the original we made when it was someone else's
+    call_no = [f"CALL #{take.get('call', 0):04d}"]  # on the first label's row
+
     def said(head, words):
         nonlocal y
         ink((M, y), head, small)
-        y += 47
+        if call_no:
+            ink((width - M, y), call_no.pop(), small, anchor="ra")
+        y += 44
         words = words.strip()
-        for line in wrap(f"“{words[:1].upper() + words[1:]}”", said_f, width - 2 * M):
+        for line in wrap(f"“{words[:1].upper() + words[1:]}”", said_f, width - 2 * M - QUOTE_INDENT):
             hang = probe.textlength("“", font=said_f) if line.startswith("“") else 0  # the quote mark hangs
-            d.text((M - hang, y), line, font=said_f, fill=0)
-            y += 29
+            d.text((M + QUOTE_INDENT - hang, y), line, font=said_f, fill=0)
+            y += 30
     if take.get("you_said"):  # they asked for someone else's IP
         said("YOU SAID", take["you_said"])
         y += 26
@@ -305,10 +317,7 @@ def sticker_image(take, cfg, src, B, width=W):
         frames = []
     for t, f in frames:
         img.paste(B.thermal_photo(f, 1 + cfg.get("print_lighten", 0) / 120), (inset, y))
-        tc = f"{int(t // 60)}:{t % 60:04.1f}"
-        cw = int(probe.textlength(tc, font=small)) + 22
-        d.rectangle([inset + 8, y + 8, inset + 8 + cw, y + 36], fill=255, outline=0, width=2)
-        ink((inset + 19, y + 13), tc, small, strong=True)
+        chip(inset + 8, y + 8, 28, f"{int(t // 60)}:{t % 60:04.1f}")
         y += fh + 7
     y += 31
 
@@ -317,9 +326,7 @@ def sticker_image(take, cfg, src, B, width=W):
     y += 82
     dots(y)
     y += 30
-    cw = int(probe.textlength("ITEMIZED CALL", font=small)) + 22  # in a chip, like the timecodes
-    d.rectangle([M, y, M + cw, y + 28], fill=255, outline=0, width=2)
-    ink((M + 11, y + 2), "ITEMIZED CALL", small)
+    chip(M, y, 28, "ITEMIZED CALL")  # in a chip, like the timecodes
     y += 42
     bill = [(item, B.model_name(model), round(cost, 4)) for item, model, cost in take.get("costs") or []]
     for item, models, cost in steps(bill):
