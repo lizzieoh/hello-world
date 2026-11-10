@@ -29,6 +29,7 @@ import os
 import queue
 import random
 import re
+import shutil
 import socket
 import subprocess
 import sys
@@ -1472,13 +1473,16 @@ def shuffled(items, rounds=6):
 DOTS = 576  # across an 80 mm receipt at 203 dpi
 
 
+NICE = ["nice", "-n", "19"] if shutil.which("nice") else []  # helper ffmpegs never take the CPU from the video
+
+
 def video_stills(src, secs, count, out_dir):
     """`count` evenly spaced frames from the video, as JPEGs in out_dir. Returns their paths."""
     out_dir.mkdir(parents=True, exist_ok=True)
     paths = []
     for i in range(count):
         out = out_dir / f"{i}.jpg"
-        subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{secs * (i + 0.5) / count:.2f}", "-i", src,
+        subprocess.run([*NICE, "ffmpeg", "-v", "error", "-y", "-ss", f"{secs * (i + 0.5) / count:.2f}", "-i", src,
                         "-frames:v", "1", "-q:v", "2", str(out)], capture_output=True, timeout=30)
         if out.exists() and out.stat().st_size:
             paths.append(str(out))
@@ -1860,12 +1864,13 @@ class Printer:
         return escpos(sticker.sticker_image(take, self.cfg, src, B, width=DOTS))  # an 80 mm receipt printer
 
     def prepare(self, take):
-        """Start building the receipt the moment the video exists, so printing it is just sending it: people were
-        hanging up before a receipt that was only begun once they'd heard the video (~6-25 s) came out."""
+        """Build the receipt as soon as the video's downloaded, so 0 prints it at once."""
         ready = take["receipt_ready"] = threading.Event()
 
         def build():
             try:
+                if take.get("done"):  # from the downloaded copy (~1 s), never decoding fal's URL beside the
+                    take["done"].wait(60)  # playing video: the Pi decodes in software and the video stuttered
                 take["receipt"] = self.render(take)
             except Exception as e:
                 log.warning("couldn't prepare the receipt (it's made at print time instead): %s", e)
@@ -2149,10 +2154,8 @@ class Booth:
             self.hung_up_cid = self.cid                                  # said is still made
         was = self.state
         t = self.take
-        if was == "ready" and t and not t["printed"]:  # they saw it: the receipt prints anyway, nobody leaves empty-handed
-            t["printed"] = True
-            log.info("hung up before printing: printing anyway")
-            threading.Thread(target=self._print, args=(-1, t), daemon=True).start()
+        if was == "ready" and t and not t["printed"]:  # nothing prints till 0: the screen says how to get it
+            log.info("hung up before pressing 0: not printed")
         if self.pending is not None:   # hung up on hold: the video still comes, and goes up on the screen
             self.orphans.add(self.pending)
         self.cid += 1
@@ -2483,12 +2486,11 @@ class Booth:
         self.hold_from = None
         self.line.stop()
         self.screen.frame(FRAME)
-        # No menu: the video plays with its sound straight away, and the receipt starts printing alongside it
-        # (Lizzie, Nov 10). sound -> printing -> done; "prompt" only if the printer fails (0 tries again).
+        # No menu: the video plays with its sound straight away, and 0 prints it, whenever they press it (Lizzie,
+        # Nov 10). sound -> prompt -> printing -> done (0 during the sound prints too).
         take["answered"], take["sound"], take["phase"] = True, True, "sound"
         self.screen.video(take["url"], mute=False)
         self.set_view("ready", keys={})
-        self.print_now(take)
         self.after(8 + self.cfg["secs"], "sound_done", cid, take)  # in case the clip never reports it's playing
         self.bump_idle()
 
@@ -2623,7 +2625,10 @@ class Booth:
             return self._receipt_out(cid, t)
         t["phase"] = "printing" if t["printed"] else "prompt"
         if t["phase"] == "prompt":
-            self.view.setdefault("keys", {})["0"] = "Printer's out"
+            if t.get("print_ok") is False:
+                self.view.setdefault("keys", {})["0"] = "Printer's out"
+            else:
+                self.play("print_prompt", "prompt")  # "Press 0 to print your video" (and it waits for them)
         self.draw()
 
     def _receipt_out(self, cid, t):
@@ -3160,13 +3165,16 @@ class Booth:
         if keys.get("3") == "3 takes max":
             more = ("3 takes max", False, True)
         if phase == "sound":  # playing with its sound (in the earpiece), the receipt printing alongside
-            return self._banner(L, "HOLD THE PHONE TO HEAR YOUR VIDEO") + self._pick_up(L, "PRINTING YOUR RECEIPT…")
+            out = self._banner(L, "HOLD THE PHONE TO HEAR YOUR VIDEO")
+            if t.get("printed"):
+                return out + self._pick_up(L, "PRINTING…")
+            return out + L.keys({"0": ("Press 0 to Print", True, False, True)})
         if phase == "silent":
             return L.keys({"2": ("Hear it", True, False), "3": more})
         if phase == "adding":
             return self._pick_up(L, "ADDING SOUND…")
         if phase == "prompt":  # only if the printer failed: 0 tries again
-            return L.keys({"0": (keys.get("0") or "Print your video", True, False, True)})
+            return L.keys({"0": (keys.get("0") or "Press 0 to Print", True, False, True)})
         if phase == "printing":
             return self._pick_up(L, "PRINTING…")
         return self._pick_up(L, "TAKE YOUR RECEIPT") + L.chip(PAD_X, SCREEN_H - PAD_X, "SCAN IT TO KEEP YOUR VIDEO", "M", h=96,

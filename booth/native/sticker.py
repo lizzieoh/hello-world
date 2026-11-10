@@ -12,6 +12,7 @@ On 3x6 in die-cut labels (the Zebra's default, ZEBRA_PAPER=LABEL) the same recei
 see label_image.
 """
 import json
+import shutil
 import threading
 import time
 import urllib.request
@@ -185,7 +186,8 @@ def key_frames(src, secs, size, count, candidates=18):
     w, h = size
     vf = (f"fps={candidates}/{secs},scale={w}:{h}:force_original_aspect_ratio=increase:flags=lanczos,"
           f"crop={w}:{h}:(iw-ow)/2:(ih-oh)/3,format=gray")
-    raw = subprocess.run(["ffmpeg", "-v", "error", "-i", src, "-vf", vf, "-f", "rawvideo", "-"],
+    nice = ["nice", "-n", "19"] if shutil.which("nice") else []  # never take the CPU from the playing video
+    raw = subprocess.run([*nice, "ffmpeg", "-v", "error", "-i", src, "-vf", vf, "-f", "rawvideo", "-"],
                          capture_output=True, timeout=30).stdout
     pool = []
     for k in range(min(candidates, len(raw) // (w * h))):

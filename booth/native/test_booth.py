@@ -192,26 +192,32 @@ def test_full_call():
     assert client.calls[0] == B.Fal.STT and sorted(client.calls[1:4]) == sorted(
         [B.Fal.IP_CHECK, B.Fal.IP_CHECK, "minimax/h3-max/text-to-video"]), client.calls
     url = booth.screen.calls("video")[-1][1]
-    # no menu: the video plays with its sound straight away, and the receipt prints alongside it (Nov 10)
+    # no menu: the video plays with its sound straight away, and 0 prints it (Nov 10)
     assert url == URL and booth.screen.calls("video")[-1][2] is False, "plays with its sound"
-    assert booth.take["phase"] == "sound" and booth.take["printed"]
-    wait(lambda: booth.view["scene"] == "ready" and "PRINTING YOUR RECEIPT" in booth.screen.last_text, 2, "ready screen")
+    assert booth.take["phase"] == "sound" and not booth.take["printed"], "nothing prints till 0"
+    wait(lambda: booth.view["scene"] == "ready" and "PRESS 0 TO PRINT" in booth.screen.last_text, 2, "ready screen")
     assert "HEAR IT" not in booth.screen.last_text and "ANOTHER TAKE" not in booth.screen.last_text
     assert "HOLD THE PHONE TO HEAR YOUR VIDEO" in booth.screen.last_text  # the sound is in the earpiece
     assert ("frame", B.FRAME) in booth.screen.log
     played = []
     real_play = booth.line.play
     booth.line.play = lambda name, *a, **k: (played.append(name), real_play(name, *a, **k))[1]
-    for k in "23":  # nothing to press: no sound to add, no other take (one video, one receipt a call)
+    for k in "23":  # nothing to press but 0: no sound to add, no other take (one video, one receipt a call)
         booth.post(("key", k))
     time.sleep(0.3)
     assert booth.take["phase"] == "sound" and client.calls.count("minimax/h3-max/text-to-video") == 1
-    wait(lambda: booth.take.get("print_ok"), 25, "printed while it plays")
-    assert "receipt" not in played, "never over the video's own sound"
+    assert not booth.take["printed"]
     booth.cfg["secs"] = 1.0  # one play with sound, quickly
     booth.post(("file_loaded",))
-    wait(lambda: booth.take["phase"] == "done" and "receipt" in played, 4, "Take your receipt, once it's played")
+    wait(lambda: booth.take["phase"] == "prompt" and "print_prompt" in played, 4, "Press 0 to print, after the play")
     assert ("mute", True) == booth.screen.calls("mute")[-1][:2], "quiet again after one play with sound"
+    time.sleep(1.0)
+    assert not booth.take["printed"], "it waits for 0"
+    wait(lambda: booth.take.get("receipt"), 15, "the receipt is built ahead, from the downloaded copy")
+    t0 = time.monotonic()
+    booth.post(("key", "0"))
+    wait(lambda: booth.take["phase"] == "done" and "receipt" in played, 4, "Take your receipt")
+    assert time.monotonic() - t0 < 3, "0 prints the ready receipt at once"
     assert "TAKE YOUR RECEIPT" in booth.screen.last_text
     data = (TMP / "printer.bin").read_bytes()
     assert data.startswith(b"\x1b@") and data.endswith(b"\x1dV\x42\x00") and b"\x1dv0\x00" in data
@@ -772,15 +778,17 @@ def test_hang_up_on_hold_keeps_their_call_on_screen():
     stop.set()
 
 
-def test_hang_up_before_printing_still_prints():
-    """They saw their video and hung up without pressing 0: the receipt prints anyway."""
+def test_hang_up_before_printing_waits_for_0():
+    """They saw their video and hung up without pressing 0: nothing prints, and the screen says how to get it."""
     booth, client, stop = make()
     lift_and_say(booth, talk())
     wait(lambda: booth.state == "ready", 10, "ready")
     (TMP / "printer.bin").write_bytes(b"")
     booth.post(("hook", False))
-    wait(lambda: (TMP / "printer.bin").stat().st_size > 1000, 25, "printed after the hang-up")
-    assert booth.take and booth.take["printed"]
+    wait(lambda: booth.view.get("scene") == "after", 5, "their video stays")
+    time.sleep(1.0)
+    assert (TMP / "printer.bin").stat().st_size == 0 and not booth.take["printed"]
+    assert "PRESS 0 TO PRINT" in booth.screen.last_text
     stop.set()
 
 
@@ -799,8 +807,9 @@ def test_zero_before_a_prompt_reprints_the_last_video():
     wait(lambda: booth.state == "ready", 10, "ready")
     first = booth.take
     (TMP / "printer.bin").write_bytes(b"")
-    booth.post(("hook", False))
+    booth.post(("key", "0"))
     wait(lambda: (TMP / "printer.bin").stat().st_size > 1000, 25, "first receipt")
+    booth.post(("hook", False))
     wait(lambda: booth.state == "idle", 5, "idle")
     calls = len(client.calls)
 
