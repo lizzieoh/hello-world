@@ -380,7 +380,7 @@ def sticker_image(take, cfg, src, B, width=W):
     # ---- the ask: post it (Nov 10, Lizzie's words); no bigger than the sign-off, the handle in a chip
     ink((width // 2, y), "Receipt, or didn’t happen.", sign_f, strong=False, anchor="ma")
     y += 44
-    a, b = "Tag ", " on any social media"  # in the bill's mono 24, a size up from the QR's lines (Nov 10)
+    a, b = "Tag ", " on any social media."  # in the bill's mono 24, a size up from the QR's lines (Nov 10)
     hw = int(probe.textlength("@fal", font=mono)) + 2 * 11 + 5  # the chip's width (ink_chip's pad)
     x = round((width - probe.textlength(a, font=mono) - hw - probe.textlength(b, font=mono)) / 2)
     ink((x, y), a, mono)
