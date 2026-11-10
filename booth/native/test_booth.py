@@ -192,37 +192,25 @@ def test_full_call():
     assert client.calls[0] == B.Fal.STT and sorted(client.calls[1:4]) == sorted(
         [B.Fal.IP_CHECK, B.Fal.IP_CHECK, "minimax/h3-max/text-to-video"]), client.calls
     url = booth.screen.calls("video")[-1][1]
-    assert url == URL and booth.screen.calls("video")[-1][2] is True  # muted
-    wait(lambda: booth.view["scene"] == "ready" and "ANOTHER TAKE" in booth.screen.last_text, 2, "ready screen")
+    # no menu: the video plays with its sound straight away, and the receipt prints alongside it (Nov 10)
+    assert url == URL and booth.screen.calls("video")[-1][2] is False, "plays with its sound"
+    assert booth.take["phase"] == "sound" and booth.take["printed"]
+    wait(lambda: booth.view["scene"] == "ready" and "PRINTING YOUR RECEIPT" in booth.screen.last_text, 2, "ready screen")
+    assert "HEAR IT" not in booth.screen.last_text and "ANOTHER TAKE" not in booth.screen.last_text
     assert ("frame", B.FRAME) in booth.screen.log
-    booth.post(("file_loaded",))
-    wait(lambda: "ready" in booth.line.playing(), 6, "Your video is ready. Press 2 to hear it.")
-    assert "HEAR IT" in booth.screen.last_text and "PRINT" not in booth.screen.last_text
-    booth.post(("key", "2"))
-    wait(lambda: "generating_audio" in booth.line.playing(), 1, "the generating-audio cue first")
-    assert ("mute", False) not in booth.screen.log and "ADDING SOUND" in booth.screen.last_text
-    wait(lambda: ("mute", False) in booth.screen.log and booth.screen.calls("restart_clip"), 3, "sound on")
-    assert booth.take["phase"] == "sound" and "HEAR IT" not in booth.screen.last_text, "2 is gone once heard"
-    booth.post(("key", "2"))  # does nothing now
-    time.sleep(0.3)
-    assert booth.take["phase"] == "sound"
-    booth.post(("key", "3"))  # another take: the new one starts silent, with 2 again
-    wait(lambda: booth.state == "hold", 3, "regenerating")
-    assert ("mute", True) in booth.screen.log
-    wait(lambda: booth.state == "ready", 8, "second video")
-    assert client.calls.count("minimax/h3-max/text-to-video") == 2
-    assert booth.take["phase"] == "silent" and "1 LEFT" in booth.screen.last_text
-    booth.cfg["secs"] = 1.0  # one play with sound, quickly
     played = []
     real_play = booth.line.play
     booth.line.play = lambda name, *a, **k: (played.append(name), real_play(name, *a, **k))[1]
+    for k in "23":  # nothing to press: no sound to add, no other take (one video, one receipt a call)
+        booth.post(("key", k))
+    time.sleep(0.3)
+    assert booth.take["phase"] == "sound" and client.calls.count("minimax/h3-max/text-to-video") == 1
+    wait(lambda: booth.take.get("print_ok"), 25, "printed while it plays")
+    assert "receipt" not in played, "never over the video's own sound"
+    booth.cfg["secs"] = 1.0  # one play with sound, quickly
     booth.post(("file_loaded",))
-    # nobody presses anything: the sound comes in on its own, plays once, then "Press 0", then it prints itself
-    wait(lambda: booth.take["phase"] == "sound", 8, "the sound on its own")
-    wait(lambda: booth.take["phase"] == "prompt" and "print_prompt" in booth.line.playing(), 14, "Press 0 to print")
+    wait(lambda: booth.take["phase"] == "done" and "receipt" in played, 4, "Take your receipt, once it's played")
     assert ("mute", True) == booth.screen.calls("mute")[-1][:2], "quiet again after one play with sound"
-    wait(lambda: "printing" in played, 4, "Printing your video now (on its own)")
-    wait(lambda: booth.take["phase"] == "done" and "receipt" in played, 25, "Take your receipt")
     assert "TAKE YOUR RECEIPT" in booth.screen.last_text
     data = (TMP / "printer.bin").read_bytes()
     assert data.startswith(b"\x1b@") and data.endswith(b"\x1dV\x42\x00") and b"\x1dv0\x00" in data
@@ -239,6 +227,38 @@ def test_full_call():
     wait(lambda: booth.view.get("scene") == "attract" and booth.view.get("fresh"), 3, "* starts over")
     assert "PICK UP" in booth.screen.last_text and booth.take is None and not booth.screen.calls("playlist")
     stop.set()
+
+
+LANGS = {"ko": "바다 위를 나는 고래", "ja": "月の上で鳴る赤い電話", "zh": "月球上响起的红色电话",
+         "ar": "هاتف أحمر يرن على القمر", "he": "טלפון אדום מצלצל על הירח", "hi": "चाँद पर बजता लाल फ़ोन",
+         "th": "โทรศัพท์สีแดงดังบนดวงจันทร์", "ru": "красный телефон звонит на луне", "el": "ένα κόκκινο τηλέφωνο στο φεγγάρι",
+         "vi": "chiếc điện thoại đỏ reo trên mặt trăng", "es": "un teléfono rojo sonando en la luna, ¡qué señal!",
+         "pt": "um telefone vermelho tocando na lua", "de": "ein rotes Telefon klingelt auf dem Mond, süß"}
+
+
+def test_every_language_is_set_in_a_font_that_has_it():
+    """fal's fonts are Latin only: Korean (and Japanese, Arabic, Hindi...) came out as boxes. Each script now has an
+    installed font that draws every character, the TV measures it in that font, and the receipt sets it in it."""
+    if not B.FALLBACK_FONTS:
+        print("      (no fallback fonts here: skipped)")
+        return
+    L = B.Look()
+    base = L.font("H3")
+    for lang, words in LANGS.items():
+        assert not B.heard_nothing(words), lang  # any language's letters are speech
+        fb = B.fallback_for(words, base.path, getattr(base, "index", 0))
+        need = {ord(c) for c in words if not c.isspace()}
+        drawn = B.font_cmap(*fb) if fb else B.font_cmap(base.path)
+        assert need <= drawn, (lang, fb, [chr(c) for c in need - drawn])
+        assert L.width(words.upper(), "H3") > 0.15 * B.TYPE["H3"][1] * len(words.replace(" ", "")), lang
+    cfg = B.load_config(Path("/nonexistent"))
+    for lang in ("ko", "ar", "hi"):
+        img = B.receipt_image({"prompt": LANGS[lang], "model": "H3 Max", "secs": 9.6, "url": URL, "call": 7}, cfg,
+                              str(CLIP))
+        img.save(TMP / f"receipt-{lang}.png")
+    cfg["share_base"] = "https://example.com/v"
+    link = B.share_url({"prompt": LANGS["ko"] * 4, "url": "https://v3.fal.media/files/x/clip.mp4"}, cfg)
+    assert len(link) < 400, len(link)  # the QR stays coarse enough to scan off thermal paper
 
 
 def test_no_speech_twice_gets_one_of_ours():

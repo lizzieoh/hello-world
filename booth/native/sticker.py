@@ -311,9 +311,10 @@ def sticker_image(take, cfg, src, B, width=W):
             ink((width - M, y), call_no.pop(), small, strong=False, anchor="ra")
         y += 34
         words = words.strip()
-        for line in wrap(f"“{words[:1].upper() + words[1:]}”", said_f, width - 2 * M - QUOTE_INDENT):
-            hang = probe.textlength("“", font=said_f) if line.startswith("“") else 0  # the quote mark hangs
-            d.text((M + QUOTE_INDENT - hang, y), line, font=said_f, fill=0)
+        f = B.font_for(words, said_f)  # Korean, Arabic, Hindi...: a font that has them, not boxes
+        for line in wrap(B.quoted(words[:1].upper() + words[1:], f), f, width - 2 * M - QUOTE_INDENT):
+            hang = probe.textlength("“", font=f) if line.startswith("“") else 0  # the quote mark hangs
+            d.text((M + QUOTE_INDENT - hang, y), line, font=f, fill=0)
             y += 29
     if take.get("you_said"):  # they asked for someone else's IP
         said("YOU SAID", take["you_said"])
@@ -492,9 +493,10 @@ def label_image(take, cfg, src, B, photo_h=None, most=4):
             ink((W - M, y), call_no.pop(), small, anchor="ra")
         y += 34
         words = words.strip()
-        for line in wrap(f"“{words[:1].upper() + words[1:]}”", said_f, W - 2 * M - QUOTE_INDENT):
-            hang = probe.textlength("“", font=said_f) if line.startswith("“") else 0  # the quote mark hangs
-            d.text((M + QUOTE_INDENT - hang, y), line, font=said_f, fill=0)
+        f = B.font_for(words, said_f)  # Korean, Arabic, Hindi...: a font that has them, not boxes
+        for line in wrap(B.quoted(words[:1].upper() + words[1:], f), f, W - 2 * M - QUOTE_INDENT):
+            hang = probe.textlength("“", font=f) if line.startswith("“") else 0  # the quote mark hangs
+            d.text((M + QUOTE_INDENT - hang, y), line, font=f, fill=0)
             y += 29
     if take.get("you_said"):
         said("YOU SAID", take["you_said"])

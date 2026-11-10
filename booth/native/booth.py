@@ -113,7 +113,7 @@ SOUND_TAGS = re.compile(r"\*[^*]*\*|\[[^\]]*\]|\([^)]*\)")  # *sniff*, [laughter
 
 
 def heard_nothing(prompt):
-    return re.sub(r"[^a-z ]", "", prompt.lower()).strip() in NOT_SPEECH
+    return re.sub(r"[^\w ]|[\d_]", "", prompt.lower()).strip() in NOT_SPEECH  # any language's letters are words
 
 
 BLOCKED = re.compile(r"\b(nude|naked|nudity|porn\w*|sex\w*|nsfw|genital\w*|gore|gory|behead\w*|suicide|nazi\w*|hitler"
@@ -164,7 +164,7 @@ REMIX_PROMPT = (
     "show's or artist's look becomes a plain description of a look, with no name (80s neon pastels, hand-painted "
     "animation). Drop words that point back to it (the famous theme park, the studio that made...). Keep the "
     "caller's own words for everything else: the same places (a swamp stays a swamp), action, time of day and mood; "
-    "add no new places or times. Make it fun and easy to picture. Reply with the new prompt only: one sentence, "
+    "add no new places or times. Make it fun and easy to picture. Write it in the caller's language. Reply with the new prompt only: one sentence, "
     "under 30 words.")
 # The remix tried first: keeps what made them want it (the genre, tone, joke, camera, look), so the original isn't
 # bland. In a side-by-side on 6 real flagged calls (Nov 6) it held the caller's idea far better than REMIX_PROMPT,
@@ -179,7 +179,7 @@ REMIX_PUNCHY = (
     "hand-painted animation). Otherwise pick the camera and light that suit their idea. Keep the caller's "
     "own places and action. Write it like a director's one-line shot: a specific subject doing something specific, "
     "where, with camera and light. No signs, screens, text or lettering in the shot. Vivid, funny or epic, never "
-    "bland. Reply with the prompt only: one sentence, under 35 words.")
+    "bland. Write it in the caller's language. Reply with the prompt only: one sentence, under 35 words.")
 # 1 (surprise me): one of ours, for anyone stuck for an idea (and for a second silence). Originals only, Miami and
 # making things, each worth trying on H3 Max before the show; none goes through the IP check.
 SURPRISE = [
@@ -847,6 +847,7 @@ class Look:
     def __init__(self, fonts=None):
         self.fonts = fonts = fonts or BRAND / "fonts"
         self._pil = {}
+        self._cjk = {}
         self.have = {k: (fonts / f).exists() for k, (_, f) in FACES.items()}
         self.lockup = ""
         svg = BRAND / "call-a-fal-lockup.svg"
@@ -879,7 +880,23 @@ class Look:
 
     def width(self, text, tok):
         _, size, track = TYPE[tok]
-        return self.font(tok).getlength(text) + track * size * max(0, len(text) - 1)
+        spacing = track * size * max(0, len(text) - 1)
+        base = self.font(tok)
+        fb = fallback_for(text, getattr(base, "path", ""), getattr(base, "index", 0)) if getattr(base, "path", "") else None
+        if fb:  # libass draws this script in a fallback font (sized by its own ascent + descent, like ours)
+            key = (fb, size)
+            if key not in self._cjk:
+                from PIL import ImageFont
+                try:
+                    asc, desc = ImageFont.truetype(fb[0], 1000, index=fb[1]).getmetrics()
+                    self._cjk[key] = ImageFont.truetype(fb[0], max(1, round(size * 1000 / (asc + desc))), index=fb[1])
+                except OSError:
+                    self._cjk[key] = None
+            if self._cjk[key]:  # libass keeps our font for what it has (spaces, quotes, Latin): measure run by run
+                has = font_cmap(base.path, getattr(base, "index", 0)) or set()
+                runs = itertools.groupby(text, key=lambda c: ord(c) in has or c.isspace())
+                return sum((base if ours else self._cjk[key]).getlength("".join(run)) for ours, run in runs) + spacing
+        return self.font(tok).getlength(text) + spacing
 
     def wrap(self, text, tok, width, lines=99, balance=False):
         if balance:  # as narrow as it can go without adding a line, so no word sits alone on the last one
@@ -1521,6 +1538,72 @@ def brand_font(kind, size, weight=None):
     return ImageFont.truetype(find_font(bold=(weight or 400) >= 600 or kind == "display"), size)
 
 
+FALLBACK_FONTS = [("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", 1),  # Korean cut first, then
+                  ("/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf", 0)]   # Latin, Cyrillic, Greek, Vietnamese
+FALLBACK_FONTS += [(p, 0) for p in sorted(glob.glob("/usr/share/fonts/truetype/noto/NotoSans*-Regular.ttf"))
+                   if not re.search(r"NotoSans(Mono|Display)?-|UI-", p)]  # each script's own: Arabic, Thai, Devanagari...
+FALLBACK_FONTS += [("/usr/share/fonts/truetype/freefont/FreeSans.ttf", 0),
+                   ("/System/Library/Fonts/AppleSDGothicNeo.ttc", 0),  # a Mac, for laptop tests
+                   ("/Library/Fonts/Arial Unicode.ttf", 0)]
+FALLBACK_FONTS = [(p, i) for p, i in FALLBACK_FONTS if os.path.exists(p)]
+_CMAPS = {}
+
+
+def font_cmap(path, index=0):
+    """Every character a font file can draw (cached: read once with fontTools)."""
+    key = (str(path), index)
+    if key not in _CMAPS:
+        try:
+            from fontTools.ttLib import TTFont
+            _CMAPS[key] = set(TTFont(str(path), lazy=True, fontNumber=index).getBestCmap() or {})
+        except Exception:
+            _CMAPS[key] = None  # can't tell: trust the font
+    return _CMAPS[key]
+
+
+def fallback_for(text, path, index=0):
+    """fal's fonts are Latin only, so Korean, Japanese, Arabic, Hindi... came out as boxes. None if the font at path
+    draws all of text, else the (path, index) of the installed font that draws the most of it (fonts-noto-cjk and
+    fonts-noto-core on the Pi)."""
+    need = {ord(c) for c in text if not c.isspace()}
+    have = font_cmap(path, index)
+    if not need or have is None or need <= have:
+        return None
+    best, most = None, len(need & have)
+    for fb in FALLBACK_FONTS:
+        got = len(need & (font_cmap(*fb) or set()))
+        if got == len(need):
+            return fb
+        if got > most:
+            best, most = fb, got
+    return best
+
+
+def font_for(text, base):
+    """A PIL font that draws text: base, or the same size in a font that has its script."""
+    fb = fallback_for(text, getattr(base, "path", ""), getattr(base, "index", 0)) if getattr(base, "path", "") else None
+    if not fb:
+        return base
+    from PIL import ImageFont
+    try:
+        return ImageFont.truetype(fb[0], base.size, index=fb[1])
+    except OSError:
+        return base
+
+
+def quoted(words, font):
+    """“words” in curly quotes, or straight ones (or none) when the script's font hasn't got them: no boxes."""
+    have = font_cmap(getattr(font, "path", ""), getattr(font, "index", 0)) if getattr(font, "path", "") else None
+    if have is None or {0x201C, 0x201D} <= have:
+        return f"“{words}”"
+    return f'"{words}"' if 0x22 in have else words
+
+
+def warm_fonts():
+    """Read every fallback font's characters once, in the background, so the first Thai caller doesn't wait."""
+    threading.Thread(target=lambda: [font_cmap(*fb) for fb in FALLBACK_FONTS], daemon=True).start()
+
+
 def share_url(take, cfg, words=True):
     """Where the QR on the receipt goes: the event page, with the video (and, `words`, what was
     said) in the part of the link after #, so the page needs no server and the words never reach its logs. The
@@ -1535,8 +1618,15 @@ def share_url(take, cfg, words=True):
         return text if words or len(text) <= most else text[:most - 2].rsplit(" ", 1)[0].rstrip(",.;:-") + "…"
     asked = take.get("you_said") or ""
     said = short(take.get("prompt") or "", 44 if asked else 70)  # both fit, and the QR stays coarse
-    q = {"m": parts.netloc + parts.path, "p": said[:140],
-         "o": short(asked, 44)[:100],  # what they asked for, so the page quotes them right after an IP swap
+    def fit(text, most):
+        while len(quote(text)) > most and " " in text.strip():
+            text = text.rsplit(" ", 1)[0].rstrip(",.;:-") + "…"
+        while len(quote(text)) > most:
+            text = text[:-2] + "…"
+        return text
+    said = fit(said[:140], 210)
+    q = {"m": parts.netloc + parts.path, "p": said,
+         "o": fit(short(asked, 44)[:100], 150),  # what they asked for, so the page quotes them right after an IP swap
          "l": str(cfg.get("line", "")),
          "s": f"{take.get('gen_secs', take.get('secs', 0)):.1f}", "t": str(int(take.get("at") or time.time())),
          "mo": "flux" if "flux" in str(take.get("model", "")).lower() else "h3"}
@@ -1683,12 +1773,14 @@ def receipt_image(take, cfg, src):
     # what they asked for, in the brand's headline face
     if take.get("you_said"):  # someone else's IP: what the agent made instead, said kindly
         text(["YOU ASKED FOR"], small, 28)
-        text(wrap(f"“{take['you_said']}”", mono), mono, 30)
+        f = font_for(take["you_said"], mono)  # Korean, Arabic, Hindi...: a font that has them, not boxes
+        text(wrap(quoted(take["you_said"], f), f), f, 30)
         y += 18
         text(["WE MADE YOU AN ORIGINAL"], small, 30)
     else:
         text(["ONE OF OURS" if take.get("surprise") else "YOU SAID"], small, 30)
-    text(wrap(f"“{take['prompt']}”", said_font), said_font, 46)
+    f = font_for(take["prompt"], said_font)
+    text(wrap(quoted(take["prompt"], f), f), f, 46)
     y += 30
 
     # the clearest frame, full width, nothing over it
@@ -2367,10 +2459,13 @@ class Booth:
         self.hold_from = None
         self.line.stop()
         self.screen.frame(FRAME)
-        self.screen.video(take["url"], mute=True)
-        take["phase"] = "silent"  # silent -> adding -> sound -> prompt -> printing -> done
+        # No menu: the video plays with its sound straight away, and the receipt starts printing alongside it
+        # (Lizzie, Nov 10). sound -> printing -> done; "prompt" only if the printer fails (0 tries again).
+        take["answered"], take["sound"], take["phase"] = True, True, "sound"
+        self.screen.video(take["url"], mute=False)
         self.set_view("ready", keys={})
-        self.after(8, "menu", cid, rid)  # in case the clip never reports it's playing
+        self.print_now(take)
+        self.after(8 + self.cfg["secs"], "sound_done", cid, take)  # in case the clip never reports it's playing
         self.bump_idle()
 
     def costs(self, take, rid):
@@ -2398,7 +2493,7 @@ class Booth:
         t = self.take
         if self.state == "ready" and t and not t.get("loaded"):
             t["loaded"] = True
-            self.after(self.cfg["menu_after"], "menu", self.cid, t["rid"])
+            self.after(self.cfg["secs"] + 0.3, "sound_done", self.cid, t)  # one play with sound, from when it starts
             self.slides_later(t)
 
     # ----- after a few plays, the video becomes a slideshow of its own stills -----
@@ -2469,6 +2564,8 @@ class Booth:
         keys = self.view["keys"]
         if k == "2" and phase == "silent":
             return self.add_sound(t)
+        if k in "23":  # sound and printing are automatic now: one video, one receipt a call
+            return
         if k == "3":
             if t.get("take", 0) >= 2:  # three takes a call, so the next caller gets a turn
                 keys["3"] = "3 takes max"
@@ -2492,13 +2589,23 @@ class Booth:
             self.add_sound(t)
 
     def on_sound_done(self, cid, t):
-        """One play with sound: then quiet again, and the one thing left to do."""
+        """One play with sound, then quiet again. The receipt's been printing all along: if it's out, "take your
+        receipt" now (not over the video's own sound); if the printer failed, 0 to try again."""
         if cid != self.cid or self.take is not t or self.state != "ready" or t.get("phase") != "sound":
             return
-        t["phase"], t["sound"] = "prompt", False
+        t["sound"] = False
         self.screen.mute(True)
-        self.play("print_prompt", "prompt")
-        self.after(len(self.line.sounds["print_prompt"]) / SR + AUTO_PRINT_AFTER, "auto_print", cid, t)
+        if t.get("print_ok"):
+            return self._receipt_out(cid, t)
+        t["phase"] = "printing" if t["printed"] else "prompt"
+        if t["phase"] == "prompt":
+            self.view.setdefault("keys", {})["0"] = "Printer's out"
+        self.draw()
+
+    def _receipt_out(self, cid, t):
+        t["phase"] = "done"
+        self.line.play("receipt")
+        self.after(DONE_BUSY_AFTER, "done_busy", cid)
         self.draw()
 
     def on_auto_print(self, cid, t):
@@ -2508,7 +2615,9 @@ class Booth:
     def print_now(self, t, say=False):
         if t["printed"]:
             return
-        t["printed"], t["phase"] = True, "printing"
+        t["printed"] = True
+        if t.get("phase") != "sound":
+            t["phase"] = "printing"
         if say:
             self.line.play("printing")
         threading.Thread(target=self._print, args=(self.cid, t), daemon=True).start()
@@ -2615,14 +2724,14 @@ class Booth:
         else:
             self.last_error = {"at": time.time(), "what": "Print failed"}
             take["printed"] = False  # 0 again tries again
+        take["print_ok"] = ok
         if cid == self.cid and self.take is take and self.state == "ready":
+            if take.get("phase") == "sound":  # still playing with its sound: on_sound_done says the rest
+                return self.draw()
             if ok:
-                take["phase"] = "done"
-                self.line.play("receipt")
-                self.after(DONE_BUSY_AFTER, "done_busy", cid)
-            else:
-                take["phase"] = "prompt"
-                self.view["keys"]["0"] = "Printer's out"
+                return self._receipt_out(cid, take)
+            take["phase"] = "prompt"
+            self.view["keys"]["0"] = "Printer's out"
             self.draw()
 
     # ----- busy, idle -----
@@ -3026,14 +3135,14 @@ class Booth:
         more = ("Another take" + (f" · {left} left" if left else ""), False, not left)
         if keys.get("3") == "3 takes max":
             more = ("3 takes max", False, True)
+        if phase == "sound":  # playing with its sound, the receipt printing alongside
+            return self._pick_up(L, "PRINTING YOUR RECEIPT…")
         if phase == "silent":
             return L.keys({"2": ("Hear it", True, False), "3": more})
         if phase == "adding":
             return self._pick_up(L, "ADDING SOUND…")
-        if phase == "sound":
-            return L.keys({"0": ("Print", False, False), "3": more}, first="0")
-        if phase == "prompt":
-            return L.keys({"0": (keys.get("0") or "Print your video", True, False, True), "3": more})
+        if phase == "prompt":  # only if the printer failed: 0 tries again
+            return L.keys({"0": (keys.get("0") or "Print your video", True, False, True)})
         if phase == "printing":
             return self._pick_up(L, "PRINTING…")
         return self._pick_up(L, "TAKE YOUR RECEIPT") + L.chip(PAD_X, SCREEN_H - PAD_X, "SCAN IT TO KEEP YOUR VIDEO", "M", h=96,
@@ -3046,7 +3155,14 @@ class Booth:
         prompt = self.take.get("prompt") or ""
         said = v.get("said") or (f"“{prompt}”" if prompt else "")  # their video's prompt, then each still's
         return (self._said(L, said, 980, bottom=SCREEN_H - PAD_X - 88 - 16) + L.keys({"*": ("Start over", False, False)})
-                + self._pick_up(L, "PICK UP TO MAKE YOUR OWN"))
+                + self._banner(L, "PICK UP TO MAKE YOUR OWN"))
+
+    def _banner(self, L, label):
+        """The one thing to do, big across the top, to read from across the hall: a Model Purple bar."""
+        tok, h = "H3", 168
+        w = L.width(label, tok) + 2 * 72
+        x = (SCREEN_W - w) / 2
+        return [L.rect(x, PAD_X, w, h, MODEL_PURPLE), L.text(SCREEN_W / 2, PAD_X + h / 2, label, tok, an=5)]
 
     def _scene_message(self, v, L):
         out = self._plaque(L, v.get("head", ""), v.get("sub", ""))
@@ -3099,6 +3215,7 @@ def serve_control(booth, path=CONTROL_SOCK):
 
 
 def main():
+    warm_fonts()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     logging.getLogger("httpx").setLevel(logging.WARNING)  # not every status poll
     cfg = load_config()
