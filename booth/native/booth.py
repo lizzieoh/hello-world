@@ -2186,6 +2186,7 @@ class Booth:
             v["done"]["check"] = f"ORIGINAL ✓ · {model}".rstrip(" ·").upper()
         elif stage == "remixed":
             v["done"]["check"] = f"REMIXED ✓ · {model}".rstrip(" ·").upper()
+            v["you_said"] = v.get("said") or ""  # kept, struck through above the original the agent made
             v["label"], v["said"] = "OUR AGENT MADE YOU AN ORIGINAL", f"“{original}”"
         elif stage == "render":
             v["backup"] = v.get("model") is not None  # a second model on the line: the first one failed
@@ -2808,7 +2809,8 @@ class Booth:
         if isinstance(pos, int):
             self.attract_pos = pos
         if self.state == "idle" and isinstance(pos, int) and 0 <= pos < len(shown):
-            if self.view.get("scene") == "attract":
+            scene = self.view.get("scene")
+            if scene == "attract" or (scene == "after" and self.take and self.take.get("slides")):
                 self.view["said"] = f"“{shown[pos][1]}”"
                 self.draw()
 
@@ -2917,15 +2919,15 @@ class Booth:
         x, y = SCREEN_W - PAD_X - w, SCREEN_H - PAD_X - h
         return [L.rect(x, y, w, h, MODEL_PURPLE), L.text(x + w / 2, y + h / 2, label, tok, an=5)]
 
-    def _said(self, L, said, room):
-        """What was said, as one quiet White chip bottom left, cut to fit."""
+    def _said(self, L, said, room, bottom=SCREEN_H - PAD_X):
+        """What was said, as one quiet White chip bottom left (or with its foot at bottom), cut to fit."""
         said = (said or "").upper()
         if not said:
             return []
         lines = L.wrap(said, "M", room, lines=2, balance=True)
         w = max(L.width(l, "M") for l in lines) + 2 * 24 + 12
         h = 56 * len(lines) + 32
-        y = SCREEN_H - PAD_X - h
+        y = bottom - h
         return [L.rect(PAD_X, y, w, h, WHITE)] + L.lines(PAD_X + 24, y + 16, lines, "M", gap=56)
 
     def _scene_attract(self, v, L):
@@ -2972,19 +2974,46 @@ class Booth:
         return out
 
     def _scene_hold(self, v, L):
-        """On hold: a giant clock, their words small above it, and one line saying which model has the call."""
+        """On hold. Until the words are in, a giant clock. Then their prompt is the one big thing (the clock moves to the
+        corner): if it was someone else's IP, what they said sits small and struck through above the original the
+        agent made, so the rework is there to read while it renders."""
         now = time.monotonic()
         secs = now - (self.hold_from or now)
         out = [L.mat(SAGE)]
-        said = (v.get("said") or "").upper()  # nothing until the words are in: the status line says "Hearing you"
-        out += L.lines(SCREEN_W / 2, 230, L.wrap(said, "K", SCREEN_W - 560, lines=2, balance=True), "K", gap=68, an=8)
-        out.append(L.text(SCREEN_W / 2, 390, f"{secs:4.1f}s".strip(), "H1", an=8))  # mono: the digits never jitter
         stage, model = v.get("stage", "hear"), v.get("model") or ""
         doing = {"hear": "Hearing you", "check": "Checking it's original",
                  "remix": "Making it an original", "render": "Rendering"}[stage]
         if stage == "render" and model:
             doing = f"{'Backup line' if v.get('backup') else 'Rendering'} · {model_name(model)}"
-        out.append(L.text(SCREEN_W / 2, 690, (doing + "…").upper(), "M", an=8))
+        said = (v.get("said") or "").upper()
+        clock = f"{secs:4.1f}s".strip()
+        if not said:  # nothing until the words are in: the status line says "Hearing you"
+            out.append(L.text(SCREEN_W / 2, 390, clock, "H1", an=8))  # mono: the digits never jitter
+            out.append(L.text(SCREEN_W / 2, 690, (doing + "…").upper(), "M", an=8))
+            return out + L.keys({"*": ("Start over", False, False)})
+        room = SCREEN_W - 2 * 160
+        top, bottom = 72, SCREEN_H - PAD_X - 88 - 48  # the words sit between the top and the keys
+        was = L.wrap((v.get("you_said") or "").upper(), "M", room, lines=2, balance=True) if v.get("you_said") else []
+        head = (52 + 52 * len(was) + 36 if was else 0) + 64  # what they said, struck through, then the label
+        for tok, n in (("H3", 4), ("K", 6), ("M", 8)):  # the biggest size it fits whole in
+            gap = TYPE[tok][1] * 1.12
+            lines = L.wrap(said, tok, room, balance=True)
+            if len(lines) <= n and head + len(lines) * gap <= bottom - top:
+                break
+        lines = L.wrap(said, tok, room, lines=n, balance=True)
+        y = top + max(0, (bottom - top - head - len(lines) * gap) / 2)  # the whole group centred, label by its prompt
+        if was:
+            out.append(L.text(SCREEN_W / 2, y, "YOU SAID", "MS", an=8))
+            y += 52
+            for line in was:
+                out.append(L.text(SCREEN_W / 2, y, line, "M", an=8, alpha=0x40).replace("\\b0", "\\b0\\s1", 1))
+                y += 52
+            y += 36
+        out.append(L.text(SCREEN_W / 2, y, v.get("label") or "YOU SAID", "MS", an=8))
+        out += L.lines(SCREEN_W / 2, y + 64, lines, tok, gap=gap, an=8)
+        # the clock and who has the call, bottom right, out of the prompt's way
+        out.append(L.text(SCREEN_W - PAD_X, SCREEN_H - PAD_X, clock, "H3", an=3))
+        out.append(L.text(SCREEN_W - PAD_X, SCREEN_H - PAD_X - 100, (doing + "…").upper(), "MS", an=3))
         out += L.keys({"*": ("Start over", False, False)})
         return out
 
@@ -3014,7 +3043,10 @@ class Booth:
         """Their caller hung up: their video stays a while, edge to edge, before the feed comes back."""
         if not self.take:
             return self._scene_attract(v, L)
-        return L.keys({"*": ("Start over", False, False)}) + self._pick_up(L, "PICK UP TO MAKE YOUR OWN")
+        prompt = self.take.get("prompt") or ""
+        said = v.get("said") or (f"“{prompt}”" if prompt else "")  # their video's prompt, then each still's
+        return (self._said(L, said, 980, bottom=SCREEN_H - PAD_X - 88 - 16) + L.keys({"*": ("Start over", False, False)})
+                + self._pick_up(L, "PICK UP TO MAKE YOUR OWN"))
 
     def _scene_message(self, v, L):
         out = self._plaque(L, v.get("head", ""), v.get("sub", ""))
