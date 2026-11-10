@@ -380,13 +380,13 @@ def sticker_image(take, cfg, src, B, width=W):
     # ---- the ask: post it (Nov 10, Lizzie's words); no bigger than the sign-off, the handle in a chip
     ink((width // 2, y), "Receipt, or didn’t happen.", sign_f, strong=False, anchor="ma")
     y += 44
-    a, b = "Tag ", " on any social media"
-    hw = int(probe.textlength("@fal", font=small)) + 2 * 11 + 5  # the chip's width (ink_chip's pad)
-    x = round((width - probe.textlength(a, font=small) - hw - probe.textlength(b, font=small)) / 2)
-    ink((x, y), a, small)
-    x = ink_chip(img, d, x + int(probe.textlength(a, font=small)), y - 5, 30, "@fal", small, True)
-    ink((x, y), b, small)
-    y += 58
+    a, b = "Tag ", " on any social media"  # in the bill's mono 24, a size up from the QR's lines (Nov 10)
+    hw = int(probe.textlength("@fal", font=mono)) + 2 * 11 + 5  # the chip's width (ink_chip's pad)
+    x = round((width - probe.textlength(a, font=mono) - hw - probe.textlength(b, font=mono)) / 2)
+    ink((x, y), a, mono)
+    x = ink_chip(img, d, x + int(probe.textlength(a, font=mono)), y - 6, 36, "@fal", mono, True)
+    ink((x, y), b, mono)
+    y += 64
     d.text((M, y), "Your creative direct line.", font=sign_f, fill=0)
     d.text((width - M, y), "fal.ai", font=sign_f, fill=0, anchor="ra")
     y += 33 + PAD_FOOT
