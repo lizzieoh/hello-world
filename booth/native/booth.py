@@ -1844,19 +1844,41 @@ class Printer:
     def __init__(self, cfg):
         self.cfg = cfg
 
-    def print(self, take):
-        if take.get("done"):
-            take["done"].wait(20)
-        src = take.get("file") or take["url"]
+    def render(self, take):
+        """The receipt's bytes for the printer that's plugged in. From the downloaded copy once it's there, else
+        straight from fal's URL (never waiting on the download)."""
+        done = take.get("done")
+        f = take.get("file")
+        src = f if f and (done is None or done.is_set()) and os.path.exists(str(f)) else take["url"]
         path = printer_path(self.cfg)
         import sticker
         B = sys.modules[__name__]
         if sticker.speaks_zpl(path) and self.cfg.get("zebra_paper", "label") == "label":  # 3x6 die-cut labels
-            data = sticker.label_zpl(sticker.label_3x6(take, self.cfg, src, B), self.cfg.get("label_x", 131))
-        elif sticker.speaks_zpl(path):  # a Zebra on continuous paper: the long receipt, in its language
-            data = sticker.label(path, sticker.sticker_image(take, self.cfg, src, B))
-        else:  # an 80 mm receipt printer: the same design, 576 dots across
-            data = escpos(sticker.sticker_image(take, self.cfg, src, B, width=DOTS))
+            return sticker.label_zpl(sticker.label_3x6(take, self.cfg, src, B), self.cfg.get("label_x", 131))
+        if sticker.speaks_zpl(path):  # a Zebra on continuous paper: the long receipt, in its language
+            return sticker.label(path, sticker.sticker_image(take, self.cfg, src, B))
+        return escpos(sticker.sticker_image(take, self.cfg, src, B, width=DOTS))  # an 80 mm receipt printer
+
+    def prepare(self, take):
+        """Start building the receipt the moment the video exists, so printing it is just sending it: people were
+        hanging up before a receipt that was only begun once they'd heard the video (~6-25 s) came out."""
+        ready = take["receipt_ready"] = threading.Event()
+
+        def build():
+            try:
+                take["receipt"] = self.render(take)
+            except Exception as e:
+                log.warning("couldn't prepare the receipt (it's made at print time instead): %s", e)
+            finally:
+                ready.set()
+        threading.Thread(target=build, daemon=True).start()
+
+    def print(self, take):
+        ready = take.get("receipt_ready")
+        if ready:
+            ready.wait(30)
+        data = take.get("receipt") or self.render(take)
+        path = printer_path(self.cfg)
         if "/" not in path:
             # a printer queue name (e.g. on a Mac): the same bytes, passed through untouched
             subprocess.run(["lp", "-d", path, "-o", "raw"], input=data, check=True, capture_output=True, timeout=30)
@@ -2437,6 +2459,8 @@ class Booth:
         take.setdefault("share", share_url(take, self.cfg))  # saved with the copy, for staff favorites on the page
         self._save_last_take(take)
         self.cache.add(take)  # kept for the screen between calls, even if they hung up while it rendered
+        if hasattr(self.printer, "prepare"):
+            self.printer.prepare(take)  # the receipt's ready before anyone asks for it
         if rid in self.orphans:
             self.orphans.discard(rid)
             self.stt_secs.pop(rid, None)
@@ -3043,7 +3067,7 @@ class Booth:
         """Free line: what this phone has made, edge to edge, what was said in a small chip, and Pick up."""
         if not self.attract or v.get("fresh"):  # nothing made yet, or cleared with *: the promise
             return self._plaque(L, "Pick up.", "Say an idea, get a 10-second video.", tok="H1") + self._pick_up(L)
-        return self._said(L, v.get("said"), 980) + self._pick_up(L)
+        return self._said(L, v.get("said"), 980) + self._banner(L, "PICK UP TO MAKE YOUR OWN")  # big, to read from afar
 
     def _scene_ringing(self, v, L):
         return self._plaque(L, "Pick up.", "Incoming call", tok="H1") + self._pick_up(L)
@@ -3135,8 +3159,8 @@ class Booth:
         more = ("Another take" + (f" · {left} left" if left else ""), False, not left)
         if keys.get("3") == "3 takes max":
             more = ("3 takes max", False, True)
-        if phase == "sound":  # playing with its sound, the receipt printing alongside
-            return self._pick_up(L, "PRINTING YOUR RECEIPT…")
+        if phase == "sound":  # playing with its sound (in the earpiece), the receipt printing alongside
+            return self._banner(L, "HOLD THE PHONE TO HEAR YOUR VIDEO") + self._pick_up(L, "PRINTING YOUR RECEIPT…")
         if phase == "silent":
             return L.keys({"2": ("Hear it", True, False), "3": more})
         if phase == "adding":
@@ -3154,12 +3178,17 @@ class Booth:
             return self._scene_attract(v, L)
         prompt = self.take.get("prompt") or ""
         said = v.get("said") or (f"“{prompt}”" if prompt else "")  # their video's prompt, then each still's
-        return (self._said(L, said, 980, bottom=SCREEN_H - PAD_X - 88 - 16) + L.keys({"*": ("Start over", False, False)})
-                + self._banner(L, "PICK UP TO MAKE YOUR OWN"))
+        out = (self._said(L, said, 980, bottom=SCREEN_H - PAD_X - 88 - 16) + L.keys({"*": ("Start over", False, False)})
+               + self._banner(L, "PICK UP TO MAKE YOUR OWN"))
+        if not self.take.get("printed"):  # they hung up on hold, so nothing printed: how to get it
+            out += self._pick_up(L, "PICK UP, THEN PRESS 0 TO PRINT")
+        return out
 
     def _banner(self, L, label):
         """The one thing to do, big across the top, to read from across the hall: a Model Purple bar."""
         tok, h = "H3", 168
+        if L.width(label, tok) + 2 * 72 > SCREEN_W - 2 * PAD_X:  # a long one still fits the width
+            tok, h = "K", 136
         w = L.width(label, tok) + 2 * 72
         x = (SCREEN_W - w) / 2
         return [L.rect(x, PAD_X, w, h, MODEL_PURPLE), L.text(SCREEN_W / 2, PAD_X + h / 2, label, tok, an=5)]

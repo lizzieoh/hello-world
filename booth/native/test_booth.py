@@ -197,6 +197,7 @@ def test_full_call():
     assert booth.take["phase"] == "sound" and booth.take["printed"]
     wait(lambda: booth.view["scene"] == "ready" and "PRINTING YOUR RECEIPT" in booth.screen.last_text, 2, "ready screen")
     assert "HEAR IT" not in booth.screen.last_text and "ANOTHER TAKE" not in booth.screen.last_text
+    assert "HOLD THE PHONE TO HEAR YOUR VIDEO" in booth.screen.last_text  # the sound is in the earpiece
     assert ("frame", B.FRAME) in booth.screen.log
     played = []
     real_play = booth.line.play
@@ -259,6 +260,25 @@ def test_every_language_is_set_in_a_font_that_has_it():
     cfg["share_base"] = "https://example.com/v"
     link = B.share_url({"prompt": LANGS["ko"] * 4, "url": "https://v3.fal.media/files/x/clip.mp4"}, cfg)
     assert len(link) < 400, len(link)  # the QR stays coarse enough to scan off thermal paper
+
+
+def test_hung_up_on_hold_is_told_how_to_print_and_it_is_quick():
+    """People hung up on hold before the video (and so before any receipt). Their video goes up with how to get the
+    receipt, which was built the moment the video existed, so 0 prints it at once."""
+    booth, client, stop = make()
+    lift_and_say(booth, talk())
+    wait(lambda: booth.state == "hold", 8, "on hold")
+    booth.post(("hook", False))
+    wait(lambda: booth.take and booth.view.get("scene") == "after", 12, "their video goes up anyway")
+    assert "PRESS 0 TO PRINT" in booth.screen.last_text and not booth.take["printed"]
+    wait(lambda: booth.take.get("receipt"), 15, "the receipt is ready before anyone asks")
+    booth.post(("hook", True))
+    wait(lambda: booth.state in ("greeting", "listening"), 5, "picked up")
+    t0 = time.monotonic()
+    booth.post(("key", "0"))
+    wait(lambda: booth.stats["prints"] == 1, 5, "printed")
+    assert time.monotonic() - t0 < 3, "a ready receipt prints at once"
+    stop.set()
 
 
 def test_no_speech_twice_gets_one_of_ours():
